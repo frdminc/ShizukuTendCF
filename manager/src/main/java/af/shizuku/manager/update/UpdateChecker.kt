@@ -24,12 +24,12 @@ import javax.net.ssl.SSLException
 
 object UpdateChecker {
     private const val TAG = "UpdateChecker"
-    private const val RELEASES_URL = "https://api.github.com/repos/thejaustin/ShizukuPlus/releases"
+    private const val RELEASES_URL = "https://api.github.com/repos/frdminc/ShizukuTendCF/releases"
     private const val LATEST_URL = "$RELEASES_URL/latest"
 
     // Fallback: GitHub's Atom feed is served from github.com CDN — different IP range
     // than api.github.com, so routing issues specific to that host don't affect it.
-    private const val ATOM_URL = "https://github.com/thejaustin/ShizukuPlus/releases.atom"
+    private const val ATOM_URL = "https://github.com/frdminc/ShizukuTendCF/releases.atom"
     private const val CONNECT_TIMEOUT_MS = 5_000
     private const val READ_TIMEOUT_MS = 8_000
     private const val RETRY_DELAY_MS = 2_000L
