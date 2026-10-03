@@ -110,8 +110,21 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Validate Signing Config
+        run: |
+          if [ "$IS_DEBUG" = "false" ]; then
+            if [ -z "$KEYSTORE" ]; then
+              echo "::error::Signing secrets not configured. KEYSTORE secret is required for release builds."
+              exit 1
+            fi
+            if [ -z "${{ secrets.KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.KEYSTORE_ALIAS }}" ] || [ -z "${{ secrets.KEYSTORE_ALIAS_PASSWORD }}" ]; then
+              echo "::error::Signing secrets incomplete. KEYSTORE, KEYSTORE_PASSWORD, KEYSTORE_ALIAS, and KEYSTORE_ALIAS_PASSWORD are required for release builds."
+              exit 1
+            fi
+          fi
+
       - name: Create signing.properties
-        if: ${{ env.IS_DEBUG == 'false' && env.KEYSTORE != '' }}
+        if: ${{ env.IS_DEBUG == 'false' }}
         run: |
           echo KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} > signing.properties
           echo KEYSTORE_ALIAS=${{ secrets.KEYSTORE_ALIAS }} >> signing.properties
@@ -155,14 +168,35 @@ jobs:
 
           export GRADLE_OPTS="-Xmx4g -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError"
 
+          get_apk_abi() {
+            local file="$1"
+            case "$(basename "$file")" in
+              *arm64-v8a*) echo "arm64-v8a"; return ;;
+              *armeabi-v7a*) echo "armeabi-v7a"; return ;;
+              *x86_64*) echo "x86_64"; return ;;
+              *x86*) echo "x86"; return ;;
+            esac
+            local abis
+            abis=$(unzip -l "$file" 2>/dev/null | grep -oE 'lib/[^/]+/' | sort -u | sed 's#lib/##;s#/##')
+            local count
+            count=$(echo "$abis" | grep -c . || true)
+            if [ "$count" -eq 1 ]; then
+              echo "$abis"
+            else
+              echo "universal"
+            fi
+          }
+
           if [ "$IS_DEBUG" = "true" ]; then
             CMD="./gradlew :manager:assembleShizukuplusDebug"
             eval $CMD --stacktrace --info -x :manager:lint
             FILE=$(find manager/build/outputs/apk/shizukuplus/debug -name "*.apk" -type f | head -1)
             [ -z "$FILE" ] && { echo "Error: No debug APK found"; exit 1; }
-            RENAMED="$(dirname "$FILE")/shizukuplus-debug.apk"
+            ABI=$(get_apk_abi "$FILE")
+            APK_NAME="ShizukuTendCF-${VERSION}-${ABI}-debug.apk"
+            RENAMED="$(dirname "$FILE")/${APK_NAME}"
             mv "$FILE" "$RENAMED"
-            echo "artifactName=shizukuplus-debug.apk" >> $GITHUB_OUTPUT
+            echo "artifactName=${APK_NAME}" >> $GITHUB_OUTPUT
             echo "filePath=${RENAMED}" >> $GITHUB_OUTPUT
           else
             CMD="./gradlew :manager:assembleShizukuplusRelease :manager:assembleDropinRelease $ARGS"
@@ -186,20 +220,25 @@ jobs:
                     --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
                     --key-pass "pass:${{ secrets.KEYSTORE_ALIAS_PASSWORD }}" \
                     "$FILE"
+                else
+                  echo "::error::Release APK $FILE is unsigned and key.jks is missing"
+                  exit 1
                 fi
               fi
             }
 
             PLUS_FILE=$(find manager/build/outputs/apk/shizukuplus/release -name "*.apk" -type f | head -1)
             DROPIN_FILE=$(find manager/build/outputs/apk/dropin/release -name "*.apk" -type f | head -1)
-            [ -z "$PLUS_FILE" ] && { echo "Error: No ShizukuPlus APK found"; exit 1; }
+            [ -z "$PLUS_FILE" ] && { echo "Error: No ShizukuTendCF APK found"; exit 1; }
             [ -z "$DROPIN_FILE" ] && { echo "Error: No drop-in APK found"; exit 1; }
 
             sign_apk "$PLUS_FILE"
             sign_apk "$DROPIN_FILE"
 
-            PLUS_RENAMED="$(dirname "$PLUS_FILE")/shizukuplus.apk"
-            DROPIN_RENAMED="$(dirname "$DROPIN_FILE")/shizuku-dropin.apk"
+            ABI=$(get_apk_abi "$PLUS_FILE")
+            APK_NAME="ShizukuTendCF-${VERSION}-${ABI}.apk"
+            PLUS_RENAMED="$(dirname "$PLUS_FILE")/${APK_NAME}"
+            DROPIN_RENAMED="$(dirname "$DROPIN_FILE")/ShizukuTendCF-dropin.apk"
             mv "$PLUS_FILE" "$PLUS_RENAMED"
             mv "$DROPIN_FILE" "$DROPIN_RENAMED"
 
@@ -207,12 +246,12 @@ jobs:
             COMPAT_FILE=$(find compat/build/outputs/apk/release -name "*.apk" -type f | head -1)
             if [ -n "$COMPAT_FILE" ]; then
               sign_apk "$COMPAT_FILE"
-              COMPAT_RENAMED="$(dirname "$COMPAT_FILE")/shizuku-compat.apk"
+              COMPAT_RENAMED="$(dirname "$COMPAT_FILE")/ShizukuTendCF-compat.apk"
               mv "$COMPAT_FILE" "$COMPAT_RENAMED"
               echo "compatPath=${COMPAT_RENAMED}" >> $GITHUB_OUTPUT
             fi
 
-            echo "artifactName=shizukuplus.apk" >> $GITHUB_OUTPUT
+            echo "artifactName=${APK_NAME}" >> $GITHUB_OUTPUT
             echo "filePath=${PLUS_RENAMED}" >> $GITHUB_OUTPUT
             echo "dropinPath=${DROPIN_RENAMED}" >> $GITHUB_OUTPUT
           fi
@@ -223,7 +262,7 @@ jobs:
         run: |
           ./gradlew :manager:uploadSentryProguardMappingsShizukuplusRelease :manager:uploadSentryNativeSymbolsForShizukuplusRelease
 
-      - name: Upload ShizukuPlus Artifact
+      - name: Upload ShizukuTendCF Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.buildWithGradle.outputs.artifactName }}
@@ -233,14 +272,14 @@ jobs:
         if: ${{ steps.buildWithGradle.outputs.dropinPath != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: shizuku-dropin.apk
+          name: ShizukuTendCF-dropin.apk
           path: ${{ steps.buildWithGradle.outputs.dropinPath }}
 
       - name: Upload Compat Stub Artifact
         if: ${{ steps.buildWithGradle.outputs.compatPath != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: shizuku-compat.apk
+          name: ShizukuTendCF-compat.apk
           path: ${{ steps.buildWithGradle.outputs.compatPath }}
 
       - name: Upload Version File
@@ -386,7 +425,7 @@ jobs:
           # Mirror the tag locally so git tag --list in the release-notes step sees this release.
           git tag "$TAG_NAME" "${{ github.sha }}" 2>/dev/null || true
 
-      - name: Download ShizukuPlus Artifact
+      - name: Download ShizukuTendCF Artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.artifactName }}
@@ -396,14 +435,14 @@ jobs:
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          name: shizuku-dropin.apk
+          name: ShizukuTendCF-dropin.apk
           path: files/dropin
 
       - name: Download Compat Stub Artifact
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          name: shizuku-compat.apk
+          name: ShizukuTendCF-compat.apk
           path: files/compat
 
       - name: Generate Release Notes
@@ -539,25 +578,62 @@ jobs:
           # Rename each built APK to a versioned, self-identifying filename before attaching (#340).
           #
           # Select each asset by its VERIFIED applicationId, not by "first .apk in a directory". The
-          # ShizukuPlus artifact download landed multiple APKs in files/main, so the old
-          # `find files/main | head -1` grabbed the Drop-In and published it as the Plus asset —
+          # ShizukuTendCF artifact download landed multiple APKs in files/main, so the old
+          # `find files/main | head -1` grabbed the Drop-In and published it as the primary asset —
           # every release r2141..r2152 shipped the Drop-In (moe.shizuku.privileged.api) under BOTH the
-          # Plus and Drop-In names, so the standard af.shizuku.plus.api build (the coexist-with-stock
+          # primary and Drop-In names, so the standard af.shizuku.plus.api build (the coexist-with-stock
           # one) never reached users and wouldn't install alongside stock Shizuku.
           ASSETS=()
           # applicationId of an APK, read from its FileProvider authority (${applicationId}.fileprovider).
           # Toolless (no aapt in this job): unzip the binary manifest, pull the UTF-16 string.
           appid_of() { unzip -p "$1" AndroidManifest.xml 2>/dev/null | strings -e l \
             | grep -oE '[a-zA-Z0-9._]+\.fileprovider' | head -1 | sed 's/\.fileprovider$//'; }
-          attach() { mv "$1" "files/${2}.apk"; ASSETS+=("files/${2}.apk"); }
+          attach() {
+            local src="$1"
+            local dest="files/${2}.apk"
+            if [ "$src" != "$dest" ]; then
+              mv "$src" "$dest"
+            fi
+            ASSETS+=("$dest")
+          }
+          get_apk_abi() {
+            local file="$1"
+            case "$(basename "$file")" in
+              *arm64-v8a*) echo "arm64-v8a"; return ;;
+              *armeabi-v7a*) echo "armeabi-v7a"; return ;;
+              *x86_64*) echo "x86_64"; return ;;
+              *x86*) echo "x86"; return ;;
+            esac
+            local abis
+            abis=$(unzip -l "$file" 2>/dev/null | grep -oE 'lib/[^/]+/' | sort -u | sed 's#lib/##;s#/##')
+            local count
+            count=$(echo "$abis" | grep -c . || true)
+            if [ "$count" -eq 1 ]; then
+              echo "$abis"
+            else
+              echo "universal"
+            fi
+          }
 
-          # Plus (standard) — uniquely af.shizuku.plus.api. Fail the release if it's missing.
-          PLUS_APK=""
-          for f in $(find files -name "*.apk" -type f 2>/dev/null); do
-            [ "$(appid_of "$f")" = "af.shizuku.plus.api" ] && { PLUS_APK="$f"; break; }
+          # ShizukuTendCF (standard) — uniquely af.shizuku.plus.api. Fail the release if it's missing.
+          PLUS_APKS=()
+          for f in $(find files/main -name "*.apk" -type f 2>/dev/null); do
+            if [ "$(appid_of "$f")" = "af.shizuku.plus.api" ]; then
+              PLUS_APKS+=("$f")
+            fi
           done
-          [ -z "$PLUS_APK" ] && { echo "::error::Standard af.shizuku.plus.api APK missing from build artifacts"; exit 1; }
-          attach "$PLUS_APK" "Shizuku+-${VERSION}"
+          if [ ${#PLUS_APKS[@]} -eq 0 ]; then
+            for f in $(find files -name "*.apk" -type f 2>/dev/null); do
+              if [ "$(appid_of "$f")" = "af.shizuku.plus.api" ]; then
+                PLUS_APKS+=("$f")
+              fi
+            done
+          fi
+          [ ${#PLUS_APKS[@]} -eq 0 ] && { echo "::error::Standard af.shizuku.plus.api APK missing from build artifacts"; exit 1; }
+          for apk in "${PLUS_APKS[@]}"; do
+            ABI=$(get_apk_abi "$apk")
+            attach "$apk" "ShizukuTendCF-${VERSION}-${ABI}"
+          done
 
           # Drop-In and the Compat stub BOTH use moe.shizuku.privileged.api. The Drop-In is the full
           # manager (~5-6 MB); the Compat stub is tiny — so the Drop-In is the largest such APK outside
@@ -565,10 +641,10 @@ jobs:
           DROPIN_APK=$(for f in $(find files/main files/dropin -name "*.apk" -type f 2>/dev/null); do
             [ "$(appid_of "$f")" = "moe.shizuku.privileged.api" ] && stat -c '%s %n' "$f"
           done | sort -rn | head -1 | cut -d' ' -f2-)
-          [ -n "$DROPIN_APK" ] && attach "$DROPIN_APK" "Shizuku+-Drop-In-${VERSION}"
+          [ -n "$DROPIN_APK" ] && attach "$DROPIN_APK" "ShizukuTendCF-Drop-In-${VERSION}"
 
           COMPAT_APK=$(find files/compat -name "*.apk" -type f 2>/dev/null | head -1)
-          [ -n "$COMPAT_APK" ] && attach "$COMPAT_APK" "Shizuku+-Compat-Hub-${VERSION}"
+          [ -n "$COMPAT_APK" ] && attach "$COMPAT_APK" "ShizukuTendCF-Compat-Hub-${VERSION}"
 
           # When promoting from prerelease to stable (IS_PRERELEASE=false via workflow_dispatch
           # without the prerelease flag), delete the existing prerelease first. The push to master
