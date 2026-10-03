@@ -2572,6 +2572,32 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             }
             return true;
         }
+        // An AIDL method declared "= N" is transaction FIRST_CALL_TRANSACTION + N on the wire. The
+        // hand-written switch in Service.onTransact() matches bare N for a few methods, so three
+        // wire codes from standard clients would be answered as the wrong method. Take them here,
+        // before that switch sees them.
+        if (code == IBinder.FIRST_CALL_TRANSACTION + 2 /* getVersion; the switch answers getUid */) {
+            data.enforceInterface(ShizukuApiConstants.BINDER_DESCRIPTOR);
+            int version = getVersion();
+            reply.writeNoException();
+            reply.writeInt(version);
+            return true;
+        } else if (code == IBinder.FIRST_CALL_TRANSACTION + 16 /* shouldShowRequestPermissionRationale; the switch runs attachApplication */) {
+            data.enforceInterface(ShizukuApiConstants.BINDER_DESCRIPTOR);
+            boolean rationale = shouldShowRequestPermissionRationale();
+            reply.writeNoException();
+            reply.writeInt(rationale ? 1 : 0);
+            return true;
+        } else if (code == IBinder.FIRST_CALL_TRANSACTION + 13 /* attachApplication(IBinder, String) from API <= 12; the switch runs requestPermission */) {
+            data.enforceInterface(ShizukuApiConstants.BINDER_DESCRIPTOR);
+            IBinder application = data.readStrongBinder();
+            Bundle args = new Bundle();
+            args.putString(ShizukuApiConstants.ATTACH_APPLICATION_PACKAGE_NAME, data.readString());
+            // No API version in args: the client is treated as pre-v13.
+            attachApplication(IShizukuApplication.Stub.asInterface(application), args);
+            reply.writeNoException();
+            return true;
+        }
         try {
             return super.onTransact(code, data, reply, flags);
         } catch (SecurityException e) {
@@ -2782,13 +2808,9 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             // triggers ClassNotFoundException / BadParcelableException inside Bundle.unparcel(), which
             // invalidates the entire bundle — including the moe key — on Android 11 (#446, #389).
             //
-            // Apps that declare moe.shizuku.manager.permission.API_V23 (original Shizuku permission,
-            // not the ShizukuPlus af.shizuku variant) were compiled against the old positional AIDL
-            // transaction codes, which are all +1 relative to ShizukuPlus's explicit codes. Wrap the
-            // service binder in a proxy that applies the -1 offset so calls land on the right methods.
-            IBinder binderForLegacy = isLegacyOriginalShizukuApp(packageName, userId)
-                    ? new LegacyShizukuBinderProxy(binder) : binder;
-            extra.putParcelable("moe.shizuku.privileged.api.intent.extra.BINDER", new moe.shizuku.api.BinderContainer(binderForLegacy));
+            // Apps built against the original Shizuku API get the service binder as it is: they
+            // send the same wire codes as everyone else (see onTransact), so nothing is renumbered.
+            extra.putParcelable("moe.shizuku.privileged.api.intent.extra.BINDER", new moe.shizuku.api.BinderContainer(binder));
             extra.putBinder("binder", binder);
 
             Bundle reply = IContentProviderUtils.callCompat(provider, null, name, "sendBinder", null, extra);
@@ -2810,16 +2832,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                     LOGGER.w(tr, "removeContentProviderExternal");
                 }
             }
-        }
-    }
-
-    private static boolean isLegacyOriginalShizukuApp(String packageName, int userId) {
-        try {
-            PackageInfo pi = Android17Compat.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS, userId);
-            return pi != null && pi.requestedPermissions != null
-                    && ArraysKt.contains(pi.requestedPermissions, ServerConstants.PERMISSION_ORIGINAL);
-        } catch (Throwable e) {
-            return false;
         }
     }
 

@@ -261,3 +261,35 @@ All are in base-inherited code; none blocks a release. Order is by value.
 6. **Fleet profile swap window on API 24–29.** On Android 7–10 the app's external files dir is writable
    by apps holding `WRITE_EXTERNAL_STORAGE`; either accept the profile inline (`--es profile_json`) below
    API 30 or document the limitation. Moot if every fleet device is Android 11+.
+
+## End-of-rebase upstreaming pass (operator instruction, 2026-10-03)
+
+Do this last, once the new build works on all three fleet devices (SM-S921U1, Pixel 7a, Titan 2).
+
+1. **Find, file and write PRs for everything generally useful** to thejaustin/ShizukuPlus and
+   thejaustin/ShizukuPlus-API: bug fixes found while getting the fleet working (transaction-code
+   handling in `Service.onTransact`, server-side exception logging, the CI Sentry `-x` failure without
+   a token, anything else from the device debugging log below).
+2. **Generalise what is fleet-specific in code but useful in principle**, so it can be offered upstream
+   rather than carried as a private delta (for example a configurable trusted-signer list instead of a
+   built-in fingerprint, headless start/stop/status receivers, fleet profiles).
+3. **Review gate:** any PR code that has not already been checked by at least two other agents gets
+   that review before the PR is opened.
+4. Fixes to code that lives in the `api` submodule are carried in our own server class until then, so
+   the submodule keeps tracking upstream.
+
+## Final step: updated general rebase prompt (operator instruction, 2026-10-03)
+
+After the upstreaming pass, copy an updated "rebase a fork onto ShizukuPlus" prompt to the clipboard.
+
+1. **General, no placeholders.** The prompt must ask the user for whatever it needs (fork location,
+   upstream, branch names, signing, devices) instead of carrying fill-in blanks.
+2. **Discover the user's own delta.** Unlike the current prompt, which lists our specific features, it
+   must search the fork for the user's own features and bug fixes, list them, and ask the user whether
+   it found them all.
+3. **Fold in what this rebase taught us** (api gitlink drift, CI without a Sentry token, on-device
+   verification of server-side behaviour, signer and versionCode checks before a fleet rollout).
+4. **End with the upstreaming step:** prompt the user to file PRs and issues against upstream the way
+   we do it in the section above, including the two-other-agents review gate.
+
+Starting point: `docs/rebase-on-shizukuplus-prompt.md` (the prompt as written on 2026-10-03).
