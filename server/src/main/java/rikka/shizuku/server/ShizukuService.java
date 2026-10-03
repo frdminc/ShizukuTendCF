@@ -2572,7 +2572,17 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             }
             return true;
         }
-        return super.onTransact(code, data, reply, flags);
+        try {
+            return super.onTransact(code, data, reply, flags);
+        } catch (SecurityException e) {
+            // Denials are already logged where they are thrown.
+            throw e;
+        } catch (RuntimeException e) {
+            // Binder hands the exception back to the caller without logging it here, which
+            // leaves a client-side "IllegalStateException" with no server-side trace.
+            LOGGER.w(e, "onTransact code=%d from uid=%d pid=%d failed", code, Binder.getCallingUid(), Binder.getCallingPid());
+            throw e;
+        }
     }
 
     void sendBinderToClient() {
