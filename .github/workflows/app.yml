@@ -204,14 +204,18 @@ jobs:
             echo "filePath=${RENAMED}" >> $GITHUB_OUTPUT
           else
             CMD="./gradlew :manager:assembleShizukuplusRelease :manager:assembleDropinRelease $ARGS"
-            eval $CMD --stacktrace --info \
-              -x uploadSentryProguardMappingsShizukuplusRelease \
-              -x uploadSentryProguardMappingsDropinRelease \
-              -x uploadSentryNativeSymbolsForShizukuplusRelease \
-              -x uploadSentryNativeSymbolsForDropinRelease \
-              -x sentryUploadSourceBundleShizukuplusRelease \
-              -x sentryUploadSourceBundleDropinRelease \
-              -x :manager:lint
+            # manager/build.gradle only registers the Sentry upload tasks when a
+            # token is set, and Gradle fails on -x for a task that does not exist.
+            SENTRY_SKIP=""
+            if [ -n "$SENTRY_AUTH_TOKEN" ]; then
+              SENTRY_SKIP="-x uploadSentryProguardMappingsShizukuplusRelease \
+                -x uploadSentryProguardMappingsDropinRelease \
+                -x uploadSentryNativeSymbolsForShizukuplusRelease \
+                -x uploadSentryNativeSymbolsForDropinRelease \
+                -x sentryUploadSourceBundleShizukuplusRelease \
+                -x sentryUploadSourceBundleDropinRelease"
+            fi
+            eval $CMD --stacktrace --info $SENTRY_SKIP -x :manager:lint
 
             sign_apk() {
               local FILE="$1"
