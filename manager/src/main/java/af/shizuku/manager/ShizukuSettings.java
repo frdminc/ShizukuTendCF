@@ -17,6 +17,7 @@ import java.lang.annotation.Retention;
 import java.util.Locale;
 import af.shizuku.manager.service.WatchdogService;
 import af.shizuku.manager.receiver.BootCompleteReceiver;
+import af.shizuku.manager.receiver.BootRetryWorker;
 import af.shizuku.manager.utils.Token;
 import af.shizuku.manager.utils.EmptySharedPreferencesImpl;
 import af.shizuku.manager.utils.EnvironmentUtils;
@@ -515,6 +516,9 @@ public class ShizukuSettings {
             PackageManager.DONT_KILL_APP
         );
         getPreferences().edit().putBoolean(Keys.KEY_START_ON_BOOT, enable).apply();
+        if (!enable) {
+            BootRetryWorker.cancel(context);
+        }
     }
 
     /**

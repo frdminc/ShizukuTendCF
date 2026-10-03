@@ -40,6 +40,13 @@ class BootCompleteReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 Timber.tag("BootCompleteReceiver").w(e, "Auto-start skipped (service not ready, e.g. direct boot)")
             }
+            // The direct start above is one shot; on slow or unattended devices (FBE unlock,
+            // network authorization, pairing) it fails and nothing retries until the next
+            // reboot. Keep retrying in the background until Shizuku is up or the user turns
+            // start-on-boot off.
+            if (action != Intent.ACTION_MY_PACKAGE_REPLACED) {
+                BootRetryWorker.schedule(context)
+            }
         } else {
             Timber.tag("BootCompleteReceiver").d("LOCKED_BOOT_COMPLETED — deferring start to BOOT_COMPLETED")
         }
