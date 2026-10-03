@@ -144,7 +144,9 @@ object ShizukuReceiverStarter {
 
         val nb = NotificationCompat.Builder(context, CHANNEL_ID)
 
-        if (msg != null) nb.setContentText(msg)
+        // BigTextStyle so a long message (the authorisation wait carries a key fingerprint the
+        // user is asked to compare) is readable in full when expanded.
+        if (msg != null) nb.setContentText(msg).setStyle(NotificationCompat.BigTextStyle().bigText(msg))
 
         return nb
             .setSmallIcon(R.drawable.ic_notification_icon)

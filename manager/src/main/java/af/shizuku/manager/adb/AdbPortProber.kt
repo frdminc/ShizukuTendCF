@@ -40,6 +40,14 @@ object AdbPortProber {
      */
     suspend fun findActiveLoopbackPort(context: Context? = null): Int =
         withContext(Dispatchers.IO) {
+            // When adbd reports the TCP port it is listening on, use only that. A fixed candidate
+            // such as 5555 could be held by another app while adbd listens elsewhere, and that app
+            // could relay adbd's auth challenge to this app's authorised key.
+            val reported = af.shizuku.manager.utils.EnvironmentUtils.getAdbTcpPort()
+            if (reported in 1..65535) {
+                return@withContext if (isPortOpen(reported, 150)) reported else -1
+            }
+
             val candidates = LinkedHashSet<Int>()
 
             // 1. Standard ADB TCP port
