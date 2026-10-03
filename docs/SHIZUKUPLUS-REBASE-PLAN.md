@@ -229,3 +229,35 @@ Adversary text for a PR body, verbatim from `adversary-fleet-verdict3.md`:
 > fleet-only build or on-device opt-in is recommended; (2) a profile-file swap window remains on API
 > 24–29; (3) CI hardening follow-ups: certificate pinning, the IS_DEBUG coercion, env-based secrets in
 > the remaining steps; (4) update-checker ABI matching.
+
+## Master flipped; operator decisions closed (2026-10-03, later)
+
+- **`master` → `a4dbb58d`** (was `a7178c9e`), pushed with `--force-with-lease`; `legacy/pre-shizukuplus`
+  is the rollback point. `shizukuplus-base` is now just an alias of master and can be deleted once nothing
+  references it.
+- **Review 1.3 decision: (a) keep the trusted-signer fingerprint built in, disclosed in the README.**
+  Revisit (b, a fleet-only flavour) only if release APKs are ever published for people outside the fleet.
+- **App label** renamed `Shizuku+` → `ShizukuTendCF` (flavour `resValue` in `manager/build.gradle` plus
+  the `core/ui` fallbacks). The Drop-In flavour keeps the label `Shizuku` on purpose, since it occupies the
+  stock package name.
+- **`frdminc/Shizuku-API` archived on GitHub** (superseded by the thejaustin/ShizukuPlus-API submodule).
+  No local checkout existed under `~/src`, so there was nothing to register with `~/src/justfile`.
+
+## Queued follow-ups (operator said "queue all", 2026-10-03)
+
+All are in base-inherited code; none blocks a release. Order is by value.
+
+1. **CI: pin the release certificate.** After signing, run `apksigner verify --print-certs` and fail the
+   job unless the SHA-256 equals the fingerprint in `ShizukuConfigManager.TRUSTED_SIGNER_SHA256`. Catches a
+   swapped keystore secret before an APK that no fleet device will trust is published.
+2. **CI: `IS_DEBUG` coercion.** `app.yml` compares a string input to a boolean in places; a "debug"
+   workflow_dispatch can take the release path (fails closed on signing today, but fix the comparison).
+3. **CI: env-based secrets in the remaining steps** (`Create signing.properties`, `sign_apk`) — same
+   pattern as the Validate step, so secrets never appear in a shell-interpolated command line.
+4. **Updater: ABI + name matching.** `UpdateChecker` should pick the asset named
+   `ShizukuTendCF-<ver>-<abi>.apk` for the device's primary ABI, falling back to the universal APK.
+5. **Updater: SHA-256 digest verification** before install, from a digest the release publishes
+   (`UpdateHelper.kt.reference` in the session scratchpad has the ported check to lift from).
+6. **Fleet profile swap window on API 24–29.** On Android 7–10 the app's external files dir is writable
+   by apps holding `WRITE_EXTERNAL_STORAGE`; either accept the profile inline (`--es profile_json`) below
+   API 30 or document the limitation. Moot if every fleet device is Android 11+.

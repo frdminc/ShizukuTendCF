@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Shizuku+</string>
+    <string name="app_name">ShizukuTendCF</string>
     <string name="translation_contributors">thejaustin</string>
     <string name="translation_url">https://github.com/thejaustin/ShizukuPlus</string>
     <string name="settings_expressive_title">Виразний дизайн (M3E)</string>

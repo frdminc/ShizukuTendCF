@@ -51,7 +51,7 @@ android {
         shizukuplus {
             dimension = "distribution"
             applicationId = "af.shizuku.plus.api"
-            resValue "string", "app_name", "Shizuku+"
+            resValue "string", "app_name", "ShizukuTendCF"
         }
         dropin {
             dimension = "distribution"
