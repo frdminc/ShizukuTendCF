@@ -76,6 +76,10 @@ object AdbStarter {
             throw AdbAuthPendingException("another start is waiting for the adbd authorisation dialog to be answered")
         }
 
+        // Set when this call stood down because another start owns the authorisation wait; the
+        // finally block must then leave wireless debugging alone — it is the owner's transport.
+        var stoodDown = false
+
         suspend fun AdbClient.runCommand(cmd: String) {
             command(cmd) { log?.invoke(String(it)) }
         }
@@ -153,6 +157,7 @@ object AdbStarter {
                 }
             }
         } catch (e: Exception) {
+            if (e is AdbAuthPendingException) stoodDown = true
             Timber.tag(TAG).e(e, "startAdb failed on port %d: %s", port, e.message)
             if (e is SSLException && (e.message?.contains("protocol version") == true || e is javax.net.ssl.SSLProtocolException)) {
                 withContext(Dispatchers.Main) {
@@ -177,7 +182,7 @@ object AdbStarter {
             }
             throw e
         } finally {
-            if (ShizukuSettings.getAutoDisableUsbDebugging() && context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
+            if (!stoodDown && ShizukuSettings.getAutoDisableUsbDebugging() && context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
                 Settings.Global.putInt(context.contentResolver, "adb_wifi_enabled", 0)
             }
         }
@@ -267,7 +272,11 @@ object AdbStarter {
                         attempt == maxAttempts ||
                         e is CancellationException ||
                         // Reconnecting would raise another "Allow USB debugging?" dialog.
-                        e is AdbAuthTimeoutException
+                        e is AdbAuthTimeoutException ||
+                        // A CAS loser must stand down, not reconnect: a retry could claim the
+                        // slot the instant its owner releases it and offer a second key, or —
+                        // once the owner's key is accepted — start a second server in parallel.
+                        e is AdbAuthPendingException
                     ) {
                         throw e
                     }

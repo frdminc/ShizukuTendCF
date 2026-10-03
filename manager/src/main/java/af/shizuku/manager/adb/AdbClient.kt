@@ -125,15 +125,18 @@ class AdbClient(
         // Claim the wait slot before the key goes out: the claim is a single compare-and-set, so
         // two connections racing past their callers' advisory isWaiting() checks cannot both
         // offer a key and stack two dialogs. The loser aborts without adbd ever seeing its key.
+        // Everything constructed after the CAS lives inside the try, so the slot cannot leak if
+        // setup (e.g. the Timer's thread creation) fails: end() runs on every post-claim path.
+        val deadlineHit = AtomicBoolean(false)
         if (!AdbAuthWait.tryBegin()) {
             throw AdbAuthPendingException("another start is already waiting for the adbd authorisation dialog")
         }
-        Timber.tag(TAG).i("Waiting up to %d ms for the user to accept the adbd authorisation dialog", AdbAuthWait.TIMEOUT_MS)
-        // soTimeout bounds each read call, not the whole wait, so a peer trickling bytes could
-        // hold the connection (and the process-wide gate) open. Close the socket at a deadline.
-        val deadlineHit = AtomicBoolean(false)
-        val deadline = Timer("adb-auth-deadline", true)
+        var deadline: Timer? = null
         try {
+            Timber.tag(TAG).i("Waiting up to %d ms for the user to accept the adbd authorisation dialog", AdbAuthWait.TIMEOUT_MS)
+            // soTimeout bounds each read call, not the whole wait, so a peer trickling bytes could
+            // hold the connection (and the process-wide gate) open. Close the socket at a deadline.
+            deadline = Timer("adb-auth-deadline", true)
             write(A_AUTH, ADB_AUTH_RSAPUBLICKEY, 0, key.adbPublicKey)
             runCatching { onAuthorizationPending?.invoke() }
             s.soTimeout = AdbAuthWait.TIMEOUT_MS
@@ -156,7 +159,7 @@ class AdbClient(
                 AdbAuthTimeoutException("adbd did not accept the key: ${e.message}")
             }
         } finally {
-            deadline.cancel()
+            deadline?.cancel()
             AdbAuthWait.end()
             runCatching { s.soTimeout = 15000 }
         }

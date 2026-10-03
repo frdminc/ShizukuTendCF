@@ -301,8 +301,11 @@ class AdbStartWorker(
             if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
                 ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
             }
-            ShizukuStateMachine.update()
-            AdbAuthWait.markUnanswered()
+            // Don't let a stale failed attempt suppress future background starts when a server
+            // is in fact running (some other start succeeded while this one waited).
+            if (ShizukuStateMachine.update() != ShizukuStateMachine.State.RUNNING) {
+                AdbAuthWait.markUnanswered()
+            }
             updateNotification(applicationContext, WorkerState.AUTH_TIMED_OUT)
             return Result.failure()
         } catch (e: Exception) {
@@ -333,6 +336,10 @@ class AdbStartWorker(
                 ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
             }
             if (ShizukuStateMachine.update() == ShizukuStateMachine.State.RUNNING) {
+                // The server is verifiably up despite the exception (e.g. the connection dropped
+                // after the starter command ran), so the key is authorised: a stale unanswered
+                // marker here would wrongly suppress watchdog recovery after a later crash.
+                AdbAuthWait.clearUnanswered()
                 return Result.success()
             } else {
                 // After repeated mDNS timeouts, suggest TCP Mode — the device may be

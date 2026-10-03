@@ -181,7 +181,16 @@ class ViewModel(
             } else if (isSystem) {
                 startSys()
             } else {
-                AdbStarter.startAdb(appContext, port, { log(it) })
+                try {
+                    AdbStarter.startAdb(appContext, port, { log(it) })
+                } catch (e: af.shizuku.manager.adb.AdbAuthPendingException) {
+                    // Another start owns the authorisation dialog. Informational, not a failure:
+                    // the generic handler would reset the owner's STARTING state to STOPPED and
+                    // file a spurious Sentry report. Leave the owner's state and wait alone.
+                    log(appContext.getString(af.shizuku.manager.R.string.wadb_notification_awaiting_auth) + "\n")
+                    started = false
+                    return@launch
+                }
             }
             Starter.waitForBinder({ log(it) })
         }

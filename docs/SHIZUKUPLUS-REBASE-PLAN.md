@@ -318,8 +318,21 @@ Reports were in the session scratchpad and are summarised here because that is v
    a. Consequence: an external `START_SERVICE` launch can no longer start over ADB (it shows
       "Invalid port value: 0"); root and system starts still work. It never carried a usable port
       without the extra, so this mostly formalises existing behaviour.
-4. **Left open from the reviews (all Low) — closed 2026-10-03 (adversary re-review pending, not
-   yet device-tested).**
+4. **Left open from the reviews (all Low) — closed 2026-10-03; re-reviewed same day by two
+   independent agents (codex and antigravity/Gemini), both BLOCK, and their confirmed findings
+   fixed in the follow-up commit (not yet device-tested).** The re-review fixes:
+   `connectWithRetry` treats `AdbAuthPendingException` as terminal (a CAS loser retried up to 8
+   times and could double-start the server once the owner's key was accepted); a stood-down
+   `startAdb` no longer runs the auto-disable-wireless `finally`; `StarterActivity` handles
+   pending informationally (no state clobber of the owning start, no Sentry report);
+   the `tryBegin`-to-`try` gap that could leak the wait slot on setup failure is closed; and a
+   verified-successful start now always clears the unanswered marker (binder-received listener,
+   worker success-after-exception path, and `markUnanswered` skipped when a server is RUNNING),
+   so a stale marker cannot suppress watchdog recovery. Deferred from the re-reviews (Low,
+   pre-existing or cosmetic, tracked with the full reports in site-private
+   `memory/handoffs/ShizukuTendCF/reports-2026-10-03/`): one pre-existing exported-activity
+   start route that bypasses the marker guard, a worker notification that can outlive a
+   stood-down worker, and the tile's 15 s STARTING reset predating this work.
    a. Buttons pressed while a dialog is pending ("Attempt now", tile, Home) do nothing silently.
       Fixed for "Attempt now": `NotifAttemptReceiver` shows a toast while the wait holds. The tile
       already toasts "Starting…" during the wait (state stays STARTING), and the Home path logs
@@ -399,8 +412,14 @@ Starting point: `docs/rebase-on-shizukuplus-prompt.md` (the prompt as written on
 ## Carry into the next handoff (operator instruction, 2026-10-03)
 
 1. **Titan 2: the stayturgid agent reports `sshd=down`** (SM-S921U1 and Pixel 7a report `sshd=up`).
-   Seen in the agent's comonitor line after the Drop-In rollout; not investigated, and not known to be
-   related to it.
+   Diagnosed read-only 2026-10-03 (full report in site-private
+   `memory/handoffs/ShizukuTendCF/reports-2026-10-03/`): sshd is genuinely down — no Termux main
+   process, nothing listening on 8022, connection refused from the Mac. High confidence: Android
+   killed Termux's processes at 16:23:41 when a permission grant/revoke changed its GIDs, and the
+   main Termux service never recovered (only `com.termux.api` survives). The initiating permission
+   change is unidentified; do not attribute it to a Shizuku build or agent action from timing
+   alone. Remediation (operator action, not performed): open Termux on the phone and run `sshd`
+   inside it — wrong UID from any adb shell; no reboot or Shizuku restart needed.
 2. **Restarting adbd kills a Shizuku server that was started from an adb shell.** `adb tcpip 5555` on the
    Pixel 7a and Titan 2 left both without Shizuku for about three minutes until the server was started
    again. A server started through `HEADLESS_START` should be checked for the same behaviour.
