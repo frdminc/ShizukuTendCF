@@ -388,8 +388,9 @@ Starting point: `docs/rebase-on-shizukuplus-prompt.md` (the prompt as written on
 2. **Restarting adbd kills a Shizuku server that was started from an adb shell.** `adb tcpip 5555` on the
    Pixel 7a and Titan 2 left both without Shizuku for about three minutes until the server was started
    again. A server started through `HEADLESS_START` should be checked for the same behaviour.
-3. **TODO, at the end: restore GitGuardian secret scanning.** The workflow (`.github/workflows/gitguardian.yaml`
-   on the base) was removed on 2026-10-03 because the repo has no `GITGUARDIAN_API_KEY` secret and it
-   failed on every push. To restore: add that secret with `gh secret set GITGUARDIAN_API_KEY --repo
-   frdminc/ShizukuTendCF`, then bring the file back from `shizukuplus/master` or from git history
-   (`git log --diff-filter=D -- .github/workflows/`).
+3. **GitGuardian: dropped permanently** (operator decision, 2026-10-03). The workflow
+   (`.github/workflows/gitguardian.yaml` on the base) was removed on 2026-10-03 because the repo has
+   no `GITGUARDIAN_API_KEY` secret and it failed on every push; the operator later decided not to
+   restore it — TruffleHog (`.github/workflows/security.yml`) covers secret scanning. The Gitleaks
+   job was removed from `security.yml` the same day for the same reason (needs a `GITLEAKS_LICENSE`
+   org secret); restore it from git history if a license is ever added.

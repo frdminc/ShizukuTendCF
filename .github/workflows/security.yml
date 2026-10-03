@@ -6,19 +6,9 @@ on:
   pull_request:
     branches: [ "master", "main" ]
 
+# TODO: restore the Gitleaks job (gitleaks/gitleaks-action@v2) once the org has a
+# GITLEAKS_LICENSE secret; without it the job fails on every push (removed 2026-10-03).
 jobs:
-  gitleaks:
-    name: Gitleaks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   trufflehog:
     name: TruffleHog
     runs-on: ubuntu-latest
