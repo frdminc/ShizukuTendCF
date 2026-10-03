@@ -713,4 +713,19 @@ jobs:
           PRERELEASE_ARGS=()
           [ "$IS_PRERELEASE" = "true" ] && PRERELEASE_ARGS=(--prerelease)
 
+          # GitHub rejects release bodies over 125k characters (HTTP 422 "body is
+          # too long"), which a long gap between releases can hit — the first
+          # post-rebase release rolled up every commit since release46 and died
+          # here. Cap the notes, keeping the full-compare link readers need.
+          MAX_NOTES_BYTES=120000
+          if [ "$(wc -c < release_notes.md)" -gt "$MAX_NOTES_BYTES" ]; then
+            head -c "$MAX_NOTES_BYTES" release_notes.md > release_notes.trunc
+            {
+              printf '\n\n---\n'
+              printf '_Release notes truncated at %s bytes (GitHub body limit)._\n' "$MAX_NOTES_BYTES"
+              printf '[Full commit list](https://github.com/%s/commits/%s)\n' "${{ github.repository }}" "$TAG_NAME"
+            } >> release_notes.trunc
+            mv release_notes.trunc release_notes.md
+          fi
+
           gh release create "$TAG_NAME" "${ASSETS[@]}" --title "$VERSION" --notes-file release_notes.md "${PRERELEASE_ARGS[@]}"
