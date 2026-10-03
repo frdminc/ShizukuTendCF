@@ -291,10 +291,19 @@ Reports were in the session scratchpad and are summarised here because that is v
    the key is offered; other start paths stand down; nothing retries after a timeout or rejection;
    the boot retry loop stops after one unanswered dialog per boot. The waiting text shows the app's
    key fingerprint (MD5, the form the system dialog shows).
-   a. Not tested on a device at all. Test plan: fresh key, `HEADLESS_START`, expect exactly one
+   a. **Device result, SM-S921U1, Drop-In r2772, 2026-10-03:** after "Revoke USB debugging
+      authorisations", one `HEADLESS_START` produced exactly one `adbd_auth: sending prompt` (key
+      `shizuku+`); two more `HEADLESS_START` broadcasts during the wait logged "Start already in
+      progress" and opened no connection; after the operator accepted, the server was RUNNING and the
+      agent logged `UserService connected`. In-place update from r2759 and the authorised stop/start
+      path also pass. Not exercised: the 150 s timeout path, "Attempt now" during the wait, a rejected
+      prompt, the boot path.
+   b. The Mac's own adb client raised 4 prompts for the Mac's key after the revoke: `adb` retries an
+      unauthorised TCP device by itself. That is the host adb client, not this app.
+   c. Original test plan: fresh key, `HEADLESS_START`, expect exactly one
       dialog and `adb logcat -s adbd:*` showing one "sending prompt"; repeat the broadcast and tap
       "Attempt now" while waiting; accept; then the 150 s timeout path; then the authorised fast path.
-   b. Unverified premise: that adbd dismisses its dialog when the offering connection closes.
+   d. Unverified premise: that adbd dismisses its dialog when the offering connection closes.
 3. **Auth-relay hole in the base, fixed (upstream candidate, report privately).** `StarterActivity`
    was exported and took a caller-chosen port. With adbd on plain TCP and this app's key authorised
    (the fleet setup), a local app could run a fake adbd on its own port, have this app sign the real
