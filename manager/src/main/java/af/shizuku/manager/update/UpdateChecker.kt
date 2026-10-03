@@ -30,6 +30,7 @@ object UpdateChecker {
 
     // Fallback: GitHub's Atom feed is served from github.com CDN — different IP range
     // than api.github.com, so routing issues specific to that host don't affect it.
+    private val SAFE_TAG = Regex("^v?[0-9][0-9A-Za-z._-]{0,63}$")
     private const val ATOM_URL = "https://github.com/frdminc/ShizukuTendCF/releases.atom"
     private const val CONNECT_TIMEOUT_MS = 5_000
     private const val READ_TIMEOUT_MS = 8_000
@@ -151,6 +152,12 @@ object UpdateChecker {
             }
 
         val tagName = json.getString("tag_name")
+        // The tag ends up in a file name and a notification. Git allows shell metacharacters in
+        // tag names, so accept only the shapes CI produces and ignore anything else.
+        if (!SAFE_TAG.matches(tagName)) {
+            Timber.tag(TAG).w("Ignoring release with unexpected tag name")
+            return CheckResult.UpToDate
+        }
         val versionName = tagName.removePrefix("v")
         val isPrerelease = json.optBoolean("prerelease", false)
         val releaseNotes = json.optString("body", "")

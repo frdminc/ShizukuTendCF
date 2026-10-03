@@ -692,7 +692,9 @@ jobs:
           # downloads it from the same release and refuses to install an APK it does not list or
           # that does not match. Names are bare file names (all APKs are in files/), as sha256sum
           # prints them, so the updater can match on the asset name.
-          (cd files && sha256sum -- $(for a in "${ASSETS[@]}"; do basename "$a"; done)) > files/SHA256SUMS
+          SUM_NAMES=()
+          for a in "${ASSETS[@]}"; do SUM_NAMES+=("$(basename "$a")"); done
+          (cd files && sha256sum -- "${SUM_NAMES[@]}") > files/SHA256SUMS
           [ "$(wc -l < files/SHA256SUMS)" -eq ${#ASSETS[@]} ] || { echo "::error::SHA256SUMS line count does not match the attached APKs"; exit 1; }
           ASSETS+=("files/SHA256SUMS")
 

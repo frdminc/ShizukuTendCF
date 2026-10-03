@@ -26,6 +26,7 @@ class UpdateManager(
 ) {
     companion object {
         private const val TAG = "UpdateManager"
+        private const val STAGED_PREFIX = "update-"
         private const val NOTIFICATION_CHANNEL_ID = "update_channel"
         private const val NOTIFICATION_ID = 1001
         private const val DOWNLOAD_ID_PREF = "update_download_id"
@@ -260,7 +261,9 @@ class UpdateManager(
             // swapped between a check and the install. Any failure discards the APK (fail closed).
             val verified =
                 withContext(Dispatchers.IO) {
-                    val staged = File(context.cacheDir, file.name)
+                    // Unique, fixed-shape name: nothing from the release reaches the path, and a
+                    // second verification cannot overwrite a copy that has already been verified.
+                    val staged = File.createTempFile(STAGED_PREFIX, ".apk", context.cacheDir)
                     UpdateVerifier.verifyAndStage(file, downloadUrl, staged).also { file.delete() }
                 }
             if (verified == null) {
@@ -409,24 +412,31 @@ class UpdateManager(
 
                 when {
                     isRoot -> {
-                        // Root shell can read files in getExternalFilesDir on all API levels.
+                        // The verified copy is in app-private storage, which system_server (the
+                        // process that opens a path given to pm) cannot read. Copy it as root to
+                        // /data/local/tmp first. The source path is cacheDir plus a generated
+                        // name, so nothing from the release is interpolated into the command.
+                        val tmp = "/data/local/tmp/update.apk"
                         val result =
                             withContext(Dispatchers.IO) {
                                 com.topjohnwu.superuser.Shell
-                                    .cmd("pm install -r -d \"${file.absolutePath}\"")
+                                    .cmd("cp '${file.absolutePath}' $tmp && chmod 644 $tmp && pm install -r -d $tmp")
                                     .exec()
+                                    .also {
+                                        com.topjohnwu.superuser.Shell
+                                            .cmd("rm -f $tmp")
+                                            .exec()
+                                    }
                             }
                         if (result.isSuccess) {
                             Timber.tag(TAG).i("Silent install via root succeeded")
                             true
                         } else {
-                            Timber.tag(TAG).w("Root install failed (signature mismatch?): ${result.out}")
-                            // forceUpdateWithShizuku is blocking (Shell.cmd().exec() + file I/O);
-                            // must stay on IO — installApk's outer withTimeoutOrNull runs on the
-                            // caller's dispatcher which is Main for the auto-install path.
-                            withContext(Dispatchers.IO) {
-                                UpdateInstaller.forceUpdateWithShizuku(context, file)
-                            }
+                            // Deliberately no uninstall-and-reinstall fallback here: that would
+                            // install an APK from any signer over this package without the user
+                            // seeing anything. Fall back to the system installer prompt instead.
+                            Timber.tag(TAG).w("Root install failed: ${result.out}")
+                            false
                         }
                     }
                     hasShizuku -> {
@@ -511,7 +521,7 @@ class UpdateManager(
                 Timber.tag(TAG).d("Cleaned up old APK: ${file.name}")
             }
             // Verified copies staged for install (see onDownloadComplete) live in the cache dir.
-            context.cacheDir?.listFiles { file -> file.name.startsWith("Shizuku+-v") && file.name.endsWith(".apk") }?.forEach { file ->
+            context.cacheDir?.listFiles { file -> file.name.startsWith(STAGED_PREFIX) && file.name.endsWith(".apk") }?.forEach { file ->
                 file.delete()
                 Timber.tag(TAG).d("Cleaned up staged APK: ${file.name}")
             }

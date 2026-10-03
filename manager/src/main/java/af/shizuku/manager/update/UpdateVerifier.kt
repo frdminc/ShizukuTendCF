@@ -14,8 +14,9 @@ import java.security.MessageDigest
  *
  * This guards against a corrupted or truncated download and against a CDN/mirror serving bytes
  * that differ from what the release published. It shares the GitHub release as its trust root,
- * so it does NOT protect against someone who can edit release assets; Android's own APK
- * signature check on install is the real authenticity guarantee.
+ * so it does NOT protect against someone who can edit release assets. Authenticity rests on
+ * Android's same-signer rule for updates, which is why the updater never falls back to
+ * uninstalling and reinstalling.
  */
 object UpdateVerifier {
     private const val TAG = "UpdateVerifier"
@@ -24,6 +25,7 @@ object UpdateVerifier {
     private const val MAX_CHECKSUMS_BYTES = 64 * 1024
     private const val CONNECT_TIMEOUT_MS = 5_000
     private const val READ_TIMEOUT_MS = 8_000
+    private val SAFE_SEGMENT = Regex("^[A-Za-z0-9][A-Za-z0-9._+-]*$")
     private val DIGEST_LINE = Regex("^([0-9a-fA-F]{64}) [ *](.+?)\\s*$")
 
     /** The `SHA256SUMS` URL in the same release as [downloadUrl], or null if it is not a release asset URL over HTTPS. */
@@ -31,7 +33,7 @@ object UpdateVerifier {
         if (!downloadUrl.startsWith(RELEASE_DOWNLOAD_PREFIX)) return null
         // Exactly "<tag>/<asset>"; anything else (extra segments, query, fragment, traversal) is rejected.
         val parts = downloadUrl.removePrefix(RELEASE_DOWNLOAD_PREFIX).split('/')
-        if (parts.size != 2 || parts.any { it.isEmpty() || it == ".." || it.contains('?') || it.contains('#') }) return null
+        if (parts.size != 2 || parts.any { !SAFE_SEGMENT.matches(it) }) return null
         return RELEASE_DOWNLOAD_PREFIX + parts[0] + "/" + CHECKSUMS_ASSET
     }
 
