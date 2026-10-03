@@ -134,7 +134,7 @@ jobs:
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
           KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
         run: |
-          # Secrets reach the script through env, never through ${{ }} in the command text.
+          # Secrets reach the script through env, never interpolated into the command text.
           {
             printf 'KEYSTORE_PASSWORD=%s\n' "$KEYSTORE_PASSWORD"
             printf 'KEYSTORE_ALIAS=%s\n' "$KEYSTORE_ALIAS"
