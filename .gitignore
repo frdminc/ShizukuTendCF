@@ -37,3 +37,10 @@ ktlint
 
 # Local build output — compat.apk is built by CI and should not be committed
 manager/src/main/assets/compat.apk
+
+# --- ShizukuTendCF fork: machine-local / secret / regenerable ---
+*.jks
+*.keystore
+/graft/
+.ignore
+.ralph-tui/
