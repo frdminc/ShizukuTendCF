@@ -256,14 +256,14 @@ All are in base-inherited code; none blocks a release. Order is by value.
    workflow_dispatch can take the release path (fails closed on signing today, but fix the comparison).
 3. **Done 2026-10-03. CI: env-based secrets in the remaining steps** (`Create signing.properties`, `sign_apk`) — same
    pattern as the Validate step, so secrets never appear in a shell-interpolated command line.
-4. **Updater: ABI + name matching.** `UpdateChecker` should pick the asset named
+4. **Done 2026-10-03 (see "Follow-ups 4, 5 and 7" below).** **Updater: ABI + name matching.** `UpdateChecker` should pick the asset named
    `ShizukuTendCF-<ver>-<abi>.apk` for the device's primary ABI, falling back to the universal APK.
-5. **Updater: SHA-256 digest verification** before install, from a digest the release publishes
+5. **Done 2026-10-03 (see "Follow-ups 4, 5 and 7" below).** **Updater: SHA-256 digest verification** before install, from a digest the release publishes
    (`UpdateHelper.kt.reference` in the session scratchpad has the ported check to lift from).
 6. **Fleet profile swap window on API 24–29.** On Android 7–10 the app's external files dir is writable
    by apps holding `WRITE_EXTERNAL_STORAGE`; either accept the profile inline (`--es profile_json`) below
    API 30 or document the limitation. Moot if every fleet device is Android 11+.
-7. **Headless ADB start: one authorisation prompt, not a stack of them** (operator request, 2026-10-03).
+7. **Done 2026-10-03 (see "Follow-ups 4, 5 and 7" below).** **Headless ADB start: one authorisation prompt, not a stack of them** (operator request, 2026-10-03).
    On a fresh install the manager's ADB key is unknown to adbd. While the "Allow USB debugging?" dialog
    is unanswered, the start worker keeps reconnecting and every attempt queues another dialog: about ten
    had to be accepted on the Titan 2. Make the start hold one connection open while authorisation is
@@ -272,6 +272,49 @@ All are in base-inherited code; none blocks a release. Order is by value.
    pending, skipping" until adbd restarts; and restarting adbd kills a server that was started from an
    adb shell. Procedure until fixed: unlock the phone first, trigger `HEADLESS_START` once, tick
    "Always allow".
+
+## Follow-ups 4, 5 and 7: landed, reviewed, not yet device-tested (2026-10-03)
+
+Both changes went through an adversary review (verdict BLOCK), fixes, and a second review (PASS).
+Reports were in the session scratchpad and are summarised here because that is volatile.
+
+1. **Updater (follow-ups 4 and 5).** Asset chosen by flavour and ABI with no "first APK" fallback;
+   `SHA256SUMS` published by the release job and required by the app (fails closed).
+   a. A build with this change cannot update to a release that has no `SHA256SUMS`.
+   b. Removed from upstream behaviour: the uninstall-and-reinstall "force update" fallback (it
+      installed an APK from any signer with no prompt) and `pm install -d`.
+   c. Release tags must match `^v?[0-9][0-9A-Za-z._-]{0,63}$`; previously the tag reached a root
+      shell command unescaped.
+   d. Not tested: the root silent-install path (no rooted device in the fleet), and the release job's
+      `SHA256SUMS` step (runs only on a published release).
+2. **Single ADB authorisation prompt (follow-up 7).** One connection is held for up to 150 s after
+   the key is offered; other start paths stand down; nothing retries after a timeout or rejection;
+   the boot retry loop stops after one unanswered dialog per boot. The waiting text shows the app's
+   key fingerprint (MD5, the form the system dialog shows).
+   a. Not tested on a device at all. Test plan: fresh key, `HEADLESS_START`, expect exactly one
+      dialog and `adb logcat -s adbd:*` showing one "sending prompt"; repeat the broadcast and tap
+      "Attempt now" while waiting; accept; then the 150 s timeout path; then the authorised fast path.
+   b. Unverified premise: that adbd dismisses its dialog when the offering connection closes.
+3. **Auth-relay hole in the base, fixed (upstream candidate, report privately).** `StarterActivity`
+   was exported and took a caller-chosen port. With adbd on plain TCP and this app's key authorised
+   (the fleet setup), a local app could run a fake adbd on its own port, have this app sign the real
+   adbd's challenge, and get an adb shell with no dialog. Now: the activity is not exported, other
+   apps reach it only through the alias `.starter.ExternalStarterActivity`, and the port extra is
+   ignored for the alias. `AdbPortProber.findActiveLoopbackPort` uses only the port adbd reports
+   when it reports one.
+   a. Consequence: an external `START_SERVICE` launch can no longer start over ADB (it shows
+      "Invalid port value: 0"); root and system starts still work. It never carried a usable port
+      without the extra, so this mostly formalises existing behaviour.
+4. **Left open from the reviews (all Low).**
+   a. Buttons pressed while a dialog is pending ("Attempt now", tile, Home) do nothing silently.
+   b. A start that stands down returns as if it had succeeded, then its caller's 20 s wait for the
+      service can time out while the other start is still waiting.
+   c. `QUICKBOOT_POWERON` and the Locale FIRE receiver are reachable by any app and ignore the
+      unanswered marker, so an app can raise this app's own dialog about every 150 s.
+   d. The gate is check-then-act, not a mutex.
+5. **CI certificate pin.** The runner's apksigner labels the line `V3.0 Signer: certificate SHA-256
+   digest`; the check matches on the field name. Two runs failed on correctly signed builds before
+   that was right.
 
 ## End-of-rebase upstreaming pass (operator instruction, 2026-10-03)
 
