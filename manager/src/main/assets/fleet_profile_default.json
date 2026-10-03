@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "name": "ShizukuTendCF fleet/headless default profile",
+    "description": "Recommended defaults for unattended fleet deployments (Termux + Shizuku + wireless ADB).",
+    "version": 1,
+    "clear_existing": false
+  },
+  "start_on_boot": true,
+  "watchdog": true,
+  "tcp_mode": true,
+  "tcp_port": 5555,
+  "auto_disable_usb_debugging": false,
+  "legacy_pairing": false,
+  "update_mode": "stable",
+  "mode": "adb"
+}

@@ -447,6 +447,11 @@ public class ShizukuSettings {
         return authToken;
     }
 
+    /** Install a caller-supplied automation token (fleet provisioning); see ProvisionAuthReceiver. */
+    public static void setAuthToken(String token) {
+        getPreferences().edit().putString("auth_token", token).apply();
+    }
+
     public static String generateAuthToken() {
         String token = Token.generateToken();
         getPreferences().edit().putString("auth_token", token).apply();

@@ -456,6 +456,38 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".receiver.ProvisionAuthReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL">
+            <intent-filter>
+                <action android:name="${applicationId}.PROVISION_AUTH" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Fleet profile import: `adb shell am start -a ${applicationId}.APPLY_FLEET_PROFILE
+             -e profile_path /sdcard/Download/profile.json`. Permission-gated like the headless
+             receivers so a third-party app cannot rewrite Shizuku's preferences. -->
+        <activity
+            android:name=".fleet.FleetProfileActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL">
+            <intent-filter>
+                <action android:name="${applicationId}.APPLY_FLEET_PROFILE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="${applicationId}.APPLY_FLEET_PROFILE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <receiver android:name=".receiver.NotifAttemptReceiver" />
         <receiver android:name=".receiver.NotifCancelReceiver" />
         <receiver android:name=".receiver.NotifRestoreReceiver" />
