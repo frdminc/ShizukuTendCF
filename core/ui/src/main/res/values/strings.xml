@@ -59,8 +59,9 @@
     <string name="home_status_service_not_running_summary">%1$s is stopped</string>
     <string name="home_status_service_user_root">root</string>
     <string name="home_status_service_user_adb">adb</string>
-    <string name="home_status_service_version">Version %2$s, %1$s</string>
-    <string name="home_status_service_version_update"><![CDATA[Version %2$s, %1$s<br>Start again to update to version %3$s]]></string>
+    <string name="home_status_service_version">Protocol version %2$s, %1$s</string>
+    <string name="home_status_service_version_update"><![CDATA[Protocol version %2$s, %1$s<br>Start again to update to version %3$s]]></string>
+    <string name="home_status_build_version">Build %1$s</string>
     <!-- Home - Adb -->
     <string name="home_adb_title"><![CDATA[Start by connecting to a computer]]></string>
     <string name="home_adb_description"><![CDATA[For devices without root, you need to use adb to start Shizuku (requires computer connection). This process needs to be repeated every time the device is restarted. Please <b><a href=\"%1$s\">read the help</a></b>.]]></string>

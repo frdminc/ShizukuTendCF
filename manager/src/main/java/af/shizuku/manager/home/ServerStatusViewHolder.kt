@@ -326,15 +326,31 @@ class ServerStatusViewHolder(
                 // patch, or the "restart to update" prompt shows spuriously.
                 val patchKnown = patchVersion >= 0
                 val versionText = if (patchKnown) "$apiVersion.$patchVersion" else "$apiVersion"
-                if (apiVersion != Shizuku.getLatestServiceVersion() || (patchKnown && patchVersion != ShizukuApiConstants.SERVER_PATCH_VERSION)) {
-                    context.getString(
-                        R.string.home_status_service_version_update,
-                        user,
-                        versionText,
-                        "${Shizuku.getLatestServiceVersion()}.${ShizukuApiConstants.SERVER_PATCH_VERSION}",
-                    )
+                val protocolLine =
+                    if (apiVersion != Shizuku.getLatestServiceVersion() ||
+                        (patchKnown && patchVersion != ShizukuApiConstants.SERVER_PATCH_VERSION)
+                    ) {
+                        context.getString(
+                            R.string.home_status_service_version_update,
+                            user,
+                            versionText,
+                            "${Shizuku.getLatestServiceVersion()}.${ShizukuApiConstants.SERVER_PATCH_VERSION}",
+                        )
+                    } else {
+                        context.getString(R.string.home_status_service_version, user, versionText)
+                    }
+                // Protocol version identifies the client<->server wire protocol; surface the
+                // installed package versionName separately so "which build is this" is obvious.
+                val buildVersion =
+                    try {
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                    } catch (_: Exception) {
+                        null
+                    }
+                if (!buildVersion.isNullOrEmpty()) {
+                    "$protocolLine<br>" + context.getString(R.string.home_status_build_version, buildVersion)
                 } else {
-                    context.getString(R.string.home_status_service_version, user, versionText)
+                    protocolLine
                 }
             } else {
                 context.getString(R.string.home_status_service_not_running_summary, context.getString(R.string.app_name))
