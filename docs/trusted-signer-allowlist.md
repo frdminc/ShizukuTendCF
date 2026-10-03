@@ -144,3 +144,14 @@ passwords secret with the same care you'd give any other production signing
 key. This mechanism only removes the *interactive, easily-and-silently-lost*
 approval step for keys you already fully trust — it doesn't change what
 "trusting a key" means.
+
+
+## Revocation semantics on the ShizukuPlus base (2026-10-03)
+
+The default applies **only when no config entry exists** for the UID. Any persisted decision wins:
+an explicit Deny from the permission dialog (`FLAG_DENIED`) and the manager's ordinary "revoke"
+toggle (an entry with neither flag) both stick, and the app has to `requestPermission()` again like
+any other client. Known residual: the server's start-up reconciliation drops an entry when the UID's
+live package set differs from what was persisted (the very bug this allowlist works around), and a
+dropped *revoke* is then replaced by the signer default on the next start. If you revoke a trusted app
+and need that to survive reinstall/reconciliation, remove its certificate from the list and rebuild.

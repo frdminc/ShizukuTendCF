@@ -308,13 +308,10 @@ public class ShizukuConfigManager extends ConfigManager {
         synchronized (this) {
             entry = findLocked(uid);
         }
-        // An explicit, persisted DENY always wins: the signer default only fills the gap left
-        // when reconciliation dropped the entry (or nothing was ever decided), it is not a way
-        // around the user's decision.
-        if (entry != null && (entry.flags & ConfigManager.FLAG_DENIED) != 0) {
-            return entry;
-        }
-        if ((entry == null || (entry.flags & ConfigManager.FLAG_ALLOWED) == 0) && isTrustedSignerUid(uid)) {
+        // Any persisted decision wins, including the manager's "revoke", which stores an entry
+        // with neither flag set. The signer default only fills the gap left when reconciliation
+        // dropped the entry or nothing was ever decided; it is not a way around the user.
+        if (entry == null && isTrustedSignerUid(uid)) {
             return new ShizukuConfig.PackageEntry(uid, ConfigManager.FLAG_ALLOWED);
         }
         return entry;

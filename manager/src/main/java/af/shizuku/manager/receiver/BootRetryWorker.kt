@@ -35,8 +35,8 @@ class BootRetryWorker(context: Context, params: WorkerParameters) : CoroutineWor
             // The starter refuses to run outside the primary user, so a worker there would
             // only ever spin.
             if (UserHandleCompat.myUserId() > 0) return
-            // Root mode needs no network at all; ADB mode needs a connection but an offline
-            // device should still get a (cheap, failing) attempt rather than never retrying.
+            // Root mode needs no network at all; ADB mode cannot succeed without one, so wait
+            // for connectivity rather than burning attempts offline.
             val network =
                 if (ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ROOT) {
                     NetworkType.NOT_REQUIRED

@@ -37,7 +37,7 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                     setResult(3, "UNSUPPORTED_USER", null)
                     return
                 }
-                when (ShizukuStateMachine.get()) {
+                when (ShizukuStateMachine.update()) {
                     ShizukuStateMachine.State.RUNNING -> {
                         HeadlessLogger.i("Start", "Already running")
                         setResult(1, "ALREADY_RUNNING", null)

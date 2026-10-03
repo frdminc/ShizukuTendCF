@@ -179,3 +179,31 @@ Vendor batch that produced F14/F02/F18 drafts: cursor (S1), agy (S2, S4), zcode 
 
 Remaining before flipping `master`: local compile result, adversary review findings (in flight), then
 operator flips master → shizukuplus-base (legacy/pre-shizukuplus keeps the old history).
+
+## Build + security review (2026-10-03)
+
+- **Compile:** `:server:compileReleaseJavaWithJavac`, `:manager:compileShizukuplusDebugKotlin` and
+  `…JavaWithJavac` all pass. Needed `7f4ce197`: ShizukuPlus master's own `OverlayManagerPlusImpl` was
+  ahead of its pinned API submodule (`setActiveThemePackage` missing) — their tree was broken as
+  checked out; api bumped to ShizukuPlus-API master `3f2ae3c`. Expect this class of breakage again
+  while tracking their master; check the gitlink vs their code on every sync.
+- **Adversary review** (`adversary-fleet-report.md` in the session scratchpad): initial verdict BLOCK on
+  two High findings in the trusted-signer port — SigningInfo is API 28+ with minSdk 24 (server crash
+  on Android 7–8), and the signer default overrode an explicit user DENY (no kill switch). Fixed in
+  `e95a3cd8` together with the Medium/Low items: token-format validation for PROVISION_AUTH, scoped +
+  correctly-ordered `clear_existing`, profile-source restriction and non-echoing errors, boot-retry
+  armed only by the protected BOOT_COMPLETED and skipped in secondary users, HEADLESS_START keeps the
+  base's user/already-running guards (wireless-ADB enable opt-out), private log dir below API 30, CI
+  secrets via env, README disclosure. Re-verification verdict: see `adversary-fleet-verdict2.md`.
+- **Open operator decision (review 1.3):** the stayturgid trusted-signer fingerprint is compiled into a
+  publicly released build, so every installer of the public APK grants that key Shizuku access by
+  default (revocable per-device now, after the fix). Options: (a) keep, disclosed (current state);
+  (b) empty by default, supplied at build time via a `fleet` flavour / BuildConfig field;
+  (c) runtime list from a shell-owned file the server reads (e.g. the existing
+  `/data/user_de/0/com.android.shell/shizuku.json`), provisioned by `adb`.
+- **Follow-ups (not blocking):** pin the release cert in CI with `apksigner verify --print-certs`;
+  base's `IS_DEBUG` string/boolean coercion may make a "debug" dispatch publish a release (fails
+  closed on signing); updater asset picker should match `ShizukuTendCF-<ver>-` + device ABI; add
+  SHA-256 digest verification to the base updater (ported `UpdateHelper` reference in scratchpad);
+  `app_name` label still "Shizuku+". Scripts must pass `-p af.shizuku.plus.api` (Drop-In flavour: `moe.shizuku.privileged.api`) to the
+  headless broadcasts on API 26+.

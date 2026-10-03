@@ -76,9 +76,14 @@ object FleetProfileApplier {
             "file" -> return applyFromPath(context, uri.path ?: "")
             "content" -> {
                 // Never let a caller read the manager's own providers back through this activity.
-                val authority = uri.authority ?: ""
-                if (authority == context.packageName || authority.startsWith("${context.packageName}.")) {
-                    return Result(false, 0, 0, listOf("URI not allowed"), "Profile URI must not point at this app")
+                // Resolve the authority (minus any "<userId>@" prefix) to its owning package rather
+                // than string-matching, since this app also owns authorities under other names.
+                val authority = (uri.authority ?: "").replace(Regex("^\\d+@"), "")
+                val owner = runCatching {
+                    context.packageManager.resolveContentProvider(authority, 0)?.packageName
+                }.getOrNull()
+                if (authority.isEmpty() || owner == null || owner == context.packageName) {
+                    return Result(false, 0, 0, listOf("URI not allowed"), "Profile URI must point at another app's provider")
                 }
             }
             else -> return Result(false, 0, 0, listOf("Unsupported URI scheme"), "Unsupported URI scheme")
@@ -107,6 +112,9 @@ object FleetProfileApplier {
         if (clearExisting) {
             val reset = prefs.edit()
             knownKeys.forEach { reset.remove(it) }
+            // update_mode is a profile-level alias for these two stored keys.
+            reset.remove(ShizukuSettings.Keys.KEY_AUTO_UPDATE_ENABLED)
+            reset.remove(ShizukuSettings.Keys.KEY_UPDATE_CHANNEL)
             reset.commit()
         }
         val editor = prefs.edit()

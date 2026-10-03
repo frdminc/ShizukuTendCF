@@ -13,7 +13,8 @@
 > stayturgid-agent release certificate (SHA-256 `6651cb15…be293e`) is granted Shizuku access by default
 > unless you explicitly deny it in the manager. That is intended for stayturgid fleet devices; if you are
 > not running that fleet, this fork is probably not the one you want. Headless broadcasts must name the
-> package since Android 8: `adb shell am broadcast -p moe.shizuku.privileged.api -a moe.shizuku.privileged.api.HEADLESS_STATUS`.
+> package since Android 8 — standard build: `adb shell am broadcast -p af.shizuku.plus.api -a af.shizuku.plus.api.HEADLESS_STATUS`;
+> Drop-In build: replace both with `moe.shizuku.privileged.api`.
 > The fork history, feature overlap matrix and remaining work
 > are in [`docs/SHIZUKUPLUS-REBASE-PLAN.md`](docs/SHIZUKUPLUS-REBASE-PLAN.md); the pre-ShizukuPlus
 > history is preserved on the `legacy/pre-shizukuplus` branch. Everything below is ShizukuPlus's own README.
