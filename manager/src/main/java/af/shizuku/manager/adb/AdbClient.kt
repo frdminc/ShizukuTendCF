@@ -20,11 +20,17 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.Timer
+import java.util.TimerTask
+import java.util.concurrent.atomic.AtomicBoolean
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.net.ssl.SSLSocket
 
 private const val TAG = "AdbClient"
+
+/** adbd's own upper bound for one message payload. */
+private const val MAX_PAYLOAD = 1024 * 1024
 
 class AdbClient(
     private val host: String,
@@ -96,8 +102,7 @@ class AdbClient(
 
                 message = read()
                 if (message.command != A_CNXN) {
-                    write(A_AUTH, ADB_AUTH_RSAPUBLICKEY, 0, key.adbPublicKey)
-                    message = awaitAuthorization(s)
+                    message = offerKeyAndAwaitAuthorization(s)
                 }
             }
 
@@ -112,25 +117,41 @@ class AdbClient(
      * adbd answers an offered public key only once the user has accepted or rejected its dialog,
      * and raises one dialog per connection that offers an unknown key. Reconnecting after the
      * normal read timeout would therefore stack dialogs, so this holds the one connection open
-     * for [AdbAuthWait.TIMEOUT_MS]. A timeout, a rejection or a dropped connection all surface as
+     * for [AdbAuthWait.TIMEOUT_MS]. Anything that goes wrong once the key has been offered (a
+     * timeout, a rejection, a dropped connection, a malformed reply) surfaces as
      * [AdbAuthTimeoutException], which callers do not retry.
      */
-    private fun awaitAuthorization(s: Socket): AdbMessage {
+    private fun offerKeyAndAwaitAuthorization(s: Socket): AdbMessage {
         Timber.tag(TAG).i("Waiting up to %d ms for the user to accept the adbd authorisation dialog", AdbAuthWait.TIMEOUT_MS)
+        // soTimeout bounds each read call, not the whole wait, so a peer trickling bytes could
+        // hold the connection (and the process-wide gate) open. Close the socket at a deadline.
+        val deadlineHit = AtomicBoolean(false)
+        val deadline = Timer("adb-auth-deadline", true)
         AdbAuthWait.begin()
         try {
-            onAuthorizationPending?.invoke()
+            write(A_AUTH, ADB_AUTH_RSAPUBLICKEY, 0, key.adbPublicKey)
+            runCatching { onAuthorizationPending?.invoke() }
             s.soTimeout = AdbAuthWait.TIMEOUT_MS
-            return try {
-                read()
-            } catch (e: java.net.SocketTimeoutException) {
-                throw AdbAuthTimeoutException("adbd authorisation dialog was not answered within ${AdbAuthWait.TIMEOUT_MS / 1000}s")
-            } catch (e: java.io.IOException) {
-                // Rejected, or adbd went away mid-wait. Either way the key was offered on this
-                // connection, so the caller must not reconnect on its own and raise the dialog again.
-                throw AdbAuthTimeoutException("adbd closed the connection without accepting the key: ${e.message}")
+            deadline.schedule(
+                object : TimerTask() {
+                    override fun run() {
+                        deadlineHit.set(true)
+                        runCatching { s.close() }
+                    }
+                },
+                AdbAuthWait.TIMEOUT_MS.toLong(),
+            )
+            val message = read()
+            if (message.command != A_CNXN) error("not A_CNXN")
+            return message
+        } catch (e: Exception) {
+            throw if (deadlineHit.get() || e is java.net.SocketTimeoutException) {
+                AdbAuthTimeoutException("adbd authorisation dialog was not answered within ${AdbAuthWait.TIMEOUT_MS / 1000}s")
+            } else {
+                AdbAuthTimeoutException("adbd did not accept the key: ${e.message}")
             }
         } finally {
+            deadline.cancel()
             AdbAuthWait.end()
             runCatching { s.soTimeout = 15000 }
         }
@@ -207,6 +228,8 @@ class AdbClient(
         val checksum = buffer.int
         val magic = buffer.int
         val data: ByteArray?
+        // Bound the allocation: the length comes from the peer and is read before validation.
+        if (dataLength > MAX_PAYLOAD) error("adb message too large: $dataLength")
         if (dataLength >= 0) {
             data = ByteArray(dataLength)
             inputStream.readFully(data, 0, dataLength)

@@ -111,7 +111,10 @@ class StarterActivity : AppBarActivity() {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus && !hasStarted) {
             hasStarted = true
-            val port = intent.getIntExtra(EXTRA_PORT, 0)
+            // Launched through the exported alias means launched by another app: never connect
+            // to a port it chose (see the manifest comment on ExternalStarterActivity).
+            val external = intent.component?.className != StarterActivity::class.java.name
+            val port = if (external) 0 else intent.getIntExtra(EXTRA_PORT, 0)
 
             viewModel.start(
                 intent.getBooleanExtra(EXTRA_IS_ROOT, false),

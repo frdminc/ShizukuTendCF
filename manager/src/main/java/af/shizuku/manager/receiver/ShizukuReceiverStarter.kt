@@ -161,6 +161,7 @@ object ShizukuReceiverStarter {
     fun updateNotification(
         context: Context,
         state: WorkerState,
+        detail: String? = null,
     ) {
         if (state == WorkerState.STOPPED) return
         val msgId =
@@ -172,7 +173,8 @@ object ShizukuReceiverStarter {
                 WorkerState.AUTH_TIMED_OUT -> R.string.wadb_notification_auth_timed_out
                 else -> null
             }
-        val msg = if (msgId != null) context.getString(msgId) else null
+        val base = if (msgId != null) context.getString(msgId) else null
+        val msg = if (base != null && detail != null) "$base. $detail" else base
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIFICATION_ID, buildNotification(context, msg))
     }

@@ -216,7 +216,9 @@ object ShizukuStateMachine {
                     // Break out of STARTING after 90 s so a failed start (server process died,
                     // ADB connection refused, etc.) never leaves the UI permanently locked.
                     val elapsed = System.currentTimeMillis() - startingTimestamp.get()
-                    if (elapsed > STARTING_TIMEOUT_MS) State.STOPPED else State.STARTING
+                    // A start waiting on adbd's authorisation dialog is still in progress; calling
+                    // it STOPPED would invite a second start, and with it a second dialog.
+                    if (elapsed > STARTING_TIMEOUT_MS && !af.shizuku.manager.adb.AdbAuthWait.isWaiting()) State.STOPPED else State.STARTING
                 }
                 currentState == State.STOPPING -> State.STOPPING
                 currentState == State.CRASHED -> State.CRASHED

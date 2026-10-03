@@ -88,6 +88,16 @@ class BootRetryWorker(context: Context, params: WorkerParameters) : CoroutineWor
             return Result.success()
         }
 
+        // One authorisation dialog per boot: the first attempt of a boot's loop may raise it, but
+        // once a start has ended with the dialog unanswered only a human can make progress, and
+        // every further attempt would raise another dialog on an unattended device.
+        if (runAttemptCount == 0) {
+            af.shizuku.manager.adb.AdbAuthWait.clearUnanswered()
+        } else if (af.shizuku.manager.adb.AdbAuthWait.isUnanswered()) {
+            Timber.tag(TAG).i("adbd authorisation was not accepted, stopping retry until the next explicit start")
+            return Result.success()
+        }
+
         ShizukuStateMachine.update()
         if (ShizukuStateMachine.isRunning()) {
             Timber.tag(TAG).i("Shizuku already running (attempt $runAttemptCount)")

@@ -251,13 +251,22 @@
             android:label="@string/home_terminal_title" />
         <activity
             android:name=".starter.StarterActivity"
+            android:exported="false"
+            android:label="@string/starter" />
+        <!-- Other apps reach the starter only through this alias, which StarterActivity
+             recognises and for which it ignores the caller-supplied ADB port: connecting to a
+             port chosen by another app would let that app relay adbd's auth challenge and have
+             it signed with this app's authorised key. -->
+        <activity-alias
+            android:name=".starter.ExternalStarterActivity"
             android:exported="true"
-            android:label="@string/starter">
+            android:label="@string/starter"
+            android:targetActivity=".starter.StarterActivity">
             <intent-filter>
                 <action android:name="af.shizuku.manager.action.START_SERVICE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </activity>
+        </activity-alias>
         <activity
             android:name=".settings.BugReportDialogActivity"
             android:theme="@style/Theme.App.DialogHost"
