@@ -1,14 +1,8 @@
 name: Crowdin Sync
 
+# Manual-only until the repo has CROWDIN_PROJECT_ID and CROWDIN_TOKEN secrets:
+# without them every triggered run fails (removed push/schedule triggers 2026-10-03).
 on:
-  push:
-    branches: [master]
-    paths:
-      - 'manager/src/main/res/values/strings.xml'
-      - 'manager/src/main/res/values/strings_companion.xml'
-  schedule:
-    # Weekly Monday 06:00 UTC — pull approved translations and open a PR
-    - cron: '0 6 * * 1'
   workflow_dispatch:
     inputs:
       direction:
