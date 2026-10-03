@@ -2,6 +2,7 @@ package af.shizuku.manager.receiver
 
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.utils.ShizukuStateMachine
+import af.shizuku.common.util.UserHandleCompat
 import android.content.Context
 import timber.log.Timber
 import androidx.work.BackoffPolicy
@@ -31,8 +32,19 @@ class BootRetryWorker(context: Context, params: WorkerParameters) : CoroutineWor
          */
         @JvmStatic
         fun schedule(context: Context) {
+            // The starter refuses to run outside the primary user, so a worker there would
+            // only ever spin.
+            if (UserHandleCompat.myUserId() > 0) return
+            // Root mode needs no network at all; ADB mode needs a connection but an offline
+            // device should still get a (cheap, failing) attempt rather than never retrying.
+            val network =
+                if (ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ROOT) {
+                    NetworkType.NOT_REQUIRED
+                } else {
+                    NetworkType.CONNECTED
+                }
             val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.NOT_ROAMING)
+                .setRequiredNetworkType(network)
                 .build()
 
             val retry = OneTimeWorkRequestBuilder<BootRetryWorker>()

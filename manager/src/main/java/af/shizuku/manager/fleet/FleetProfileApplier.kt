@@ -35,29 +35,61 @@ object FleetProfileApplier {
             val profile = JSONObject(json)
             applyProfile(context, profile)
         } catch (e: Exception) {
-            Result(false, 0, 0, listOf(e.message ?: "Invalid JSON"), "Profile parse failed: ${e.message}")
+            // org.json appends the whole input to its syntax errors; never echo file contents.
+            Result(false, 0, 0, listOf("Invalid JSON"), "Profile parse failed: invalid JSON")
+        }
+    }
+
+    /**
+     * Directories a profile file may be read from. The app's own external files dir is writable
+     * by the app and by shell/root (`adb push`) but, on Android 11+, not by other apps, which
+     * closes the swap-the-file-between-push-and-apply window shared storage would leave open.
+     */
+    private fun allowedDirs(context: Context): List<File> =
+        listOfNotNull(context.getExternalFilesDir(null), context.filesDir.resolve("fleet"))
+            .map { it.canonicalFile }
+
+    private fun isAllowedPath(context: Context, file: File): Boolean {
+        val canonical = runCatching { file.canonicalFile }.getOrNull() ?: return false
+        return allowedDirs(context).any { dir ->
+            canonical.path == dir.path || canonical.path.startsWith(dir.path + File.separator)
         }
     }
 
     @JvmStatic
     fun applyFromPath(context: Context, path: String): Result {
+        val file = File(path)
+        if (!isAllowedPath(context, file)) {
+            val where = allowedDirs(context).joinToString(" or ") { it.path }
+            return Result(false, 0, 0, listOf("Path not allowed"), "Profile must be under $where")
+        }
         return try {
-            val json = File(path).readText(Charsets.UTF_8)
-            applyJson(context, json)
+            applyJson(context, file.readText(Charsets.UTF_8))
         } catch (e: Exception) {
-            Result(false, 0, 0, listOf(e.message ?: "Read error"), "Failed to read $path: ${e.message}")
+            Result(false, 0, 0, listOf(e.javaClass.simpleName), "Failed to read profile: ${e.javaClass.simpleName}")
         }
     }
 
     @JvmStatic
     fun applyFromUri(context: Context, uri: Uri): Result {
+        when (uri.scheme) {
+            "file" -> return applyFromPath(context, uri.path ?: "")
+            "content" -> {
+                // Never let a caller read the manager's own providers back through this activity.
+                val authority = uri.authority ?: ""
+                if (authority == context.packageName || authority.startsWith("${context.packageName}.")) {
+                    return Result(false, 0, 0, listOf("URI not allowed"), "Profile URI must not point at this app")
+                }
+            }
+            else -> return Result(false, 0, 0, listOf("Unsupported URI scheme"), "Unsupported URI scheme")
+        }
         return try {
             val stream = context.contentResolver.openInputStream(uri)
-                ?: return Result(false, 0, 0, listOf("Cannot open URI"), "Cannot open URI: $uri")
+                ?: return Result(false, 0, 0, listOf("Cannot open URI"), "Cannot open profile URI")
             val json = stream.use { it.reader(Charsets.UTF_8).readText() }
             applyJson(context, json)
         } catch (e: Exception) {
-            Result(false, 0, 0, listOf(e.message ?: "URI error"), "Failed to read URI $uri: ${e.message}")
+            Result(false, 0, 0, listOf(e.javaClass.simpleName), "Failed to read profile URI: ${e.javaClass.simpleName}")
         }
     }
 
@@ -69,10 +101,15 @@ object FleetProfileApplier {
         var applied = 0
         var skipped = 0
 
-        val editor = prefs.edit()
+        // clear_existing resets only the keys a profile can set, never the auth token or the
+        // operator's other hardening toggles, and is committed before the setters below run so
+        // their own apply()s are not wiped by a later batch clear.
         if (clearExisting) {
-            editor.clear()
+            val reset = prefs.edit()
+            knownKeys.forEach { reset.remove(it) }
+            reset.commit()
         }
+        val editor = prefs.edit()
 
         val keys = profile.keys()
         while (keys.hasNext()) {

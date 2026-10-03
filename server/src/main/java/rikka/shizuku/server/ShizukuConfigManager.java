@@ -304,32 +304,48 @@ public class ShizukuConfigManager extends ConfigManager {
 
     @Nullable
     public ShizukuConfig.PackageEntry find(int uid) {
-        if (isTrustedSignerUid(uid)) {
+        ShizukuConfig.PackageEntry entry;
+        synchronized (this) {
+            entry = findLocked(uid);
+        }
+        // An explicit, persisted DENY always wins: the signer default only fills the gap left
+        // when reconciliation dropped the entry (or nothing was ever decided), it is not a way
+        // around the user's decision.
+        if (entry != null && (entry.flags & ConfigManager.FLAG_DENIED) != 0) {
+            return entry;
+        }
+        if ((entry == null || (entry.flags & ConfigManager.FLAG_ALLOWED) == 0) && isTrustedSignerUid(uid)) {
             return new ShizukuConfig.PackageEntry(uid, ConfigManager.FLAG_ALLOWED);
         }
-        synchronized (this) {
-            return findLocked(uid);
-        }
+        return entry;
     }
 
     /**
      * True if any package currently installed under {@code uid} is signed by a certificate in
-     * {@link #TRUSTED_SIGNER_SHA256}.
+     * {@link #TRUSTED_SIGNER_SHA256}. Fails closed: any error, including the missing
+     * SigningInfo class below API 28, means "not trusted", never a crashed server.
      */
     private boolean isTrustedSignerUid(int uid) {
-        int userId = UserHandleCompat.getUserId(uid);
-        for (String packageName : PackageManagerApis.getPackagesForUidNoThrow(uid)) {
-            PackageInfo pi = Android17Compat.getPackageInfo(
-                    packageName, PackageManager.GET_SIGNING_CERTIFICATES, userId);
-            if (pi == null || pi.signingInfo == null) {
-                continue;
-            }
-            for (Signature signature : pi.signingInfo.getApkContentsSigners()) {
-                String digest = sha256Hex(signature.toByteArray());
-                if (digest != null && TRUSTED_SIGNER_SHA256.contains(digest)) {
-                    return true;
+        if (TRUSTED_SIGNER_SHA256.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            return false;
+        }
+        try {
+            int userId = UserHandleCompat.getUserId(uid);
+            for (String packageName : PackageManagerApis.getPackagesForUidNoThrow(uid)) {
+                PackageInfo pi = Android17Compat.getPackageInfo(
+                        packageName, PackageManager.GET_SIGNING_CERTIFICATES, userId);
+                if (pi == null || pi.signingInfo == null) {
+                    continue;
+                }
+                for (Signature signature : pi.signingInfo.getApkContentsSigners()) {
+                    String digest = sha256Hex(signature.toByteArray());
+                    if (digest != null && TRUSTED_SIGNER_SHA256.contains(digest)) {
+                        return true;
+                    }
                 }
             }
+        } catch (Throwable t) {
+            LOGGER.w(t, "trusted signer lookup failed for uid " + uid);
         }
         return false;
     }

@@ -111,13 +111,17 @@ jobs:
           java-version: '21'
 
       - name: Validate Signing Config
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
         run: |
           if [ "$IS_DEBUG" = "false" ]; then
             if [ -z "$KEYSTORE" ]; then
               echo "::error::Signing secrets not configured. KEYSTORE secret is required for release builds."
               exit 1
             fi
-            if [ -z "${{ secrets.KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.KEYSTORE_ALIAS }}" ] || [ -z "${{ secrets.KEYSTORE_ALIAS_PASSWORD }}" ]; then
+            if [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEYSTORE_ALIAS" ] || [ -z "$KEYSTORE_ALIAS_PASSWORD" ]; then
               echo "::error::Signing secrets incomplete. KEYSTORE, KEYSTORE_PASSWORD, KEYSTORE_ALIAS, and KEYSTORE_ALIAS_PASSWORD are required for release builds."
               exit 1
             fi

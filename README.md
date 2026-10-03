@@ -7,7 +7,14 @@
 > start-on-boot retry**, a **trusted-signer allowlist** that keeps the fleet agent's grant from being lost
 > (see [`docs/trusted-signer-allowlist.md`](docs/trusted-signer-allowlist.md)), a status card that shows
 > protocol version and app build separately, and CI that refuses to cut an unsigned release. Releases are
-> named `ShizukuTendCF-<version>-<abi>.apk`. The fork history, feature overlap matrix and remaining work
+> named `ShizukuTendCF-<version>-<abi>.apk`.
+>
+> **Disclosure:** this build ships a built-in trusted-signer allowlist — any app signed with the
+> stayturgid-agent release certificate (SHA-256 `6651cb15…be293e`) is granted Shizuku access by default
+> unless you explicitly deny it in the manager. That is intended for stayturgid fleet devices; if you are
+> not running that fleet, this fork is probably not the one you want. Headless broadcasts must name the
+> package since Android 8: `adb shell am broadcast -p moe.shizuku.privileged.api -a moe.shizuku.privileged.api.HEADLESS_STATUS`.
+> The fork history, feature overlap matrix and remaining work
 > are in [`docs/SHIZUKUPLUS-REBASE-PLAN.md`](docs/SHIZUKUPLUS-REBASE-PLAN.md); the pre-ShizukuPlus
 > history is preserved on the `legacy/pre-shizukuplus` branch. Everything below is ShizukuPlus's own README.
 

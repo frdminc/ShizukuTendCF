@@ -44,7 +44,9 @@ class BootCompleteReceiver : BroadcastReceiver() {
             // network authorization, pairing) it fails and nothing retries until the next
             // reboot. Keep retrying in the background until Shizuku is up or the user turns
             // start-on-boot off.
-            if (action != Intent.ACTION_MY_PACKAGE_REPLACED) {
+            // Only the protected system broadcast arms it: the QUICKBOOT actions are
+            // unprotected and any app could use them to re-arm a retry loop.
+            if (action == Intent.ACTION_BOOT_COMPLETED) {
                 BootRetryWorker.schedule(context)
             }
         } else {

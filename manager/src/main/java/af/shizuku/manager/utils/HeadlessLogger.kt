@@ -16,15 +16,23 @@ object HeadlessLogger {
     private const val LOG_FILE = "headless.log"
     private const val MAX_SIZE = 256 * 1024
 
-    private var logDir: File? = null
-    private var logFile: File? = null
+    @Volatile private var logDir: File? = null
+    @Volatile private var logFile: File? = null
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
     enum class Level { INFO, WARN, ERROR }
 
+    @Synchronized
     fun init(context: Context) {
         if (logDir != null) return
-        logDir = context.getExternalFilesDir(null) ?: context.filesDir
+        // Below API 30 the app's external files dir is readable by any app holding
+        // READ_EXTERNAL_STORAGE, and the log names the adb port/state; keep it private there.
+        logDir =
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                context.getExternalFilesDir(null) ?: context.filesDir
+            } else {
+                context.filesDir
+            }
         logDir?.mkdirs()
         logFile = logDir?.let { File(it, LOG_FILE) }
     }

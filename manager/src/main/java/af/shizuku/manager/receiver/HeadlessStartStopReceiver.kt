@@ -1,6 +1,7 @@
 package af.shizuku.manager.receiver
 
 import af.shizuku.common.util.EnvironmentUtils
+import af.shizuku.common.util.UserHandleCompat
 import af.shizuku.manager.BuildConfig
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.ShizukuSettings.LaunchMethod
@@ -18,8 +19,10 @@ import rikka.shizuku.Shizuku
 /**
  * ADB-shell / root only control surface for fleet automation: start, stop and query Shizuku
  * without opening the UI. Gated in the manifest by INTERACT_ACROSS_USERS_FULL, which ordinary
- * apps cannot hold. Results are returned through ordered-broadcast result codes/data/extras so
- * `adb shell am broadcast ... ` scripts can read them.
+ * apps cannot hold (shell, root, system and platform-signed apps can; so, in effect, can any
+ * client Shizuku has already authorised, since it can run `am` as shell). Results are returned
+ * through ordered-broadcast result codes/data/extras. Since API 26 the broadcast must name the
+ * package or it is dropped: `adb shell am broadcast -p <pkg> -a <pkg>.HEADLESS_STATUS`.
  */
 class HeadlessStartStopReceiver : BroadcastReceiver() {
 
@@ -28,21 +31,43 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_HEADLESS_START -> {
                 HeadlessLogger.i("Start", "Headless start requested (version ${BuildConfig.VERSION_NAME})")
+                // Same guards the shared starter applies; keep them rather than forcing past them.
+                if (UserHandleCompat.myUserId() > 0) {
+                    HeadlessLogger.w("Start", "Rejected: not the primary user")
+                    setResult(3, "UNSUPPORTED_USER", null)
+                    return
+                }
+                when (ShizukuStateMachine.get()) {
+                    ShizukuStateMachine.State.RUNNING -> {
+                        HeadlessLogger.i("Start", "Already running")
+                        setResult(1, "ALREADY_RUNNING", null)
+                        return
+                    }
+                    ShizukuStateMachine.State.STARTING -> {
+                        HeadlessLogger.i("Start", "Start already in progress")
+                        setResult(0, "STARTING", null)
+                        return
+                    }
+                    else -> Unit
+                }
                 val launchMode = ShizukuSettings.getLastLaunchMode()
                 if (launchMode == LaunchMethod.ROOT) {
                     HeadlessLogger.i("Start", "Launch mode=ROOT, delegating to ShizukuReceiverStarter")
                 } else {
-                    // ADB, or UNKNOWN on a fresh install: make sure wireless debugging is on, then
-                    // persist ADB as the launch mode so the shared starter takes its ADB path
-                    // (it treats UNKNOWN as "background start not supported").
+                    // ADB, or UNKNOWN on a fresh install. Enabling wireless debugging exposes adbd
+                    // on the network, so it is on by default for the fleet case but can be opted
+                    // out with --ez enable_wireless_adb false. UNKNOWN is persisted as ADB because
+                    // the shared starter treats UNKNOWN as "background start not supported".
                     HeadlessLogger.i("Start", "Launch mode=$launchMode, attempting ADB start")
-                    tryEnsureWirelessAdb(context)
+                    if (intent.getBooleanExtra(EXTRA_ENABLE_WIRELESS_ADB, true)) {
+                        tryEnsureWirelessAdb(context)
+                    }
                     if (launchMode != LaunchMethod.ADB) {
                         ShizukuSettings.setLastLaunchMode(LaunchMethod.ADB)
                     }
                     HeadlessLogger.i("Start", "Starting via ADB (TCP port ${ShizukuSettings.getTcpPort()})")
                 }
-                ShizukuReceiverStarter.start(context, forceStart = true)
+                ShizukuReceiverStarter.start(context)
                 setResult(0, "STARTING", null)
             }
             ACTION_HEADLESS_STOP -> {
@@ -122,5 +147,6 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
         val ACTION_HEADLESS_START = "${BuildConfig.APPLICATION_ID}.HEADLESS_START"
         val ACTION_HEADLESS_STOP = "${BuildConfig.APPLICATION_ID}.HEADLESS_STOP"
         val ACTION_HEADLESS_STATUS = "${BuildConfig.APPLICATION_ID}.HEADLESS_STATUS"
+        const val EXTRA_ENABLE_WIRELESS_ADB = "enable_wireless_adb"
     }
 }
