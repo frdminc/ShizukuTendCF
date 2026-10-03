@@ -263,8 +263,11 @@ class UpdateManager(
                 withContext(Dispatchers.IO) {
                     // Unique, fixed-shape name: nothing from the release reaches the path, and a
                     // second verification cannot overwrite a copy that has already been verified.
-                    val staged = File.createTempFile(STAGED_PREFIX, ".apk", context.cacheDir)
-                    UpdateVerifier.verifyAndStage(file, downloadUrl, staged).also { file.delete() }
+                    // createTempFile throws when the cache dir is full or unwritable.
+                    val staged = runCatching { File.createTempFile(STAGED_PREFIX, ".apk", context.cacheDir) }.getOrNull()
+                    val result = staged?.let { UpdateVerifier.verifyAndStage(file, downloadUrl, it) }
+                    file.delete()
+                    result
                 }
             if (verified == null) {
                 showDownloadErrorNotification(messageRes = R.string.update_verify_failed_message)
@@ -273,8 +276,8 @@ class UpdateManager(
 
             if (ShizukuSettings.isAutoInstallEnabled()) {
                 if (!installApk(verified)) {
-                    // installApk only returns false on an unexpected failure before it could
-                    // even hand off to the system installer — fall back to the manual prompt.
+                    // No silent route (root or Shizuku) installed it — fall back to the system
+                    // installer prompt.
                     showInstallNotification(verified, versionName)
                 }
             } else {
@@ -420,7 +423,7 @@ class UpdateManager(
                         val result =
                             withContext(Dispatchers.IO) {
                                 com.topjohnwu.superuser.Shell
-                                    .cmd("cp '${file.absolutePath}' $tmp && chmod 644 $tmp && pm install -r -d $tmp")
+                                    .cmd("cp '${file.absolutePath}' $tmp && chmod 644 $tmp && pm install -r $tmp")
                                     .exec()
                                     .also {
                                         com.topjohnwu.superuser.Shell
@@ -462,7 +465,7 @@ class UpdateManager(
             val apkBytes = file.readBytes()
             val script =
                 "cat > /data/local/tmp/update.apk && chmod 644 /data/local/tmp/update.apk" +
-                    " && pm install -r -d /data/local/tmp/update.apk 2>&1; echo EXIT:\$?; rm -f /data/local/tmp/update.apk"
+                    " && pm install -r /data/local/tmp/update.apk 2>&1; echo EXIT:\$?; rm -f /data/local/tmp/update.apk"
             val process =
                 rikka.shizuku.Shizuku.newProcess(arrayOf("sh", "-c", script), null, null)
                     ?: run {
