@@ -260,9 +260,11 @@ All are in base-inherited code; none blocks a release. Order is by value.
    `ShizukuTendCF-<ver>-<abi>.apk` for the device's primary ABI, falling back to the universal APK.
 5. **Done 2026-10-03 (see "Follow-ups 4, 5 and 7" below).** **Updater: SHA-256 digest verification** before install, from a digest the release publishes
    (`UpdateHelper.kt.reference` in the session scratchpad has the ported check to lift from).
-6. **Fleet profile swap window on API 24–29.** On Android 7–10 the app's external files dir is writable
-   by apps holding `WRITE_EXTERNAL_STORAGE`; either accept the profile inline (`--es profile_json`) below
-   API 30 or document the limitation. Moot if every fleet device is Android 11+.
+6. **Done 2026-10-03 (documented, not coded).** **Fleet profile swap window on API 24–29.** On Android 7–10 the app's
+   external files dir is writable by apps holding `WRITE_EXTERNAL_STORAGE`; either accept the profile inline
+   (`--es profile_json`) below API 30 or document the limitation. Moot if every fleet device is Android 11+.
+   Resolution: the fleet is Android 16/17 throughout, so the limitation and its workaround (push to the
+   internal `files/fleet/` dir on API < 30) are documented in `FleetProfileApplier.allowedDirs`'s KDoc.
 7. **Done 2026-10-03 (see "Follow-ups 4, 5 and 7" below).** **Headless ADB start: one authorisation prompt, not a stack of them** (operator request, 2026-10-03).
    On a fresh install the manager's ADB key is unknown to adbd. While the "Allow USB debugging?" dialog
    is unanswered, the start worker keeps reconnecting and every attempt queues another dialog: about ten

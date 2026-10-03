@@ -44,6 +44,12 @@ object FleetProfileApplier {
      * Directories a profile file may be read from. The app's own external files dir is writable
      * by the app and by shell/root (`adb push`) but, on Android 11+, not by other apps, which
      * closes the swap-the-file-between-push-and-apply window shared storage would leave open.
+     *
+     * Known limitation on API 24-29 (Android 7-10): there the external files dir IS writable by
+     * any app holding WRITE_EXTERNAL_STORAGE, so a hostile app can swap the file between the
+     * `adb push` and the apply. On such devices push the profile to the internal
+     * `files/fleet/` dir instead (`run-as` or root), which no other app can write. The fleet is
+     * Android 11+ throughout, so this is documented rather than coded around.
      */
     private fun allowedDirs(context: Context): List<File> =
         listOfNotNull(context.getExternalFilesDir(null), context.filesDir.resolve("fleet"))
