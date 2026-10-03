@@ -29,7 +29,10 @@ object AdbAuthWait {
     }
 }
 
-/** The user did not answer the "Allow USB debugging?" dialog within [AdbAuthWait.TIMEOUT_MS]. */
+/**
+ * The key offered to adbd was not accepted: the "Allow USB debugging?" dialog was not answered within
+ * [AdbAuthWait.TIMEOUT_MS], was rejected, or the connection dropped while it was showing.
+ */
 class AdbAuthTimeoutException(
     message: String,
 ) : SocketTimeoutException(message)

@@ -18,17 +18,17 @@ import android.widget.Toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.sentry.Sentry
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.EOFException
 import java.net.ConnectException
 import java.net.SocketException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.net.SocketTimeoutException
 import javax.net.ssl.SSLException
 
@@ -111,7 +111,15 @@ object AdbStarter {
                 Timber.tag(TAG).i("Connecting to ADB daemon at 127.0.0.1:%d", activePort)
                 log?.invoke("Connecting on port $activePort...")
 
-                val onPending = { ShizukuReceiverStarter.updateNotification(context, ShizukuReceiverStarter.WorkerState.AWAITING_AUTH) }
+                // The background worker owns (and later clears) the ongoing notification; an
+                // interactive start reports through its log instead and must not leave one behind.
+                val onPending = {
+                    if (log != null) {
+                        log.invoke(context.getString(R.string.wadb_notification_awaiting_auth))
+                    } else {
+                        ShizukuReceiverStarter.updateNotification(context, ShizukuReceiverStarter.WorkerState.AWAITING_AUTH)
+                    }
+                }
                 AdbClient("127.0.0.1", activePort, key, onPending).use { client ->
                     connectWithRetry(client, activePort)
                     Timber.tag(TAG).i("Connected to ADB at 127.0.0.1:%d; deploying starter command", activePort)

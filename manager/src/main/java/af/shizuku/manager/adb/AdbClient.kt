@@ -112,7 +112,8 @@ class AdbClient(
      * adbd answers an offered public key only once the user has accepted or rejected its dialog,
      * and raises one dialog per connection that offers an unknown key. Reconnecting after the
      * normal read timeout would therefore stack dialogs, so this holds the one connection open
-     * for [AdbAuthWait.TIMEOUT_MS]. A rejection closes the connection (EOFException).
+     * for [AdbAuthWait.TIMEOUT_MS]. A timeout, a rejection or a dropped connection all surface as
+     * [AdbAuthTimeoutException], which callers do not retry.
      */
     private fun awaitAuthorization(s: Socket): AdbMessage {
         Timber.tag(TAG).i("Waiting up to %d ms for the user to accept the adbd authorisation dialog", AdbAuthWait.TIMEOUT_MS)
@@ -124,6 +125,10 @@ class AdbClient(
                 read()
             } catch (e: java.net.SocketTimeoutException) {
                 throw AdbAuthTimeoutException("adbd authorisation dialog was not answered within ${AdbAuthWait.TIMEOUT_MS / 1000}s")
+            } catch (e: java.io.IOException) {
+                // Rejected, or adbd went away mid-wait. Either way the key was offered on this
+                // connection, so the caller must not reconnect on its own and raise the dialog again.
+                throw AdbAuthTimeoutException("adbd closed the connection without accepting the key: ${e.message}")
             }
         } finally {
             AdbAuthWait.end()
