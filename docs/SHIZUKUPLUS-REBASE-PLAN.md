@@ -263,6 +263,15 @@ All are in base-inherited code; none blocks a release. Order is by value.
 6. **Fleet profile swap window on API 24–29.** On Android 7–10 the app's external files dir is writable
    by apps holding `WRITE_EXTERNAL_STORAGE`; either accept the profile inline (`--es profile_json`) below
    API 30 or document the limitation. Moot if every fleet device is Android 11+.
+7. **Headless ADB start: one authorisation prompt, not a stack of them** (operator request, 2026-10-03).
+   On a fresh install the manager's ADB key is unknown to adbd. While the "Allow USB debugging?" dialog
+   is unanswered, the start worker keeps reconnecting and every attempt queues another dialog: about ten
+   had to be accepted on the Titan 2. Make the start hold one connection open while authorisation is
+   pending (or back off until it is answered), and say in the notification that a prompt is waiting.
+   Related: a prompt raised while the phone is locked is lost and adbd then reports "prompt currently
+   pending, skipping" until adbd restarts; and restarting adbd kills a server that was started from an
+   adb shell. Procedure until fixed: unlock the phone first, trigger `HEADLESS_START` once, tick
+   "Always allow".
 
 ## End-of-rebase upstreaming pass (operator instruction, 2026-10-03)
 
@@ -316,3 +325,17 @@ Starting point: `docs/rebase-on-shizukuplus-prompt.md` (the prompt as written on
    keystore; the agent's release key and every deployed agent is `35bbc3d1…ff9b6a`. Replaced on the
    operator's instruction.
 6. **`am broadcast` to a freshly installed app** needs `--include-stopped-packages -n <component>`.
+
+## Carry into the next handoff (operator instruction, 2026-10-03)
+
+1. **Titan 2: the stayturgid agent reports `sshd=down`** (SM-S921U1 and Pixel 7a report `sshd=up`).
+   Seen in the agent's comonitor line after the Drop-In rollout; not investigated, and not known to be
+   related to it.
+2. **Restarting adbd kills a Shizuku server that was started from an adb shell.** `adb tcpip 5555` on the
+   Pixel 7a and Titan 2 left both without Shizuku for about three minutes until the server was started
+   again. A server started through `HEADLESS_START` should be checked for the same behaviour.
+3. **TODO, at the end: restore GitGuardian secret scanning.** The workflow (`.github/workflows/gitguardian.yaml`
+   on the base) was removed on 2026-10-03 because the repo has no `GITGUARDIAN_API_KEY` secret and it
+   failed on every push. To restore: add that secret with `gh secret set GITGUARDIAN_API_KEY --repo
+   frdminc/ShizukuTendCF`, then bring the file back from `shizukuplus/master` or from git history
+   (`git log --diff-filter=D -- .github/workflows/`).
