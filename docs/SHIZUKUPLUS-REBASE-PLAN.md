@@ -139,3 +139,18 @@ Then: rebrand strings/docs to ShizukuTendCF, build, adversary security review of
 then operator flips `master`.
 
 Do NOT port the 12 reverted experiments (X01–X12 above). Fire OS (F15) already present on base.
+
+## Consistent TCP port (5555) — verified already on base, 2026-10-03
+
+The operator's "consistent port number" feature (fixed/configurable ADB TCP port, default 5555)
+is **already present in the ShizukuPlus base** and need not be ported. It is a shared thedjchi-origin
+feature: base `manager/.../ShizukuSettings.java` has `KEY_TCP_PORT = "tcp_port"` with `getTcpPort()`
+defaulting to `5555` — **byte-identical to our fork's key and default** — and fully localized settings
+strings (`settings_tcp_port`, `settings_tcp_port_default` = "Default (5555)", `settings_tcp_port_hint`).
+ShizukuPlus also *extends* it beyond ours: an ADB-proxy service on port **15555**
+(`manager/.../service/AdbProxyService.kt`, `settings_adb_proxy_summary`) and an on-device ADB-TCP-mode
+option (`settings_on_device_adb_tcp_summary`). Keep theirs.
+
+Implication for the F06 fleet-profile port: the profile's `tcp_port` field maps to the **same**
+`KEY_TCP_PORT = "tcp_port"` preference on the base, so `FleetProfileApplier` will drive the fixed port
+correctly with no key translation. Just confirm the setter path matches their `ShizukuSettings` API.
