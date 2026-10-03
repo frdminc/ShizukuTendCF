@@ -70,7 +70,7 @@ jobs:
       KEYSTORE: ${{ secrets.KEYSTORE }}
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-      IS_DEBUG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug == true }}
+      IS_DEBUG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
       # github.ref_name != 'master' forces prerelease regardless of trigger/inputs - workflow_dispatch's
       # prerelease input defaults to false, which is the intentional "promote to stable" mechanism
       # for master, but nothing previously stopped that same default from applying to a manual
@@ -78,7 +78,7 @@ jobs:
       # (v13.6.0.r2344, later deleted) built from an in-progress branch - a manual `gh workflow run
       # --ref <branch>` to sanity-check compilation, with no intent to cut a release at all, silently
       # became one because the default is stable-not-prerelease. Non-master can never be stable now.
-      IS_PRERELEASE: ${{ github.ref_name != 'master' || (github.event_name == 'push' && github.ref_name == 'master') || (github.event_name == 'workflow_dispatch' && github.event.inputs.prerelease == true) }}
+      IS_PRERELEASE: ${{ github.ref_name != 'master' || (github.event_name == 'push' && github.ref_name == 'master') || (github.event_name == 'workflow_dispatch' && github.event.inputs.prerelease == 'true') }}
 
     outputs:
       artifactName: ${{ steps.buildWithGradle.outputs.artifactName }}
@@ -129,12 +129,19 @@ jobs:
 
       - name: Create signing.properties
         if: ${{ env.IS_DEBUG == 'false' }}
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
         run: |
-          echo KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} > signing.properties
-          echo KEYSTORE_ALIAS=${{ secrets.KEYSTORE_ALIAS }} >> signing.properties
-          echo KEYSTORE_ALIAS_PASSWORD='${{ secrets.KEYSTORE_ALIAS_PASSWORD }}' >> signing.properties
-          echo KEYSTORE_FILE=${{ github.workspace }}/key.jks >> signing.properties
-          printf "%s" "${{ secrets.KEYSTORE }}" | base64 --decode > key.jks
+          # Secrets reach the script through env, never through ${{ }} in the command text.
+          {
+            printf 'KEYSTORE_PASSWORD=%s\n' "$KEYSTORE_PASSWORD"
+            printf 'KEYSTORE_ALIAS=%s\n' "$KEYSTORE_ALIAS"
+            printf 'KEYSTORE_ALIAS_PASSWORD=%s\n' "$KEYSTORE_ALIAS_PASSWORD"
+            printf 'KEYSTORE_FILE=%s\n' "$GITHUB_WORKSPACE/key.jks"
+          } > signing.properties
+          printf "%s" "$KEYSTORE" | base64 --decode > key.jks
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -151,6 +158,10 @@ jobs:
 
       - name: Build with Gradle
         id: buildWithGradle
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
           [ -n "$SENTRY_DSN" ] && echo "SENTRY_DSN=${SENTRY_DSN}" >> gradle.properties || true
@@ -224,14 +235,29 @@ jobs:
                 if [ -f "key.jks" ]; then
                   BUILD_TOOLS_VERSION=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)
                   $ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner sign --ks key.jks \
-                    --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
-                    --ks-key-alias "${{ secrets.KEYSTORE_ALIAS }}" \
-                    --key-pass "pass:${{ secrets.KEYSTORE_ALIAS_PASSWORD }}" \
+                    --ks-pass env:KEYSTORE_PASSWORD \
+                    --ks-key-alias "$KEYSTORE_ALIAS" \
+                    --key-pass env:KEYSTORE_ALIAS_PASSWORD \
                     "$FILE"
                 else
                   echo "::error::Release APK $FILE is unsigned and key.jks is missing"
                   exit 1
                 fi
+              fi
+            }
+
+            # The fork's own release certificate (CN=djbclark Shizuku Fork). A swapped or wrong
+            # keystore secret must fail here, not ship an APK no device can update to.
+            EXPECTED_CERT_SHA256="18a40a45fb5919eec915049231ea5bbc6bf1ec5d7d7cd1b70409a000091ce431"
+            verify_cert() {
+              local FILE="$1"
+              local BUILD_TOOLS_VERSION ACTUAL
+              BUILD_TOOLS_VERSION=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)
+              ACTUAL=$($ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner verify --print-certs "$FILE" \
+                | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+              if [ "$ACTUAL" != "$EXPECTED_CERT_SHA256" ]; then
+                echo "::error::$FILE is signed by ${ACTUAL:-no certificate}, expected $EXPECTED_CERT_SHA256"
+                exit 1
               fi
             }
 
@@ -242,6 +268,8 @@ jobs:
 
             sign_apk "$PLUS_FILE"
             sign_apk "$DROPIN_FILE"
+            verify_cert "$PLUS_FILE"
+            verify_cert "$DROPIN_FILE"
 
             ABI=$(get_apk_abi "$PLUS_FILE")
             APK_NAME="ShizukuTendCF-${VERSION}-${ABI}.apk"
@@ -254,6 +282,7 @@ jobs:
             COMPAT_FILE=$(find compat/build/outputs/apk/release -name "*.apk" -type f | head -1)
             if [ -n "$COMPAT_FILE" ]; then
               sign_apk "$COMPAT_FILE"
+              verify_cert "$COMPAT_FILE"
               COMPAT_RENAMED="$(dirname "$COMPAT_FILE")/ShizukuTendCF-compat.apk"
               mv "$COMPAT_FILE" "$COMPAT_RENAMED"
               echo "compatPath=${COMPAT_RENAMED}" >> $GITHUB_OUTPUT
@@ -378,7 +407,7 @@ jobs:
          !contains(github.event.head_commit.message, '[skip release]')) ||
         (github.event_name == 'push' && github.ref_name == 'master' &&
          contains(github.event.head_commit.message, '[force release]')) ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.debug != true)
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.debug != 'true')
       )
     runs-on: ubuntu-latest
     permissions:
@@ -392,7 +421,7 @@ jobs:
       # (v13.6.0.r2344, later deleted) built from an in-progress branch - a manual `gh workflow run
       # --ref <branch>` to sanity-check compilation, with no intent to cut a release at all, silently
       # became one because the default is stable-not-prerelease. Non-master can never be stable now.
-      IS_PRERELEASE: ${{ github.ref_name != 'master' || (github.event_name == 'push' && github.ref_name == 'master') || (github.event_name == 'workflow_dispatch' && github.event.inputs.prerelease == true) }}
+      IS_PRERELEASE: ${{ github.ref_name != 'master' || (github.event_name == 'push' && github.ref_name == 'master') || (github.event_name == 'workflow_dispatch' && github.event.inputs.prerelease == 'true') }}
 
     steps:
       - name: Checkout

@@ -247,14 +247,14 @@ Adversary text for a PR body, verbatim from `adversary-fleet-verdict3.md`:
 
 All are in base-inherited code; none blocks a release. Order is by value.
 
-1. **CI: pin the release certificate.** After signing, run `apksigner verify --print-certs` and fail the
+1. **Done 2026-10-03. CI: pin the release certificate.** After signing, run `apksigner verify --print-certs` and fail the
    job unless the SHA-256 equals the fork's own release certificate, `18a40a45…1ce431`
    (`CN=djbclark Shizuku Fork`). Catches a swapped keystore secret before a build is published.
    (Corrected 2026-10-03: this used to name `TRUSTED_SIGNER_SHA256`, which is the *agent's* certificate,
    not the key that signs these APKs.)
-2. **CI: `IS_DEBUG` coercion.** `app.yml` compares a string input to a boolean in places; a "debug"
+2. **Done 2026-10-03 (also fixed the same comparison on the `prerelease` input). CI: `IS_DEBUG` coercion.** `app.yml` compares a string input to a boolean in places; a "debug"
    workflow_dispatch can take the release path (fails closed on signing today, but fix the comparison).
-3. **CI: env-based secrets in the remaining steps** (`Create signing.properties`, `sign_apk`) — same
+3. **Done 2026-10-03. CI: env-based secrets in the remaining steps** (`Create signing.properties`, `sign_apk`) — same
    pattern as the Validate step, so secrets never appear in a shell-interpolated command line.
 4. **Updater: ABI + name matching.** `UpdateChecker` should pick the asset named
    `ShizukuTendCF-<ver>-<abi>.apk` for the device's primary ABI, falling back to the universal APK.
