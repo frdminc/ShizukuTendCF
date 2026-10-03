@@ -1178,6 +1178,7 @@
     <string name="update_download_failed_message">Failed to download the update. Please try again.</string>
     <string name="update_download_failed_storage">Not enough free storage to download the update.</string>
     <string name="update_download_failed_cannot_resume">The download couldn\'t resume after being interrupted. Please try again.</string>
+    <string name="update_verify_failed_message">The update could not be verified (missing or mismatched checksum) and was not installed.</string>
     <string name="update_download_failed_http">A network error interrupted the download. Please check your connection and try again.</string>
 
     <!-- Migration Dialog -->

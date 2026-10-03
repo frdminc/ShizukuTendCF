@@ -1,6 +1,7 @@
 package af.shizuku.manager.update
 
 import af.shizuku.manager.BuildConfig
+import android.os.Build
 import android.util.Xml
 import io.sentry.Sentry
 import kotlinx.coroutines.Dispatchers
@@ -162,18 +163,8 @@ object UpdateChecker {
                 .map { assets.getJSONObject(it) }
                 .filter { it.getString("name").endsWith(".apk", ignoreCase = true) }
 
-        val targetAsset =
-            if (isDropIn) {
-                apkAssets.firstOrNull {
-                    val name = it.getString("name")
-                    name.contains("Drop-In", ignoreCase = true) || name.contains("dropin", ignoreCase = true)
-                }
-            } else {
-                apkAssets.firstOrNull {
-                    val name = it.getString("name")
-                    !name.contains("Drop-In", ignoreCase = true) && !name.contains("dropin", ignoreCase = true)
-                }
-            } ?: apkAssets.firstOrNull()
+        val targetName = selectApkAssetName(apkAssets.map { it.getString("name") }, isDropIn, Build.SUPPORTED_ABIS)
+        val targetAsset = apkAssets.firstOrNull { it.getString("name") == targetName }
 
         val downloadUrl =
             targetAsset?.getString("browser_download_url")
@@ -191,6 +182,31 @@ object UpdateChecker {
             Timber.tag(TAG).d("Already on latest ($channel): ${BuildConfig.VERSION_NAME}")
             CheckResult.UpToDate
         }
+    }
+
+    /**
+     * Picks the release APK this install should update to, or null if the release has none.
+     *
+     * CI publishes `ShizukuTendCF-<ver>-<abi|universal>.apk` (standard flavour), a Drop-In APK
+     * (name contains "Drop-In"/"dropin") and a Compat Hub stub (name contains "compat"). The
+     * stub and the other flavour's APK are never candidates, and there is deliberately no
+     * "first APK" fallback: installing the wrong flavour over this one would replace it with a
+     * different package. Drop-In takes only the Drop-In asset; the standard flavour prefers the
+     * device's primary ABI and falls back to the universal APK.
+     */
+    internal fun selectApkAssetName(
+        apkNames: List<String>,
+        isDropIn: Boolean,
+        supportedAbis: Array<String>,
+    ): String? {
+        fun String.isDropInAsset() = contains("drop-in", ignoreCase = true) || contains("dropin", ignoreCase = true)
+        val candidates = apkNames.filterNot { it.contains("compat", ignoreCase = true) }
+        if (isDropIn) return candidates.firstOrNull { it.isDropInAsset() }
+
+        val standard = candidates.filterNot { it.isDropInAsset() }
+        val primaryAbi = supportedAbis.firstOrNull()
+        return primaryAbi?.let { abi -> standard.firstOrNull { it.endsWith("-$abi.apk", ignoreCase = true) } }
+            ?: standard.firstOrNull { it.endsWith("-universal.apk", ignoreCase = true) }
     }
 
     /**

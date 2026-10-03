@@ -688,6 +688,14 @@ jobs:
           COMPAT_APK=$(find files/compat -name "*.apk" -type f 2>/dev/null | head -1)
           [ -n "$COMPAT_APK" ] && attach "$COMPAT_APK" "ShizukuTendCF-Compat-Hub-${VERSION}"
 
+          # Publish SHA-256 digests of every attached APK as a SHA256SUMS asset; the in-app updater
+          # downloads it from the same release and refuses to install an APK it does not list or
+          # that does not match. Names are bare file names (all APKs are in files/), as sha256sum
+          # prints them, so the updater can match on the asset name.
+          (cd files && sha256sum -- $(for a in "${ASSETS[@]}"; do basename "$a"; done)) > files/SHA256SUMS
+          [ "$(wc -l < files/SHA256SUMS)" -eq ${#ASSETS[@]} ] || { echo "::error::SHA256SUMS line count does not match the attached APKs"; exit 1; }
+          ASSETS+=("files/SHA256SUMS")
+
           # When promoting from prerelease to stable (IS_PRERELEASE=false via workflow_dispatch
           # without the prerelease flag), delete the existing prerelease first. The push to master
           # always creates a prerelease for the same tag; gh release create fails if a release

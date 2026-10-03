@@ -9,6 +9,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import androidx.annotation.StringRes
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -71,6 +72,14 @@ class UpdateManager(
         isManualDownload = manual
         createNotificationChannel()
 
+        // Fail closed before spending the download: only a release asset URL has a SHA256SUMS
+        // next to it to verify against (see UpdateVerifier).
+        if (UpdateVerifier.checksumsUrlFor(downloadUrl) == null) {
+            Timber.tag(TAG).w("Refusing to download update from unverifiable URL: $downloadUrl")
+            showDownloadErrorNotification(messageRes = R.string.update_verify_failed_message)
+            return
+        }
+
         // Callers invoke this from a UI click handler; the file-exists check, delete, and
         // cleanup() below are all blocking disk I/O, so this whole body runs on IO instead of
         // whatever thread called downloadUpdate() (previously janked/risked ANR on slow storage
@@ -117,7 +126,7 @@ class UpdateManager(
                 Timber.tag(TAG).d("Download started: $downloadUrl, ID: $downloadId")
 
                 // Monitor download progress
-                monitorDownload(downloadId, file, versionName)
+                monitorDownload(downloadId, file, versionName, downloadUrl)
             } catch (e: Exception) {
                 // WARN not ERROR: some ROMs (MIUI/HyperOS) don't expose the DownloadManager
                 // content URI — expected incompatibility, not a crash (SHIZUKUPLUS-8N).
@@ -134,6 +143,7 @@ class UpdateManager(
         downloadId: Long,
         file: File,
         versionName: String,
+        downloadUrl: String,
     ) {
         monitorJob?.cancel()
         monitorJob =
@@ -168,7 +178,7 @@ class UpdateManager(
                                 DownloadManager.STATUS_SUCCESSFUL -> {
                                     cursor.close()
                                     Timber.tag(TAG).d("Download completed: ${file.absolutePath}")
-                                    onDownloadComplete(file, versionName)
+                                    onDownloadComplete(file, versionName, downloadUrl)
                                     break
                                 }
                                 DownloadManager.STATUS_FAILED -> {
@@ -232,6 +242,7 @@ class UpdateManager(
     private fun onDownloadComplete(
         file: File,
         versionName: String,
+        downloadUrl: String,
     ) {
         // Remove progress notification
         notificationManager.cancel(NOTIFICATION_ID)
@@ -243,16 +254,29 @@ class UpdateManager(
             return
         }
 
-        if (ShizukuSettings.isAutoInstallEnabled()) {
-            scope.launch {
-                if (!installApk(file)) {
+        scope.launch {
+            // Verify the SHA-256 published with the release and install only the app-private copy
+            // that was hashed: the download dir is external storage, so the file there could be
+            // swapped between a check and the install. Any failure discards the APK (fail closed).
+            val verified =
+                withContext(Dispatchers.IO) {
+                    val staged = File(context.cacheDir, file.name)
+                    UpdateVerifier.verifyAndStage(file, downloadUrl, staged).also { file.delete() }
+                }
+            if (verified == null) {
+                showDownloadErrorNotification(messageRes = R.string.update_verify_failed_message)
+                return@launch
+            }
+
+            if (ShizukuSettings.isAutoInstallEnabled()) {
+                if (!installApk(verified)) {
                     // installApk only returns false on an unexpected failure before it could
                     // even hand off to the system installer — fall back to the manual prompt.
-                    showInstallNotification(file, versionName)
+                    showInstallNotification(verified, versionName)
                 }
+            } else {
+                showInstallNotification(verified, versionName)
             }
-        } else {
-            showInstallNotification(file, versionName)
         }
     }
 
@@ -337,9 +361,12 @@ class UpdateManager(
      * when known — a few documented, OEM-independent codes get distinct, self-diagnosing text
      * (#414) instead of the generic message.
      */
-    private fun showDownloadErrorNotification(reason: Int? = null) {
-        val messageRes =
-            when (reason) {
+    private fun showDownloadErrorNotification(
+        reason: Int? = null,
+        @StringRes messageRes: Int? = null,
+    ) {
+        val text =
+            messageRes ?: when (reason) {
                 DownloadManager.ERROR_INSUFFICIENT_SPACE -> R.string.update_download_failed_storage
                 DownloadManager.ERROR_CANNOT_RESUME -> R.string.update_download_failed_cannot_resume
                 DownloadManager.ERROR_HTTP_DATA_ERROR,
@@ -352,7 +379,7 @@ class UpdateManager(
                 .Builder(context, NOTIFICATION_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification_icon)
                 .setContentTitle(context.getString(R.string.update_download_failed_title))
-                .setContentText(context.getString(messageRes))
+                .setContentText(context.getString(text))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
                 .build()
@@ -482,6 +509,11 @@ class UpdateManager(
             downloadsDir?.listFiles { file -> file.name.endsWith(".apk") }?.forEach { file ->
                 file.delete()
                 Timber.tag(TAG).d("Cleaned up old APK: ${file.name}")
+            }
+            // Verified copies staged for install (see onDownloadComplete) live in the cache dir.
+            context.cacheDir?.listFiles { file -> file.name.startsWith("Shizuku+-v") && file.name.endsWith(".apk") }?.forEach { file ->
+                file.delete()
+                Timber.tag(TAG).d("Cleaned up staged APK: ${file.name}")
             }
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Error cleaning up")
