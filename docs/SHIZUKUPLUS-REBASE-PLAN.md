@@ -194,7 +194,9 @@ operator flips master → shizukuplus-base (legacy/pre-shizukuplus keeps the old
   correctly-ordered `clear_existing`, profile-source restriction and non-echoing errors, boot-retry
   armed only by the protected BOOT_COMPLETED and skipped in secondary users, HEADLESS_START keeps the
   base's user/already-running guards (wireless-ADB enable opt-out), private log dir below API 30, CI
-  secrets via env, README disclosure. Re-verification verdict: see `adversary-fleet-verdict2.md`.
+  secrets via env, README disclosure. Second pass found revoke still did not stick (the manager's revoke
+  stores an entry with neither flag); fixed in `ca52b44d` by applying the signer default only when no
+  entry exists, plus provider-guard hardening. **Final adversary verdict: APPROVE as of `ca52b44d`.**
 - **Open operator decision (review 1.3):** the stayturgid trusted-signer fingerprint is compiled into a
   publicly released build, so every installer of the public APK grants that key Shizuku access by
   default (revocable per-device now, after the fix). Options: (a) keep, disclosed (current state);
@@ -207,3 +209,23 @@ operator flips master → shizukuplus-base (legacy/pre-shizukuplus keeps the old
   SHA-256 digest verification to the base updater (ported `UpdateHelper` reference in scratchpad);
   `app_name` label still "Shizuku+". Scripts must pass `-p af.shizuku.plus.api` (Drop-In flavour: `moe.shizuku.privileged.api`) to the
   headless broadcasts on API 26+.
+
+## Ready to flip master
+
+`shizukuplus-base` compiles and carries an APPROVE from the adversary review. To make it `master`
+(history replacement, not a merge — the two histories are unrelated):
+
+    git fetch origin
+    git push origin shizukuplus-base:master --force-with-lease=master:a7178c9e4f6c860fd8d9db06dce4e4d99ea71122
+
+`legacy/pre-shizukuplus` (= old master `a7178c9e`) stays as the rollback point. Existing PR branches
+on the old history will no longer merge cleanly and should be re-raised against the new base.
+
+Adversary text for a PR body, verbatim from `adversary-fleet-verdict3.md`:
+
+> Adversary security review: **APPROVE**, as of `ca52b44d`. Earlier blocking findings were fixed: the
+> trusted-signer lookup crashed the server on API 24–27, and trusted-signer apps could not be revoked.
+> Remaining non-blocking items: (1) the trusted-signer list is built in and disclosed in the README; a
+> fleet-only build or on-device opt-in is recommended; (2) a profile-file swap window remains on API
+> 24–29; (3) CI hardening follow-ups: certificate pinning, the IS_DEBUG coercion, env-based secrets in
+> the remaining steps; (4) update-checker ABI matching.
