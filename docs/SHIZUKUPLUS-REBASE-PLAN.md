@@ -154,3 +154,28 @@ option (`settings_on_device_adb_tcp_summary`). Keep theirs.
 Implication for the F06 fleet-profile port: the profile's `tcp_port` field maps to the **same**
 `KEY_TCP_PORT = "tcp_port"` preference on the base, so `FleetProfileApplier` will drive the fixed port
 correctly with no key translation. Just confirm the setter path matches their `ShizukuSettings` API.
+
+## Progress (2026-10-03, later) — FEATURE PORT COMPLETE on `shizukuplus-base`
+
+Commits on top of ShizukuPlus master `9ceb9f49` (all path-staged, diffs reviewed by the lead):
+1. `f1101531` F14 protocol-vs-build status line (core/ui + manager strings, ServerStatusViewHolder).
+2. `416a18e8` F02 BootRetryWorker + BootCompleteReceiver scheduling + cancel in setStartOnBoot(false).
+3. `2fe6d627` F11 — decision: **use the base's existing updater** (`update/UpdateChecker.kt`) retargeted to
+   frdminc/ShizukuTendCF instead of shipping a second updater. The ported standalone `UpdateHelper.kt`
+   (digest-verified) is parked in the session scratchpad as `S3-UpdateHelper.kt.reference`; follow-up idea:
+   add SHA-256 digest verification to the base updater.
+4. `b2340dce` F18 CI: fail-fast on missing signing secrets, unsigned-release guard, `ShizukuTendCF-<ver>-<abi>.apk`.
+5. `9dcfb2a3` F07 trusted-signer allowlist in ShizukuConfigManager + docs/trusted-signer-allowlist.md.
+6. `05ac5adb` F05 HeadlessStartStopReceiver + HeadlessLogger (now initialised from ShizukuApplication);
+   START delegates to the base's ShizukuReceiverStarter/AdbStartWorker, persisting ADB mode on fresh install.
+7. `4572ab96` F06 FleetProfileActivity/Applier + ProvisionAuthReceiver + default profile asset + setAuthToken.
+   **Hardened vs the old fork:** both gated by INTERACT_ACROSS_USERS_FULL (old activity was ungated and an
+   open-with handler for all JSON; old receiver trusted Binder.getCallingUid() in onReceive). tcp_port validated.
+8. `117c46a8` rebrand: versionName "ShizukuTendCF …", bug-report/About/releases links, README banner.
+   Deliberately NOT changed: `app_name` label ("Shizuku+"), applicationId, ShizukuPlus wiki help links,
+   their apps.json compat feed. Operator call on the label.
+
+Vendor batch that produced F14/F02/F18 drafts: cursor (S1), agy (S2, S4), zcode (S3). Reports in scratchpad.
+
+Remaining before flipping `master`: local compile result, adversary review findings (in flight), then
+operator flips master → shizukuplus-base (legacy/pre-shizukuplus keeps the old history).
