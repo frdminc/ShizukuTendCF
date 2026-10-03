@@ -1,3 +1,16 @@
+> **This is ShizukuTendCF** — [frdminc/ShizukuTendCF](https://github.com/frdminc/ShizukuTendCF), a fork of
+> [thejaustin/ShizukuPlus](https://github.com/thejaustin/ShizukuPlus) maintained for the
+> [stayturgid](https://github.com/djbclark/stayturgid) Android fleet. It tracks ShizukuPlus and adds
+> unattended-fleet features on top: permission-gated **headless start/stop/status broadcasts**
+> (`HEADLESS_START` / `HEADLESS_STOP` / `HEADLESS_STATUS`) with an on-disk diagnostics log, **JSON fleet
+> profiles** (`APPLY_FLEET_PROFILE`) and **auth-token provisioning** (`PROVISION_AUTH`), **indefinite
+> start-on-boot retry**, a **trusted-signer allowlist** that keeps the fleet agent's grant from being lost
+> (see [`docs/trusted-signer-allowlist.md`](docs/trusted-signer-allowlist.md)), a status card that shows
+> protocol version and app build separately, and CI that refuses to cut an unsigned release. Releases are
+> named `ShizukuTendCF-<version>-<abi>.apk`. The fork history, feature overlap matrix and remaining work
+> are in [`docs/SHIZUKUPLUS-REBASE-PLAN.md`](docs/SHIZUKUPLUS-REBASE-PLAN.md); the pre-ShizukuPlus
+> history is preserved on the `legacy/pre-shizukuplus` branch. Everything below is ShizukuPlus's own README.
+
 <div align="center">
 
 # Shizuku+

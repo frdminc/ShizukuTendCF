@@ -26,7 +26,7 @@ def upstreamVersion = "13.7.0"
 def gitCommitCount = getGitCommitCount()
 ext {
     versionCode = gitCommitCount
-    versionName = "Shizuku+ ${upstreamVersion}.r${gitCommitCount}"
+    versionName = "ShizukuTendCF ${upstreamVersion}.r${gitCommitCount}"
 }
 
 subprojects {

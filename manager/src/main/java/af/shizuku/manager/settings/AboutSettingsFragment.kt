@@ -40,7 +40,7 @@ class AboutSettingsFragment : BaseSettingsFragment() {
         private const val KEY_AUTO_INSTALL = "auto_install_enabled"
         private const val KEY_UPDATE_CHANNEL = "update_channel"
         private const val KEY_CHECK_FOR_UPDATE = "check_for_update"
-        private const val RELEASES_URL = "https://github.com/thejaustin/ShizukuPlus/releases"
+        private const val RELEASES_URL = "https://github.com/frdminc/ShizukuTendCF/releases"
     }
 
     private val updateManager: UpdateManager by inject()
@@ -236,7 +236,7 @@ class AboutSettingsFragment : BaseSettingsFragment() {
         }
 
         findPreference<Preference>("source_code")?.setOnPreferenceClickListener {
-            CustomTabsHelper.launchUrlOrCopy(context, "https://github.com/thejaustin/ShizukuPlus")
+            CustomTabsHelper.launchUrlOrCopy(context, "https://github.com/frdminc/ShizukuTendCF")
             true
         }
 

@@ -29,7 +29,7 @@ class BugReportDialog : DialogFragment() {
 
         val updateLink =
             getString(R.string.bug_report_dialog_link_update)
-                .asLink("https://github.com/thejaustin/ShizukuPlus/releases/latest")
+                .asLink("https://github.com/frdminc/ShizukuTendCF/releases/latest")
 
         val wikiLink =
             getString(R.string.bug_report_dialog_link_wiki)
@@ -37,7 +37,7 @@ class BugReportDialog : DialogFragment() {
 
         val issuesLink =
             getString(R.string.bug_report_dialog_link_issues)
-                .asLink("https://github.com/thejaustin/ShizukuPlus/releases/issues")
+                .asLink("https://github.com/frdminc/ShizukuTendCF/issues")
 
         binding.apply {
             updateText.applyTemplateArgs(updateLink)
@@ -50,7 +50,7 @@ class BugReportDialog : DialogFragment() {
             .setTitle(R.string.settings_report_bug)
             .setView(binding.root)
             .setPositiveButton(R.string.action_open_github) { _, _ ->
-                CustomTabsHelper.launchUrlOrCopy(context, "https://github.com/thejaustin/ShizukuPlus/issues/new")
+                CustomTabsHelper.launchUrlOrCopy(context, "https://github.com/frdminc/ShizukuTendCF/issues/new")
             }.setNegativeButton(R.string.bug_report_dialog_button_email) { _, _ ->
                 val plainBody =
                     """
