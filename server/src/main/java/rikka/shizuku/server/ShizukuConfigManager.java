@@ -82,8 +82,8 @@ public class ShizukuConfigManager extends ConfigManager {
      * across installs. This must never be a shared/debug keystore.
      */
     private static final Set<String> TRUSTED_SIGNER_SHA256 = new LinkedHashSet<>(List.of(
-            // stayturgid-agent release signing key (CN=StayTurgid, O=StayTurgid, C=US).
-            "6651cb1582a2ab9f83bc8203da4e4591bc76ef187e8b4c771dcc7a9768be293e"
+            // stayturgid-agent release signing key (CN=stayturgid, O=stayturgid, C=US).
+            "35bbc3d1a93c2a726df14bcc066bdc791f7f55f21b57d9455da27439c5ff9b6a"
     ));
 
     public static ShizukuConfig load() {

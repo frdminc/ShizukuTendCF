@@ -10,7 +10,7 @@
 > named `ShizukuTendCF-<version>-<abi>.apk`.
 >
 > **Disclosure:** this build ships a built-in trusted-signer allowlist — any app signed with the
-> stayturgid-agent release certificate (SHA-256 `6651cb15…be293e`) is granted Shizuku access by default
+> stayturgid-agent release certificate (SHA-256 `35bbc3d1…ff9b6a`) is granted Shizuku access by default
 > unless you explicitly deny it in the manager. That is intended for stayturgid fleet devices; if you are
 > not running that fleet, this fork is probably not the one you want. Headless broadcasts must name the
 > package since Android 8 — standard build: `adb shell am broadcast -p af.shizuku.plus.api -a af.shizuku.plus.api.HEADLESS_STATUS`;

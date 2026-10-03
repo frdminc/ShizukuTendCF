@@ -248,8 +248,10 @@ Adversary text for a PR body, verbatim from `adversary-fleet-verdict3.md`:
 All are in base-inherited code; none blocks a release. Order is by value.
 
 1. **CI: pin the release certificate.** After signing, run `apksigner verify --print-certs` and fail the
-   job unless the SHA-256 equals the fingerprint in `ShizukuConfigManager.TRUSTED_SIGNER_SHA256`. Catches a
-   swapped keystore secret before an APK that no fleet device will trust is published.
+   job unless the SHA-256 equals the fork's own release certificate, `18a40a45…1ce431`
+   (`CN=djbclark Shizuku Fork`). Catches a swapped keystore secret before a build is published.
+   (Corrected 2026-10-03: this used to name `TRUSTED_SIGNER_SHA256`, which is the *agent's* certificate,
+   not the key that signs these APKs.)
 2. **CI: `IS_DEBUG` coercion.** `app.yml` compares a string input to a boolean in places; a "debug"
    workflow_dispatch can take the release path (fails closed on signing today, but fix the comparison).
 3. **CI: env-based secrets in the remaining steps** (`Create signing.properties`, `sign_apk`) — same
@@ -293,3 +295,24 @@ After the upstreaming pass, copy an updated "rebase a fork onto ShizukuPlus" pro
    we do it in the section above, including the two-other-agents review gate.
 
 Starting point: `docs/rebase-on-shizukuplus-prompt.md` (the prompt as written on 2026-10-03).
+
+## On-device findings (SM-S921U1, 2026-10-03)
+
+1. **Fleet layout is the Drop-In flavour.** The stayturgid agent is hard-wired to
+   `moe.shizuku.privileged.api`, and the server treats whatever is installed under that name as its
+   manager. The standard flavour side by side with the old fork cannot work: two servers fight and user
+   services are handed to the wrong one.
+2. **Migration is uninstall then install.** The old fork (release46) is debug-signed with versionCode
+   51407; the new builds are release-signed with versionCode = commit count. Grants survive, because
+   `shizuku.json` lives in the shell user's directory.
+3. **One tap per device after install.** The manager's ADB key is per-install, so `HEADLESS_START`
+   stalls on the "Allow USB debugging?" prompt until it is accepted once. Until then start the server
+   with the bundled `libshizuku.so` from an adb shell. If adbd logs "prompt currently pending, skipping"
+   with no dialog on screen, `adb tcpip 5555` restarts adbd and the prompt comes back.
+4. **Transaction renumbering bug (fixed in `737b8ae5`).** The base's `LegacyShizukuBinderProxy`
+   subtracted 1 from every transaction code for all stock-API apps, so `addUserService` ran as
+   `setSystemProperty`. Found with the server-side exception logging added in `5f361ad4`.
+5. **Trust anchor was stale.** `TRUSTED_SIGNER_SHA256` named `6651cb15…be293e`, which matches no known
+   keystore; the agent's release key and every deployed agent is `35bbc3d1…ff9b6a`. Replaced on the
+   operator's instruction.
+6. **`am broadcast` to a freshly installed app** needs `--include-stopped-packages -n <component>`.
