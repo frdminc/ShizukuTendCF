@@ -73,6 +73,9 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                     }
                     HeadlessLogger.i("Start", "Starting via ADB (TCP port ${ShizukuSettings.getTcpPort()})")
                 }
+                // An explicit fleet start may raise one new dialog even if a previous one went
+                // unanswered — same contract as the boot path: one dialog per explicit start.
+                AdbAuthWait.clearUnanswered()
                 ShizukuReceiverStarter.start(context)
                 setResult(0, "STARTING", null)
             }

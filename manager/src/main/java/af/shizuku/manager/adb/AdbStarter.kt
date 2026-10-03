@@ -53,6 +53,7 @@ object AdbStarter {
             this is ConnectException ||
             this is SSLException ||
             this is AdbKeyException ||
+            this is AdbAuthPendingException ||
             (includeIllegalState && this is IllegalStateException)
 
     suspend fun startAdb(
@@ -66,11 +67,13 @@ object AdbStarter {
         }
 
         // Another start is holding adbd's authorisation dialog open; a second connection would
-        // raise a second dialog. The caller's wait for the service covers the pending start.
+        // raise a second dialog. Throw rather than return: a silent return looked like success,
+        // and the caller's next step (a 20 s waitForBinder) then timed out while the pending
+        // start was still legitimately waiting its 150 s.
         if (AdbAuthWait.isWaiting()) {
-            Timber.tag(TAG).i("startAdb skipped: waiting for the adbd authorisation dialog")
+            Timber.tag(TAG).i("startAdb stood down: waiting for the adbd authorisation dialog")
             log?.invoke(context.getString(R.string.wadb_notification_awaiting_auth) + "\n")
-            return
+            throw AdbAuthPendingException("another start is waiting for the adbd authorisation dialog to be answered")
         }
 
         suspend fun AdbClient.runCommand(cmd: String) {

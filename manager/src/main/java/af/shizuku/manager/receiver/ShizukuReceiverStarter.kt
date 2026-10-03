@@ -62,6 +62,16 @@ object ShizukuReceiverStarter {
             return
         }
 
+        // One dialog per boot or explicit start: once a dialog has gone unanswered, background
+        // triggers that any app can fire (QUICKBOOT_POWERON, the Tasker/Locale plugin) and the
+        // watchdog must not be able to raise a fresh dialog every 150 s. Explicit paths pass
+        // forceStart or clear the marker first (boot, headless, token-authenticated broadcast,
+        // the notification's "Attempt now").
+        if (!forceStart && ShizukuSettings.getLastLaunchMode() != LaunchMethod.ROOT && AdbAuthWait.isUnanswered()) {
+            Timber.tag(AppConstants.TAG).i("Start skipped: adbd authorisation dialog went unanswered; waiting for an explicit start")
+            return
+        }
+
         if (ShizukuSettings.getLastLaunchMode() == LaunchMethod.ROOT) {
             rootStart(context)
         } else if (ShizukuSettings.getLastLaunchMode() == LaunchMethod.ADB) {

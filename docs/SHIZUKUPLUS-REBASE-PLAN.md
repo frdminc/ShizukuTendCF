@@ -318,13 +318,27 @@ Reports were in the session scratchpad and are summarised here because that is v
    a. Consequence: an external `START_SERVICE` launch can no longer start over ADB (it shows
       "Invalid port value: 0"); root and system starts still work. It never carried a usable port
       without the extra, so this mostly formalises existing behaviour.
-4. **Left open from the reviews (all Low).**
+4. **Left open from the reviews (all Low) — closed 2026-10-03 (adversary re-review pending, not
+   yet device-tested).**
    a. Buttons pressed while a dialog is pending ("Attempt now", tile, Home) do nothing silently.
+      Fixed for "Attempt now": `NotifAttemptReceiver` shows a toast while the wait holds. The tile
+      already toasts "Starting…" during the wait (state stays STARTING), and the Home path logs
+      the awaiting-auth line in the starter output, so only the notification action was silent.
    b. A start that stands down returns as if it had succeeded, then its caller's 20 s wait for the
-      service can time out while the other start is still waiting.
+      service can time out while the other start is still waiting. Fixed: `AdbStarter.startAdb`
+      and `AdbClient` now throw `AdbAuthPendingException` instead of silently returning;
+      `AdbStartWorker` stands down quietly on it (no retry, no unanswered marker, no state flip),
+      and an interactive start surfaces it immediately instead of a confusing 20 s timeout.
    c. `QUICKBOOT_POWERON` and the Locale FIRE receiver are reachable by any app and ignore the
-      unanswered marker, so an app can raise this app's own dialog about every 150 s.
-   d. The gate is check-then-act, not a mutex.
+      unanswered marker, so an app can raise this app's own dialog about every 150 s. Fixed:
+      `ShizukuReceiverStarter.start` skips non-forced ADB starts while the marker is set; explicit
+      paths clear it first (headless receiver, token-authenticated START, "Attempt now") or pass
+      `forceStart` (settings), and `BOOT_COMPLETED` clears it as before.
+   d. The gate is check-then-act, not a mutex. Fixed: `AdbAuthWait.tryBegin()` is a single
+      compare-and-set taken in `AdbClient` immediately before the public key is offered — the
+      only step that raises a dialog — so racing starts cannot stack two dialogs; the loser
+      aborts with `AdbAuthPendingException` before adbd sees its key. The entry-point
+      `isWaiting()` checks remain as advisory early-outs.
 5. **CI certificate pin.** The runner's apksigner labels the line `V3.0 Signer: certificate SHA-256
    digest`; the check matches on the field name. Two runs failed on correctly signed builds before
    that was right.

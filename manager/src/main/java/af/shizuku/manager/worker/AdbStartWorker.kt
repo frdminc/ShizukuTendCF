@@ -3,6 +3,7 @@ package af.shizuku.manager.worker
 import af.shizuku.manager.MainActivity
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.adb.AdbAuthPendingException
 import af.shizuku.manager.adb.AdbAuthTimeoutException
 import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.adb.AdbMdns
@@ -287,6 +288,12 @@ class AdbStartWorker(
             updateNotification(applicationContext, state)
 
             throw e
+        } catch (e: AdbAuthPendingException) {
+            // Another start holds the one authorisation dialog. It owns the state machine, the
+            // notification and the unanswered marker; stand down without touching any of them
+            // (and without retrying, which would just stand down again).
+            timber.log.Timber.tag("AdbStartWorker").i("doWork: stood down: %s", e.message)
+            return Result.failure()
         } catch (e: AdbAuthTimeoutException) {
             // Retrying (WorkManager backoff) would open a new connection and raise a new dialog.
             // Stop here; the notification's "Attempt now" or the next explicit start tries again.
