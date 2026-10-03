@@ -5,6 +5,7 @@ import af.shizuku.manager.AppConstants
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.ShizukuSettings.LaunchMethod
+import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.starter.Starter
 import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.SettingsPage
@@ -35,6 +36,8 @@ object ShizukuReceiverStarter {
         AWAITING_WIFI,
         AWAITING_RETRY,
         AWAITING_DISCOVERY,
+        AWAITING_AUTH,
+        AUTH_TIMED_OUT,
         RUNNING,
         STOPPED,
     }
@@ -49,6 +52,13 @@ object ShizukuReceiverStarter {
                     ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING
             )
         ) {
+            return
+        }
+
+        // A connection is already holding adbd's "Allow USB debugging?" dialog open; any new
+        // connection would queue another dialog (and enqueue() would cancel the waiting worker).
+        if (ShizukuSettings.getLastLaunchMode() != LaunchMethod.ROOT && AdbAuthWait.isWaiting()) {
+            Timber.tag(AppConstants.TAG).i("Start skipped: waiting for the adbd authorisation dialog to be answered")
             return
         }
 
@@ -158,6 +168,8 @@ object ShizukuReceiverStarter {
                 WorkerState.AWAITING_WIFI -> R.string.wadb_notification_wifi_required
                 WorkerState.AWAITING_RETRY -> R.string.wadb_notification_retry
                 WorkerState.AWAITING_DISCOVERY -> R.string.wadb_notification_discovery_timeout
+                WorkerState.AWAITING_AUTH -> R.string.wadb_notification_awaiting_auth
+                WorkerState.AUTH_TIMED_OUT -> R.string.wadb_notification_auth_timed_out
                 else -> null
             }
         val msg = if (msgId != null) context.getString(msgId) else null

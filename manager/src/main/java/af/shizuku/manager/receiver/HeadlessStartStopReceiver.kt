@@ -4,6 +4,7 @@ import af.shizuku.common.util.EnvironmentUtils
 import af.shizuku.common.util.UserHandleCompat
 import af.shizuku.manager.BuildConfig
 import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.ShizukuSettings.LaunchMethod
 import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.ShizukuStateMachine
@@ -49,6 +50,11 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                         return
                     }
                     else -> Unit
+                }
+                if (AdbAuthWait.isWaiting()) {
+                    HeadlessLogger.i("Start", "Start already in progress, waiting for the adbd authorisation dialog to be accepted")
+                    setResult(0, "STARTING", null)
+                    return
                 }
                 val launchMode = ShizukuSettings.getLastLaunchMode()
                 if (launchMode == LaunchMethod.ROOT) {

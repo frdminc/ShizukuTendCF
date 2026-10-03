@@ -2,6 +2,7 @@ package af.shizuku.manager.adb
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.database.ActivityLogManager
+import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.starter.Starter
 import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.SettingsPage
@@ -17,6 +18,10 @@ import android.widget.Toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.sentry.Sentry
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -106,7 +111,8 @@ object AdbStarter {
                 Timber.tag(TAG).i("Connecting to ADB daemon at 127.0.0.1:%d", activePort)
                 log?.invoke("Connecting on port $activePort...")
 
-                AdbClient("127.0.0.1", activePort, key).use { client ->
+                val onPending = { ShizukuReceiverStarter.updateNotification(context, ShizukuReceiverStarter.WorkerState.AWAITING_AUTH) }
+                AdbClient("127.0.0.1", activePort, key, onPending).use { client ->
                     connectWithRetry(client, activePort)
                     Timber.tag(TAG).i("Connected to ADB at 127.0.0.1:%d; deploying starter command", activePort)
                     log?.invoke("Successfully connected on port $activePort...\n")
@@ -197,28 +203,47 @@ object AdbStarter {
     private suspend fun connectWithRetry(
         client: AdbClient,
         port: Int,
-    ) {
-        var delayTime = 500L
-        val maxAttempts = 8
-        for (attempt in 1..maxAttempts) {
-            try {
-                if (attempt > 1) {
-                    delay(delayTime)
-                    delayTime = (delayTime * 1.5).toLong().coerceAtMost(3000L) // Exponential backoff up to 3s
-                }
-                Timber.tag(TAG).d("Connecting to ADB attempt %d/%d (port=%d)", attempt, maxAttempts, port)
-                client.connect()
-                Timber.tag(TAG).d("Connected successfully on attempt %d", attempt)
-                break
-            } catch (e: Exception) {
-                Timber.tag(TAG).w(e, "Connection attempt %d/%d failed: %s", attempt, maxAttempts, e.message)
-                if (
-                    attempt == maxAttempts ||
-                    e is CancellationException
-                ) {
-                    throw e
+    ) = coroutineScope {
+        // connect() blocks in a socket read that coroutine cancellation cannot interrupt, and it can
+        // now wait minutes for the authorisation dialog. Close the socket when this scope is
+        // cancelled so a cancelled start does not leave a connection (and the AdbAuthWait gate) held.
+        val finished = AtomicBoolean(false)
+        val watcher =
+            launch {
+                try {
+                    awaitCancellation()
+                } finally {
+                    if (!finished.get()) client.close()
                 }
             }
+        try {
+            var delayTime = 500L
+            val maxAttempts = 8
+            for (attempt in 1..maxAttempts) {
+                try {
+                    if (attempt > 1) {
+                        delay(delayTime)
+                        delayTime = (delayTime * 1.5).toLong().coerceAtMost(3000L) // Exponential backoff up to 3s
+                    }
+                    Timber.tag(TAG).d("Connecting to ADB attempt %d/%d (port=%d)", attempt, maxAttempts, port)
+                    client.connect()
+                    Timber.tag(TAG).d("Connected successfully on attempt %d", attempt)
+                    break
+                } catch (e: Exception) {
+                    Timber.tag(TAG).w(e, "Connection attempt %d/%d failed: %s", attempt, maxAttempts, e.message)
+                    if (
+                        attempt == maxAttempts ||
+                        e is CancellationException ||
+                        // Reconnecting would raise another "Allow USB debugging?" dialog.
+                        e is AdbAuthTimeoutException
+                    ) {
+                        throw e
+                    }
+                }
+            }
+        } finally {
+            finished.set(true)
+            watcher.cancel()
         }
     }
 }

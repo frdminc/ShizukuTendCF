@@ -30,7 +30,11 @@ class AdbClient(
     private val host: String,
     private val port: Int,
     private val key: AdbKey,
+    /** Called once, right after the public key was offered to adbd and the connection starts
+     *  waiting for the user to accept the "Allow USB debugging?" dialog. */
+    private val onAuthorizationPending: (() -> Unit)? = null,
 ) : Closeable {
+    @Volatile
     private var socket: Socket? = null
     private var plainInputStream: DataInputStream? = null
     private var plainOutputStream: DataOutputStream? = null
@@ -93,7 +97,7 @@ class AdbClient(
                 message = read()
                 if (message.command != A_CNXN) {
                     write(A_AUTH, ADB_AUTH_RSAPUBLICKEY, 0, key.adbPublicKey)
-                    message = read()
+                    message = awaitAuthorization(s)
                 }
             }
 
@@ -101,6 +105,29 @@ class AdbClient(
         } catch (e: Exception) {
             close()
             throw e
+        }
+    }
+
+    /**
+     * adbd answers an offered public key only once the user has accepted or rejected its dialog,
+     * and raises one dialog per connection that offers an unknown key. Reconnecting after the
+     * normal read timeout would therefore stack dialogs, so this holds the one connection open
+     * for [AdbAuthWait.TIMEOUT_MS]. A rejection closes the connection (EOFException).
+     */
+    private fun awaitAuthorization(s: Socket): AdbMessage {
+        Timber.tag(TAG).i("Waiting up to %d ms for the user to accept the adbd authorisation dialog", AdbAuthWait.TIMEOUT_MS)
+        AdbAuthWait.begin()
+        try {
+            onAuthorizationPending?.invoke()
+            s.soTimeout = AdbAuthWait.TIMEOUT_MS
+            return try {
+                read()
+            } catch (e: java.net.SocketTimeoutException) {
+                throw AdbAuthTimeoutException("adbd authorisation dialog was not answered within ${AdbAuthWait.TIMEOUT_MS / 1000}s")
+            }
+        } finally {
+            AdbAuthWait.end()
+            runCatching { s.soTimeout = 15000 }
         }
     }
 

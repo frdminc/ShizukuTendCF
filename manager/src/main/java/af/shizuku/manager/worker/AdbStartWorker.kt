@@ -3,6 +3,8 @@ package af.shizuku.manager.worker
 import af.shizuku.manager.MainActivity
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.adb.AdbAuthTimeoutException
+import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.adb.AdbMdns
 import af.shizuku.manager.adb.AdbPortProber
 import af.shizuku.manager.adb.AdbStarter
@@ -282,6 +284,16 @@ class AdbStartWorker(
             updateNotification(applicationContext, state)
 
             throw e
+        } catch (e: AdbAuthTimeoutException) {
+            // Retrying (WorkManager backoff) would open a new connection and raise a new dialog.
+            // Stop here; the notification's "Attempt now" or the next explicit start tries again.
+            timber.log.Timber.tag("AdbStartWorker").w(e, "doWork: authorisation dialog not answered, not retrying")
+            if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
+                ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
+            }
+            ShizukuStateMachine.update()
+            updateNotification(applicationContext, WorkerState.AUTH_TIMED_OUT)
+            return Result.failure()
         } catch (e: Exception) {
             timber.log.Timber
                 .tag("AdbStartWorker")
@@ -424,6 +436,12 @@ class AdbStartWorker(
 
     companion object {
         fun enqueue(context: Context) {
+            // REPLACE below would cancel the worker that is holding the one authorisation dialog
+            // open, and its replacement would open a second connection and a second dialog.
+            if (AdbAuthWait.isWaiting()) {
+                timber.log.Timber.tag("AdbStartWorker").i("enqueue skipped: waiting for the adbd authorisation dialog")
+                return
+            }
             // WorkManager uses credential-encrypted storage which is unavailable during direct boot.
             // Skip enqueueing until the user has unlocked their device.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
