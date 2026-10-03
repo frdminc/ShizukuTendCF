@@ -253,12 +253,12 @@ jobs:
               local FILE="$1"
               local BUILD_TOOLS_VERSION CERTS ACTUAL
               BUILD_TOOLS_VERSION=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)
-              # The signer label differs between apksigner versions ("Signer #1", or
-              # "Signer (minSdkVersion=..., maxSdkVersion=...)" for a v3 signature), so match on
+              # The signer label differs between apksigner versions ("Signer #1 certificate",
+              # "V3.0 Signer: certificate" on the runner), so match on
               # the field name and require every signer listed to be the expected certificate.
               CERTS=$($ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner verify --print-certs "$FILE" 2>&1) \
                 || { echo "$CERTS"; echo "::error::$FILE does not verify"; exit 1; }
-              ACTUAL=$(echo "$CERTS" | sed -n 's/^Signer .*certificate SHA-256 digest: //p' | sort -u)
+              ACTUAL=$(echo "$CERTS" | sed -n 's/^.*certificate SHA-256 digest: //p' | sort -u)
               if [ "$ACTUAL" != "$EXPECTED_CERT_SHA256" ]; then
                 echo "$CERTS"
                 echo "::error::$FILE is signed by ${ACTUAL:-no certificate}, expected $EXPECTED_CERT_SHA256"
