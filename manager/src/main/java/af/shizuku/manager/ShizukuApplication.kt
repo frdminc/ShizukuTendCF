@@ -647,6 +647,9 @@ class ShizukuApplication :
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
+        // Headless/fleet diagnostics log file; the receivers also init lazily, but the boot
+        // path should have it from the start.
+        af.shizuku.manager.utils.HeadlessLogger.init(this)
 
         // Prewarm root check on a background thread early to avoid main thread delays/ANRs
         af.shizuku.manager.utils.EnvironmentUtils

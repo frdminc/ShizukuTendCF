@@ -439,6 +439,23 @@
             </intent-filter>
         </receiver>
 
+        <!--
+            Headless fleet control (ShizukuTendCF). Unlike START/STOP above, these are
+            permission-gated to INTERACT_ACROSS_USERS_FULL, so only the ADB shell, root or
+            system can invoke them; they return ordered-broadcast results for scripts.
+        -->
+        <receiver
+            android:name=".receiver.HeadlessStartStopReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL">
+            <intent-filter>
+                <action android:name="${applicationId}.HEADLESS_START" />
+                <action android:name="${applicationId}.HEADLESS_STOP" />
+                <action android:name="${applicationId}.HEADLESS_STATUS" />
+            </intent-filter>
+        </receiver>
+
         <receiver android:name=".receiver.NotifAttemptReceiver" />
         <receiver android:name=".receiver.NotifCancelReceiver" />
         <receiver android:name=".receiver.NotifRestoreReceiver" />
