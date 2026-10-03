@@ -298,6 +298,8 @@ Reports were in the session scratchpad and are summarised here because that is v
       agent logged `UserService connected`. In-place update from r2759 and the authorised stop/start
       path also pass. Not exercised: the 150 s timeout path, "Attempt now" during the wait, a rejected
       prompt, the boot path.
+      Pixel 7a and Titan 2 were then updated in place to r2772 with no prompts; stop/start and the
+      agent's `UserService connected` pass on both. All three fleet devices run Drop-In r2772.
    b. The Mac's own adb client raised 4 prompts for the Mac's key after the revoke: `adb` retries an
       unauthorised TCP device by itself. That is the host adb client, not this app.
    c. Original test plan: fresh key, `HEADLESS_START`, expect exactly one
