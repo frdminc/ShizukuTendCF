@@ -73,9 +73,21 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                     }
                     HeadlessLogger.i("Start", "Starting via ADB (TCP port ${ShizukuSettings.getTcpPort()})")
                 }
-                // An explicit fleet start may raise one new dialog even if a previous one went
-                // unanswered — same contract as the boot path: one dialog per explicit start.
-                AdbAuthWait.clearUnanswered()
+                // One dialog per boot or explicit start. This broadcast is sent by people and by
+                // unattended repair loops alike, and a loop that finds the server down every few
+                // minutes would otherwise raise a fresh dialog on each pass. So a plain request
+                // respects an unanswered dialog, and only one that says so (--ez force true, for
+                // an operator who is at the device) clears it and may raise a new one.
+                if (launchMode != LaunchMethod.ROOT && AdbAuthWait.isUnanswered()) {
+                    if (!intent.getBooleanExtra(EXTRA_FORCE, false)) {
+                        HeadlessLogger.w("Start", "Withheld: the adbd authorisation dialog went unanswered; send --ez $EXTRA_FORCE true or tap Attempt now")
+                        ShizukuReceiverStarter.refreshNotification(context)
+                        setResult(RESULT_AUTH_UNANSWERED, "AUTH_UNANSWERED", null)
+                        return
+                    }
+                    HeadlessLogger.i("Start", "Forced: clearing the unanswered authorisation marker")
+                    AdbAuthWait.clearUnanswered()
+                }
                 ShizukuReceiverStarter.start(context)
                 setResult(0, "STARTING", null)
             }
@@ -109,12 +121,16 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                 if (adbParts.isEmpty()) adbParts.add("off")
                 val adbSummary = adbParts.joinToString(" ")
 
-                val summary = "$stateLabel (binder=$binderAlive, ADB: $adbSummary, v${BuildConfig.VERSION_NAME})"
+                val authUnanswered = AdbAuthWait.isUnanswered()
+                val summary =
+                    "$stateLabel (binder=$binderAlive, ADB: $adbSummary, v${BuildConfig.VERSION_NAME})" +
+                        if (authUnanswered) " AUTH_UNANSWERED" else ""
                 val logPath = HeadlessLogger.getLogPath() ?: "unavailable"
 
                 val extras = Bundle().apply {
                     putString("state", stateLabel)
                     putBoolean("binder_alive", binderAlive)
+                    putBoolean("auth_unanswered", authUnanswered)
                     putInt("adb_tcp_port", adbTcpPort)
                     putInt("configured_tcp_port", ShizukuSettings.getTcpPort())
                     putInt("adb_wifi_enabled", adbWifi)
@@ -157,5 +173,11 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
         val ACTION_HEADLESS_STOP = "${BuildConfig.APPLICATION_ID}.HEADLESS_STOP"
         val ACTION_HEADLESS_STATUS = "${BuildConfig.APPLICATION_ID}.HEADLESS_STATUS"
         const val EXTRA_ENABLE_WIRELESS_ADB = "enable_wireless_adb"
+
+        /** Clears an unanswered authorisation dialog's marker, so this start may raise a new one. */
+        const val EXTRA_FORCE = "force"
+
+        /** Result code of a start withheld because an authorisation dialog went unanswered. */
+        const val RESULT_AUTH_UNANSWERED = 4
     }
 }
