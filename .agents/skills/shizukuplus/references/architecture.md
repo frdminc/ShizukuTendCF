@@ -1,12 +1,12 @@
-# ShizukuPlus Architecture & Core Features
+# ShizukuTendCF Architecture & Core Features
 
-This reference guide documents the core features, API extensions, and architectural modifications in ShizukuPlus.
+This reference guide documents the core features, API extensions, and architectural modifications in ShizukuTendCF.
 
 ---
 
 ## 🚀 Unified Privilege Provider
 
-ShizukuPlus combines three execution environments into a single privileged interface:
+ShizukuTendCF combines three execution environments into a single privileged interface:
 1. **Root (su)**: Leverages `libsu` to run commands with full system rights.
 2. **ADB Shell**: Operates under the system Shell user credentials (`uid 2000`).
 3. **Dhizuku (Device Owner)**: Shares the system `DevicePolicyManager` binder with authorized applications, allowing device owner administrative actions without requiring root access.
@@ -23,7 +23,7 @@ The **System Theming Bridge (Overlay Manager Plus)** resolves compatibility issu
 
 ## 🔌 Plus API Suite
 
-ShizukuPlus provides exclusive system interfaces via its custom binder proxy system:
+ShizukuTendCF provides exclusive system interfaces via its custom binder proxy system:
 
 - **AICore+ Automation Bridge**: A privileged accessibility proxy that dumps XML window hierarchies and simulates physical taps/swipes.
 - **AVF (Android Virtualization Framework) Manager**: Configures and boots isolated Linux/Microdroid VMs with GPU acceleration.

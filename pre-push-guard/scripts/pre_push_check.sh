@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Shizuku+ Pre-Push Validation Script
+# ShizukuTendCF Pre-Push Validation Script
 # Automated checks for common build-breaking issues.
 
 COLOR_RED='\033[0;31m'
@@ -10,7 +10,7 @@ COLOR_RESET='\033[0m'
 
 ERRORS=0
 
-echo -e "${COLOR_YELLOW}Running Shizuku+ Pre-Push Guard...${COLOR_RESET}"
+echo -e "${COLOR_YELLOW}Running ShizukuTendCF Pre-Push Guard...${COLOR_RESET}"
 
 STEP=0
 step() {

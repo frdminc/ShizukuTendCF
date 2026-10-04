@@ -1,6 +1,6 @@
 ---
 name: mcp-setup
-description: Spawns and configures Model Context Protocol (MCP) integrations for ShizukuPlus.
+description: Spawns and configures Model Context Protocol (MCP) integrations for ShizukuTendCF.
 license: Complete terms in LICENSE
 metadata:
   author: Google LLC

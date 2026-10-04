@@ -1,11 +1,11 @@
 ---
 name: pre-push-guard
-description: Shizuku+ codebase integrity checks. Use before pushing or committing to ensure no common build-breaking issues (CMake versions, missing imports, Java/Kotlin interop) exist.
+description: ShizukuTendCF codebase integrity checks. Use before pushing or committing to ensure no common build-breaking issues (CMake versions, missing imports, Java/Kotlin interop) exist.
 ---
 
 # Pre-Push Guard
 
-This skill automates the verification of common issues that have caused GitHub Action build failures in the Shizuku+ project.
+This skill automates the verification of common issues that have caused GitHub Action build failures in the ShizukuTendCF project.
 
 ## Workflow
 

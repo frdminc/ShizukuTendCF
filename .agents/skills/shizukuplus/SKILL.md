@@ -1,11 +1,12 @@
 ---
 name: shizukuplus
-description: Guidelines and instructions for developing, testing, and troubleshooting ShizukuPlus (an enhanced Shizuku manager with OneUI 8+ fixes, Dhizuku mode, and Plus APIs).
+description: Guidelines and instructions for developing, testing, and troubleshooting ShizukuTendCF, a fork rebased on ShizukuPlus (an enhanced Shizuku manager with OneUI 8+ fixes, Dhizuku mode, and Plus APIs).
 license: Complete terms in LICENSE
 metadata:
   author: Google LLC
   last-updated: '2026-07-10'
   keywords:
+  - ShizukuTendCF
   - ShizukuPlus
   - Shizuku
   - Dhizuku
@@ -13,16 +14,16 @@ metadata:
   - AIDL
   - Android
 ---
-# ShizukuPlus Development Specialist
+# ShizukuTendCF Development Specialist
 
-This skill provides instructions for developing, building, and verifying the ShizukuPlus manager.
+This skill provides instructions for developing, building, and verifying the ShizukuTendCF manager.
 
 ## Prerequisites & Environment
 - Target environment: Termux / Android.
 - The build uses gradle. Pinned to the `:manager:assembleRelease` task for production validation.
 
 ## Workflows
-This skill enables the caller to work on the following aspects of ShizukuPlus:
+This skill enables the caller to work on the following aspects of ShizukuTendCF:
 - *[Architecture & Core Features](references/architecture.md)*: Details on the Unified Privilege Provider (Root, ADB, Dhizuku), OneUI 8+ overlays, and custom daemon processes.
 - *[Testing & API Usage](references/testing.md)*: Instructions for testing Plus APIs, utilizing `su` wraps, process control, and debugging connections.
 

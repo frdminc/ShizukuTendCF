@@ -1,10 +1,10 @@
-# Contributing to Shizuku+
+# Contributing to ShizukuTendCF
 
 Thanks for considering a contribution — bug fixes, translations, and new Plus API work are all welcome.
 
 ## Before you start
 
-- **Check existing issues and PRs first.** A quick search saves everyone time — see [open issues](https://github.com/thejaustin/ShizukuPlus/issues) and [open PRs](https://github.com/thejaustin/ShizukuPlus/pulls).
+- **Check existing issues and PRs first.** A quick search saves everyone time — see [open issues](https://github.com/frdminc/ShizukuTendCF/issues) and [open PRs](https://github.com/frdminc/ShizukuTendCF/pulls).
 - **For anything non-trivial, open an issue first** to discuss the approach before writing code. Small fixes (typos, obvious bugs, translations) don't need this.
 - **Read the [wiki](https://github.com/thejaustin/ShizukuPlus/wiki)** for architecture context, especially [Shizuku vs. Shizuku+](https://github.com/thejaustin/ShizukuPlus/wiki/Shizuku-vs-Shizuku%2B) if you're new to the codebase.
 

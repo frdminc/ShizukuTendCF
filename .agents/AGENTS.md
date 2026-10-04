@@ -1,6 +1,6 @@
-# Workspace Rules & Guidelines for ShizukuPlus Development
+# Workspace Rules & Guidelines for ShizukuTendCF Development
 
-These rules apply to any agent working on the ShizukuPlus project inside this workspace.
+These rules apply to any agent working on the ShizukuTendCF project (a fork rebased on ShizukuPlus) inside this workspace.
 
 ## 🚨 Build & Verification Policy
 - **Primary build target**: Always use `:manager:assembleRelease` for final release validation.

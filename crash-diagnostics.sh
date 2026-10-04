@@ -1,11 +1,11 @@
 #!/bin/bash
-# Crash Diagnostics Script for Shizuku+
+# Crash Diagnostics Script for ShizukuTendCF
 # This script helps diagnose app startup crashes
 
 set -e
 
 echo "========================================"
-echo "Shizuku+ Crash Diagnostics"
+echo "ShizukuTendCF Crash Diagnostics"
 echo "========================================"
 echo ""
 

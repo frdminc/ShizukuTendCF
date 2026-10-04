@@ -1,3 +1,6 @@
+> **这是 ShizukuTendCF**（[frdminc/ShizukuTendCF](https://github.com/frdminc/ShizukuTendCF)）—— 基于 [thejaustin/ShizukuPlus](https://github.com/thejaustin/ShizukuPlus) rebase 的分支，为 stayturgid 设备群维护；分支说明见 [README.md](README.md)，下载见 [Releases](https://github.com/frdminc/ShizukuTendCF/releases)。
+> This is ShizukuTendCF, a fork rebased on ShizukuPlus; see [README.md](README.md) for what the fork adds. Everything below is ShizukuPlus's own Chinese README.
+
 <div align="center">
 
 # Shizuku+

@@ -1,6 +1,6 @@
 ---
 name: sentry-audit
-description: Fetches unresolved Sentry issues and maps stack traces to local codebase for ShizukuPlus.
+description: Fetches unresolved Sentry issues and maps stack traces to local codebase for ShizukuTendCF.
 license: Complete terms in LICENSE
 metadata:
   author: Google LLC

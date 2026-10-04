@@ -8,6 +8,7 @@
 > (see [`docs/trusted-signer-allowlist.md`](docs/trusted-signer-allowlist.md)), a status card that shows
 > protocol version and app build separately, and CI that refuses to cut an unsigned release. Releases are
 > named `ShizukuTendCF-<version>-<abi>.apk`.
+> Download them from this fork's [Releases](https://github.com/frdminc/ShizukuTendCF/releases) page.
 >
 > **Disclosure:** this build ships a built-in trusted-signer allowlist — any app signed with the
 > stayturgid-agent release certificate (SHA-256 `35bbc3d1…ff9b6a`) is granted Shizuku access by default

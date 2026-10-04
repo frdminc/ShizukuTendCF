@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build, patch, sign, and install the ShizukuPlus debug APK.
+# Build, patch, sign, and install the ShizukuTendCF debug APK.
 #
 # On Termux/ARM64: the Gradle output lands in ~/shizuku-build (not manager/build)
 # because of the custom Termux cmake wrapper. We also detect whether the built
@@ -169,5 +169,5 @@ rm -f "$WORK_APK" "$PATCHED_APK" "$SIGNED_APK"
 
 echo ""
 echo "✓ Build + install complete."
-echo "  Open ShizukuPlus — it should show 'Running'."
+echo "  Open ShizukuTendCF — it should show 'Running'."
 echo "  Then launch Hex Bodhi to test the LegacyShizukuBinderProxy."

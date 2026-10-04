@@ -1,5 +1,5 @@
 name: Feature Request
-description: Suggest a feature or improvement for ShizukuPlus
+description: Suggest a feature or improvement for ShizukuTendCF
 labels: ["type: enhancement"]
 body:
   - type: checkboxes
@@ -7,13 +7,13 @@ body:
     attributes:
       label: Before suggesting
       options:
-        - label: I searched through all [open/closed issues](https://github.com/thejaustin/ShizukuPlus/issues) and confirmed that this is a new feature request
+        - label: I searched through all [open/closed issues](https://github.com/frdminc/ShizukuTendCF/issues) and confirmed that this is a new feature request
           required: true
   - type: dropdown
     id: component
     attributes:
       label: Component
-      description: Which part of Shizuku+ does this relate to?
+      description: Which part of ShizukuTendCF does this relate to?
       options:
         - "Manager App (UI/Settings)"
         - "Server/Service"

@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug to help us improve ShizukuPlus
+description: Report a bug to help us improve ShizukuTendCF
 labels: ["type: bug"]
 body:
   - type: checkboxes
@@ -9,13 +9,13 @@ body:
       options:
         - label: I read the [wiki](https://github.com/thejaustin/ShizukuPlus/wiki/ShizukuPlus-Knowledgebase) and followed all relevant troubleshooting steps
           required: true
-        - label: I searched through all [issues](https://github.com/thejaustin/ShizukuPlus/issues) and confirmed that this is a new bug
+        - label: I searched through all [issues](https://github.com/frdminc/ShizukuTendCF/issues) and confirmed that this is a new bug
           required: true
   - type: dropdown
     id: component
     attributes:
       label: Component
-      description: Which part of Shizuku+ does this relate to?
+      description: Which part of ShizukuTendCF does this relate to?
       options:
         - "Manager App (UI/Settings)"
         - "Server/Service"
