@@ -330,9 +330,21 @@ Reports were in the session scratchpad and are summarised here because that is v
    worker success-after-exception path, and `markUnanswered` skipped when a server is RUNNING),
    so a stale marker cannot suppress watchdog recovery. Deferred from the re-reviews (Low,
    pre-existing or cosmetic, tracked with the full reports in site-private
-   `memory/handoffs/ShizukuTendCF/reports-2026-10-03/`): one pre-existing exported-activity
-   start route that bypasses the marker guard, a worker notification that can outlive a
-   stood-down worker, and the tile's 15 s STARTING reset predating this work.
+   `memory/handoffs/ShizukuTendCF/reports-2026-10-03/`), all three **closed 2026-10-04**
+   (uncommitted at the time of writing, not yet device-tested):
+   1. ~~One pre-existing exported-activity start route that bypasses the marker guard.~~
+      Closed: while the unanswered marker is set, `StarterActivity` asks before any ADB start
+      ("Attempt now" / Cancel). It cannot tell the exported `start_service_via_wadb` route from
+      the Home card, so the Home card asks too; tagging launches in `home/` would narrow it.
+   2. ~~A worker notification that can outlive a stood-down worker.~~ Closed: `AdbAuthWait`
+      records who posted the shared start notification, under one lock. A stood-down worker
+      removes only its own post, and no progress post can cover the holder's prompt while its
+      wait is held. Still open: `ShizukuReceiverStarter.start` posts its initial notification
+      outside that bookkeeping, right after `enqueue()`.
+   3. ~~The tile's 15 s STARTING reset predating this work.~~ Closed: the tile keeps one
+      watchdog, cancelled by every new start or stop. It does nothing while an authorisation
+      wait, an `AdbStarter.startAdb` call or the start worker is running. Only after 25 s with
+      none of them does it settle STARTING, from `Shizuku.pingBinder()`.
    a. Buttons pressed while a dialog is pending ("Attempt now", tile, Home) do nothing silently.
       Fixed for "Attempt now": `NotifAttemptReceiver` shows a toast while the wait holds. The tile
       already toasts "Starting…" during the wait (state stays STARTING), and the Home path logs

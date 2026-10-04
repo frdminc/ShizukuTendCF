@@ -47,16 +47,23 @@ class AdbStartWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         try {
+            // Decide before posting progress: a worker that posts its ongoing notification and
+            // then stands down would leave it behind the start that actually holds the dialog.
+            if (AdbAuthWait.isWaiting()) {
+                throw AdbAuthPendingException("another start is waiting for the adbd authorisation dialog to be answered")
+            }
             timber.log.Timber.tag("AdbStartWorker").i(
                 "doWork: runAttempt=%d, isAdbEnabled=%s, tcpMode=%s",
                 runAttemptCount,
                 EnvironmentUtils.isAdbEnabled(),
                 ShizukuSettings.getTcpMode(),
             )
-            updateNotification(
-                applicationContext,
-                WorkerState.RUNNING,
-            )
+            AdbAuthWait.postStartNotification(this) {
+                updateNotification(
+                    applicationContext,
+                    WorkerState.RUNNING,
+                )
+            }
 
             val cr = applicationContext.contentResolver
 
@@ -95,7 +102,7 @@ class AdbStartWorker(
                             "Service started via direct TCP port $desiredPort (no Wi-Fi required)",
                         )
                         val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                        nm.cancel(ShizukuReceiverStarter.NOTIFICATION_ID)
+                        AdbAuthWait.clearStartNotification { nm.cancel(ShizukuReceiverStarter.NOTIFICATION_ID) }
                         return Result.success()
                     }
                 }
@@ -127,7 +134,7 @@ class AdbStartWorker(
                         "Service started via force_start_wadb TCP probe on port $probePort",
                     )
                     val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                    nm.cancel(ShizukuReceiverStarter.NOTIFICATION_ID)
+                    AdbAuthWait.clearStartNotification { nm.cancel(ShizukuReceiverStarter.NOTIFICATION_ID) }
                     return Result.success()
                 }
             }
@@ -267,7 +274,7 @@ class AdbStartWorker(
                 .i("doWork: Shizuku service successfully started and binder ready on port %d", port)
 
             val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.cancel(ShizukuReceiverStarter.NOTIFICATION_ID)
+            AdbAuthWait.clearStartNotification { nm.cancel(ShizukuReceiverStarter.NOTIFICATION_ID) }
 
             return Result.success()
         } catch (e: CancellationException) {
@@ -285,14 +292,18 @@ class AdbStartWorker(
                         else -> WorkerState.AWAITING_RETRY
                     }
                 }
-            updateNotification(applicationContext, state)
+            AdbAuthWait.postStartNotification(this) { updateNotification(applicationContext, state) }
 
             throw e
         } catch (e: AdbAuthPendingException) {
-            // Another start holds the one authorisation dialog. It owns the state machine, the
-            // notification and the unanswered marker; stand down without touching any of them
-            // (and without retrying, which would just stand down again).
+            // Another start holds the one authorisation dialog. It owns the state machine and the
+            // unanswered marker; stand down without touching either (and without retrying, which
+            // would just stand down again). This start's own progress in the shared notification
+            // is the one thing it must clean up, since nothing else would; the holder's prompt,
+            // or anything another start posted since, stays.
             timber.log.Timber.tag("AdbStartWorker").i("doWork: stood down: %s", e.message)
+            val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            AdbAuthWait.withdrawStartNotification(this) { nm.cancel(ShizukuReceiverStarter.NOTIFICATION_ID) }
             return Result.failure()
         } catch (e: AdbAuthTimeoutException) {
             // Retrying (WorkManager backoff) would open a new connection and raise a new dialog.
@@ -306,7 +317,7 @@ class AdbStartWorker(
             if (ShizukuStateMachine.update() != ShizukuStateMachine.State.RUNNING) {
                 AdbAuthWait.markUnanswered()
             }
-            updateNotification(applicationContext, WorkerState.AUTH_TIMED_OUT)
+            AdbAuthWait.postStartNotification(this) { updateNotification(applicationContext, WorkerState.AUTH_TIMED_OUT) }
             return Result.failure()
         } catch (e: Exception) {
             timber.log.Timber
@@ -348,7 +359,7 @@ class AdbStartWorker(
                     showMdnsBlockedSuggestion(applicationContext)
                 }
                 val retryState = if (e is TimeoutException) WorkerState.AWAITING_DISCOVERY else WorkerState.AWAITING_RETRY
-                updateNotification(applicationContext, retryState)
+                AdbAuthWait.postStartNotification(this) { updateNotification(applicationContext, retryState) }
                 return Result.retry()
             }
         }

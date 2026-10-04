@@ -33,7 +33,62 @@ object AdbAuthWait {
     internal fun tryBegin(): Boolean = waiting.compareAndSet(0, 1)
 
     internal fun end() {
+        synchronized(notificationLock) { promptShowing = false }
         waiting.compareAndSet(1, 0)
+    }
+
+    // Background starts share one ongoing notification (ShizukuReceiverStarter.NOTIFICATION_ID)
+    // for their progress and for the holder's authorisation prompt. Every check-then-post or
+    // check-then-cancel on it below is one step under this lock, so a racing start can neither
+    // cover the prompt nor remove something it did not post.
+    private val notificationLock = Any()
+    private val prompt = Any()
+
+    // Guarded by notificationLock. promptShowing: the current wait's prompt is in the
+    // notification (end() clears it before releasing the slot). notificationPoster: who last
+    // posted it through here, or null once a start cleared it — anything showing then came from
+    // outside this bookkeeping (e.g. ShizukuReceiverStarter.start's initial post).
+    private var promptShowing = false
+    private var notificationPoster: Any? = null
+
+    internal fun postAuthPrompt(post: () -> Unit) {
+        synchronized(notificationLock) {
+            promptShowing = isWaiting()
+            notificationPoster = prompt
+            post()
+        }
+    }
+
+    /** Posts progress as [poster], unless that would cover the prompt of a wait still held. */
+    internal fun postStartNotification(
+        poster: Any,
+        post: () -> Unit,
+    ) {
+        synchronized(notificationLock) {
+            if (promptShowing) return
+            notificationPoster = poster
+            post()
+        }
+    }
+
+    /** A start that succeeded clears the notification whoever posted it. */
+    internal fun clearStartNotification(cancel: () -> Unit) {
+        synchronized(notificationLock) {
+            notificationPoster = null
+            cancel()
+        }
+    }
+
+    /** A start that stood down removes the notification only if it is that start's own. */
+    internal fun withdrawStartNotification(
+        poster: Any,
+        cancel: () -> Unit,
+    ) {
+        synchronized(notificationLock) {
+            if (notificationPoster !== poster && notificationPoster != null) return
+            notificationPoster = null
+            cancel()
+        }
     }
 
     private const val PREF_UNANSWERED_AT = "adb_auth_unanswered_at"

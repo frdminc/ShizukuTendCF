@@ -3,6 +3,7 @@ package af.shizuku.manager.starter
 import af.shizuku.core.ui.AppBarActivity
 import af.shizuku.manager.AppConstants.EXTRA
 import af.shizuku.manager.R
+import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.adb.AdbKeyException
 import af.shizuku.manager.adb.AdbStarter
 import af.shizuku.manager.database.ActivityLogManager
@@ -103,6 +104,21 @@ class StarterActivity : AppBarActivity() {
             binding.text1.text = output
             binding.scrollView.post { binding.scrollView.scrollTo(0, Int.MAX_VALUE) }
         }
+
+        viewModel.confirmUnanswered.observe(this) { pending ->
+            if (!pending || isFinishing || isDestroyed) return@observe
+            binding.progressIndicator.visibility = View.GONE
+            binding.cancelButton.visibility = View.GONE
+            MaterialAlertDialogBuilder(this)
+                .setMessage(R.string.wadb_notification_auth_timed_out)
+                .setPositiveButton(R.string.wadb_notification_attempt_now) { _, _ ->
+                    binding.progressIndicator.visibility = View.VISIBLE
+                    binding.cancelButton.visibility = View.VISIBLE
+                    viewModel.confirmUnanswered()
+                }.setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
+                .setOnCancelListener { finish() }
+                .show()
+        }
     }
 
     private var hasStarted = false
@@ -141,6 +157,11 @@ class ViewModel(
 
     val output = _output as LiveData<Resource<StringBuilder>>
 
+    private val _confirmUnanswered = MutableLiveData(false)
+
+    /** True while an ADB start is held for the user to confirm it (see [start]). */
+    val confirmUnanswered = _confirmUnanswered as LiveData<Boolean>
+
     private val handler =
         CoroutineExceptionHandler { _, throwable ->
             if (throwable !is CancellationException) {
@@ -156,6 +177,7 @@ class ViewModel(
         }
 
     private var started = false
+    private var unansweredConfirmed = false
     private var lastRoot = false
     private var lastSystem = false
     private var lastPort = 0
@@ -173,6 +195,16 @@ class ViewModel(
             return
         }
         if (started) return
+        // Not every route here is a fresh start gesture in the manager: MainActivity is exported
+        // and turns its start_service_via_wadb extra into a launch of this screen. So once a
+        // dialog has gone unanswered, an ADB start waits for the user to confirm here first —
+        // the one-dialog-per-explicit-start rule background triggers already follow. It is a
+        // question, not a failure: nothing was attempted, so no error and no stack trace.
+        if (!root && !isSystem && !unansweredConfirmed && AdbAuthWait.isUnanswered()) {
+            // A recreated activity calls start() again; the prompt is already pending.
+            if (_confirmUnanswered.value != true) _confirmUnanswered.value = true
+            return
+        }
         started = true
 
         viewModelScope.launch(handler) {
@@ -196,8 +228,15 @@ class ViewModel(
         }
     }
 
+    fun confirmUnanswered() {
+        unansweredConfirmed = true
+        _confirmUnanswered.value = false
+        start(lastRoot, lastSystem, lastPort)
+    }
+
     fun retry() {
         started = false
+        unansweredConfirmed = true
         sb.clear()
         _output.postValue(Resource.success(sb))
         start(lastRoot, lastSystem, lastPort)

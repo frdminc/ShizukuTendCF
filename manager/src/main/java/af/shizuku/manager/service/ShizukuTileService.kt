@@ -3,7 +3,9 @@ package af.shizuku.manager.service
 import af.shizuku.manager.MainActivity
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.adb.AdbPortProber
+import af.shizuku.manager.adb.AdbStarter
 import af.shizuku.manager.starter.Starter
 import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.ShizukuStateMachine
@@ -11,17 +13,21 @@ import af.shizuku.manager.worker.AdbStartWorker
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.widget.Toast
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import rikka.shizuku.Shizuku
 
 class ShizukuTileService : TileService() {
     private val stateListener: (ShizukuStateMachine.State) -> Unit = { updateTile() }
@@ -100,6 +106,7 @@ class ShizukuTileService : TileService() {
     }
 
     internal fun startShizuku() {
+        watchdog?.cancel()
         if (Shell.isAppGrantedRoot() == true) {
             ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
             updateTile()
@@ -128,22 +135,60 @@ class ShizukuTileService : TileService() {
                     ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
                     updateTile()
                     AdbStartWorker.enqueue(this@ShizukuTileService)
-
-                    // Watchdog fallback: if background worker hasn't started the service within 15s,
-                    // reset STARTING state so tile doesn't remain frozen in unavailable state.
-                    CoroutineScope(Dispatchers.Main).launch {
-                        delay(15_000)
-                        if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
-                            ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
-                            updateTile()
-                        }
-                    }
+                    superviseStart()
                 }
             }
         }
     }
 
+    /**
+     * Keeps the tile from staying frozen on STARTING when nothing will ever settle it — the worker
+     * is held back by its Wi-Fi constraint, or enqueue() was skipped. Every start that is actually
+     * running settles the state itself (RUNNING via the binder listener, STOPPED from its failure
+     * paths), so this does nothing while one is: an authorisation wait, an AdbStarter call (which
+     * outlives the wait: it still runs the starter command), or a running worker. Only after
+     * [WATCHDOG_GRACE_MS] with none of those, longer than the 20 s Starter.waitForBinder an
+     * interactive start spends after AdbStarter returns, does it settle STARTING itself, from
+     * what the server then reports.
+     */
+    private fun superviseStart() {
+        watchdog?.cancel()
+        val workManager = WorkManager.getInstance(applicationContext)
+        watchdog =
+            CoroutineScope(Dispatchers.Main).launch {
+                var idleSince = SystemClock.elapsedRealtime()
+                while (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
+                    delay(WATCHDOG_POLL_MS)
+                    val workerRunning =
+                        withContext(Dispatchers.IO) {
+                            // Unreadable counts as running: a wrong STOPPED persists and can turn
+                            // wireless debugging off under a live start; a stuck tile does neither.
+                            runCatching {
+                                workManager
+                                    .getWorkInfosForUniqueWork("adb_start_worker")
+                                    .get()
+                                    .any { it.state == WorkInfo.State.RUNNING }
+                            }.getOrDefault(true)
+                        }
+                    val now = SystemClock.elapsedRealtime()
+                    if (workerRunning || AdbAuthWait.isWaiting() || AdbStarter.isStarting()) {
+                        idleSince = now
+                    } else if (now - idleSince >= WATCHDOG_GRACE_MS) {
+                        if (ShizukuStateMachine.get() != ShizukuStateMachine.State.STARTING) break
+                        if (runCatching { Shizuku.pingBinder() }.getOrDefault(false)) {
+                            ShizukuStateMachine.update()
+                        } else {
+                            ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
+                        }
+                        updateTile()
+                        break
+                    }
+                }
+            }
+    }
+
     internal fun stopShizuku() {
+        watchdog?.cancel()
         ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPING)
         updateTile()
         WorkManager.getInstance(this).cancelUniqueWork("adb_start_worker")
@@ -206,5 +251,14 @@ class ShizukuTileService : TileService() {
                     }
                 }.create()
         showDialog(dialog)
+    }
+
+    companion object {
+        // Process-wide and touched only on the main thread. A new start or a stop cancels it, so a
+        // watchdog left over from an earlier attempt can never settle a later one.
+        private var watchdog: Job? = null
+
+        private const val WATCHDOG_POLL_MS = 1_000L
+        private const val WATCHDOG_GRACE_MS = 25_000L
     }
 }
