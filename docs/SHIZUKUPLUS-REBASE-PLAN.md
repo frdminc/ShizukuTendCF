@@ -333,18 +333,58 @@ Reports were in the session scratchpad and are summarised here because that is v
    `memory/handoffs/ShizukuTendCF/reports-2026-10-03/`), all three **closed 2026-10-04**
    (uncommitted at the time of writing, not yet device-tested):
    1. ~~One pre-existing exported-activity start route that bypasses the marker guard.~~
-      Closed: while the unanswered marker is set, `StarterActivity` asks before any ADB start
-      ("Attempt now" / Cancel). It cannot tell the exported `start_service_via_wadb` route from
-      the Home card, so the Home card asks too; tagging launches in `home/` would narrow it.
-   2. ~~A worker notification that can outlive a stood-down worker.~~ Closed: `AdbAuthWait`
-      records who posted the shared start notification, under one lock. A stood-down worker
-      removes only its own post, and no progress post can cover the holder's prompt while its
-      wait is held. Still open: `ShizukuReceiverStarter.start` posts its initial notification
-      outside that bookkeeping, right after `enqueue()`.
-   3. ~~The tile's 15 s STARTING reset predating this work.~~ Closed: the tile keeps one
-      watchdog, cancelled by every new start or stop. It does nothing while an authorisation
-      wait, an `AdbStarter.startAdb` call or the start worker is running. Only after 25 s with
-      none of them does it settle STARTING, from `Shizuku.pingBinder()`.
+      Closed: while the unanswered marker is set, `StarterActivity` asks ("Attempt now" /
+      Cancel) before any ADB start except one that follows a tap on the Home card's Start
+      button. Its direct launches, and the discovery dialog it opens
+      (`AdbDialogFragment.forUserGesture()`, kept in the fragment arguments), carry
+      `EXTRA_USER_GESTURE`, which is honoured only on the non-exported component. The exported
+      `start_service_via_wadb` route, the launcher shortcut and onboarding still ask.
+   2. ~~A worker notification that can outlive a stood-down worker.~~ Closed: the shared start
+      notification (1447) is a function of state held by `AdbAuthWait`'s
+      `StartNotificationLedger`. Each background start is an attempt number;
+      `AdbStartWorker.enqueue` numbers it and calls `enqueueUniqueWork` as one step under the
+      ledger's lock, and `cancel` takes the same lock. The ledger keeps three independent slots,
+      each owned by one attempt: *prompt* (adbd's dialog is up, until the wait ends; or a notice
+      such as "not answered"), *running* (a worker's progress) and *pending* (a request that is
+      queued and not running). Events set or clear only their own attempt's slots; ownership only
+      moves forward (a newer request's pending status or a newer run's progress displaces an older
+      one, never the reverse), and a cancel ends every attempt issued so far. After every change
+      one function, under the same lock, shows the prompt if set, else the progress, else the
+      pending status, else removes the notification; nothing else posts or cancels 1447. So the
+      order in which the enqueue listener (main executor), a replaced worker's `finally`, the
+      prompt and the end of its wait arrive cannot change the result. A worker that stands down decides so before it
+      becomes the owner, so it cannot displace the slots of the start holding the dialog, and a
+      confirmation that arrives after its attempt has ended for good is refused, so it leaves no
+      orphan; the unit tests run every
+      interleaving of those events from the review scenarios and expect one outcome. The pending
+      slot is set only from the success of the enqueue's `Operation`, with that request's own
+      text ("Wi-Fi required" while its network constraint holds it, otherwise the bare title) and
+      Cancel, "Attempt now" and the Wi-Fi-settings tap, for every caller (receiver, tile, tile
+      options, Home, "Attempt now"); a failed enqueue sets nothing, and a confirmation is refused
+      once its worker has run, a newer enqueue was confirmed or a cancel ended it. The worker's
+      first progress replaces its own pending status. A run that WorkManager will run again
+      (`Result.retry()`, or a stop by the system) clears its progress and, if it is still the
+      running owner, sets a "will retry" / "discovery timed out" / "Wi-Fi required" pending status;
+      a terminal run (success, failure, stand-down, cancellation by the user or by REPLACE) clears
+      its own progress and pending status, so a replaced worker cannot remove its replacement's.
+      An older attempt's prompt shows over a newer request's pending status while its wait is
+      held; when the wait ends the pending status beneath shows again. An unanswered dialog's
+      "not answered" notice is posted even if a newer request was confirmed meanwhile (it shows
+      over that request's pending status until swiped away or a newer run shows progress), and
+      is refused only after a cancel, or once a newer attempt has shown progress or a prompt or
+      started the server. Success clears its own and older attempts' slots and notices, never a
+      prompt. A number is issued only once it is committed to preferences, so after a restart
+      every new start outranks any persisted worker, and a start whose number cannot be recorded
+      is not scheduled. A worker from an older build (no number) never takes one, and posts
+      neither progress nor a notice. The worker's foreground notification is a separate id
+      (1451) that only WorkManager writes.
+   3. ~~The tile's 15 s STARTING reset predating this work.~~ Closed: the tile follows
+      `AdbAuthWait.starts` (a worker's whole run, an interactive start through its binder wait,
+      every `startAdb`, every authorisation wait) as a generation-counted StateFlow. Only 25 s
+      after the last of them ends, still STARTING, does it settle from `Shizuku.pingBinder()`.
+      `StartsInFlight.settleIfIdleSince` makes that decision and the transition under the lock
+      `begin()` takes, so a start that begins after the grace either cancels the settle or comes
+      after it.
    a. Buttons pressed while a dialog is pending ("Attempt now", tile, Home) do nothing silently.
       Fixed for "Attempt now": `NotifAttemptReceiver` shows a toast while the wait holds. The tile
       already toasts "Starting…" during the wait (state stays STARTING), and the Home path logs

@@ -9,9 +9,8 @@ class NotifRestoreReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        ShizukuReceiverStarter.updateNotification(
-            context,
-            ShizukuReceiverStarter.WorkerState.RUNNING,
-        )
+        // Puts back exactly what was swiped while it is still current; an attempt that is over
+        // (or a process that has restarted since) leaves nothing to restore.
+        ShizukuReceiverStarter.restoreNotification()
     }
 }

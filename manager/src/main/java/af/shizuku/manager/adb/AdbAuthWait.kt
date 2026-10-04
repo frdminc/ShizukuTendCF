@@ -30,66 +30,101 @@ object AdbAuthWait {
      * so of two connections racing here exactly one wins; the loser must abandon its start
      * without offering a key (see [AdbAuthPendingException]).
      */
-    internal fun tryBegin(): Boolean = waiting.compareAndSet(0, 1)
+    internal fun tryBegin(): Boolean =
+        waiting.compareAndSet(0, 1).also { if (it) starts.begin() }
 
     internal fun end() {
-        synchronized(notificationLock) { promptShowing = false }
-        waiting.compareAndSet(1, 0)
+        notifications.waitEnded()
+        if (waiting.compareAndSet(1, 0)) starts.end()
     }
 
-    // Background starts share one ongoing notification (ShizukuReceiverStarter.NOTIFICATION_ID)
-    // for their progress and for the holder's authorisation prompt. Every check-then-post or
-    // check-then-cancel on it below is one step under this lock, so a racing start can neither
-    // cover the prompt nor remove something it did not post.
-    private val notificationLock = Any()
-    private val prompt = Any()
+    /** Start work in flight in this process; what the quick-settings tile supervises. */
+    val starts = StartsInFlight()
 
-    // Guarded by notificationLock. promptShowing: the current wait's prompt is in the
-    // notification (end() clears it before releasing the slot). notificationPoster: who last
-    // posted it through here, or null once a start cleared it — anything showing then came from
-    // outside this bookkeeping (e.g. ShizukuReceiverStarter.start's initial post).
-    private var promptShowing = false
-    private var notificationPoster: Any? = null
+    const val NO_ATTEMPT = StartNotificationLedger.NO_ATTEMPT
 
-    internal fun postAuthPrompt(post: () -> Unit) {
-        synchronized(notificationLock) {
-            promptShowing = isWaiting()
-            notificationPoster = prompt
-            post()
-        }
-    }
+    private const val PREF_LAST_ATTEMPT = "adb_start_last_attempt"
 
-    /** Posts progress as [poster], unless that would cover the prompt of a wait still held. */
+    // The notification background starts share, as a function of the ledger's slots; see the
+    // ledger. Nothing posts, replaces or cancels ShizukuReceiverStarter.NOTIFICATION_ID except
+    // through the functions below. Attempt numbers are committed synchronously: the worker carrying
+    // one is persisted by WorkManager right after, and must never outlive the record of its number.
+    // Neither lambda swallows a failure; the ledger refuses to number a start it cannot record.
+    private val notifications =
+        StartNotificationLedger(
+            lastIssued = { ShizukuSettings.getPreferences().getLong(PREF_LAST_ATTEMPT, NO_ATTEMPT) },
+            recordIssued = { attempt -> ShizukuSettings.getPreferences().edit().putLong(PREF_LAST_ATTEMPT, attempt).commit() },
+        )
+
+    /**
+     * Numbers a background start and runs [submit] (enqueueUniqueWork) as one step against every
+     * other start, cancel and adoption. Returns [NO_ATTEMPT], without running [submit], when the
+     * number could not be durably recorded. Nothing is posted for the attempt until WorkManager
+     * confirms the enqueue ([attemptEnqueued]) or its worker runs.
+     */
+    internal fun scheduleAttempt(submit: (attempt: Long) -> Unit): Long = notifications.schedule(submit)
+
+    /**
+     * WorkManager confirmed [attempt]'s enqueue: [show] becomes its pending status, unless the
+     * attempt has meanwhile run, been replaced or been cancelled.
+     */
+    internal fun attemptEnqueued(
+        attempt: Long,
+        show: () -> Unit,
+        hide: () -> Unit,
+    ) = notifications.enqueued(attempt, show, hide)
+
+    /** The attempt a worker that just started running belongs to, or [NO_ATTEMPT] if it may not post progress. */
+    internal fun adoptAttempt(attempt: Long): Long = notifications.adopt(attempt)
+
+    internal fun hideStartProgress(attempt: Long) = notifications.hideProgress(attempt)
+
+    internal fun postAuthPrompt(
+        attempt: Long,
+        show: () -> Unit,
+        hide: () -> Unit,
+    ) = notifications.postPrompt(attempt, show, hide)
+
     internal fun postStartNotification(
-        poster: Any,
-        post: () -> Unit,
-    ) {
-        synchronized(notificationLock) {
-            if (promptShowing) return
-            notificationPoster = poster
-            post()
-        }
-    }
+        attempt: Long,
+        show: () -> Unit,
+        hide: () -> Unit,
+    ) = notifications.post(attempt, show, hide)
 
-    /** A start that succeeded clears the notification whoever posted it. */
-    internal fun clearStartNotification(cancel: () -> Unit) {
-        synchronized(notificationLock) {
-            notificationPoster = null
-            cancel()
-        }
-    }
+    internal fun finishStartNotification(
+        attempt: Long,
+        show: () -> Unit,
+        hide: () -> Unit,
+    ) = notifications.finish(attempt, show, hide)
 
-    /** A start that stood down removes the notification only if it is that start's own. */
+    internal fun retryStartNotification(
+        attempt: Long,
+        show: () -> Unit,
+        hide: () -> Unit,
+    ) = notifications.retrying(attempt, show, hide)
+
+    internal fun clearStartNotification(
+        attempt: Long,
+        hide: () -> Unit,
+    ) = notifications.clear(attempt, hide)
+
     internal fun withdrawStartNotification(
-        poster: Any,
-        cancel: () -> Unit,
-    ) {
-        synchronized(notificationLock) {
-            if (notificationPoster !== poster && notificationPoster != null) return
-            notificationPoster = null
-            cancel()
-        }
-    }
+        attempt: Long,
+        hide: () -> Unit,
+    ) = notifications.withdraw(attempt, hide)
+
+    /** Ends every attempt issued so far, removes the notification, then runs [cancelWork], as one step. */
+    internal fun cancelAttempts(
+        hide: () -> Unit,
+        cancelWork: () -> Unit,
+    ) = notifications.cancel(hide, cancelWork)
+
+    internal fun postStartNotice(
+        show: () -> Unit,
+        hide: () -> Unit,
+    ) = notifications.notice(show, hide)
+
+    internal fun restoreStartNotification() = notifications.restore()
 
     private const val PREF_UNANSWERED_AT = "adb_auth_unanswered_at"
 

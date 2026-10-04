@@ -31,7 +31,6 @@ import java.net.ConnectException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import javax.net.ssl.SSLException
 
 object AdbStarter {
@@ -57,19 +56,16 @@ object AdbStarter {
             this is AdbAuthPendingException ||
             (includeIllegalState && this is IllegalStateException)
 
-    private val inFlight = AtomicInteger(0)
-
     /**
-     * True while a [startAdb] call is connecting, waiting for the authorisation dialog or deploying
-     * the server. The authorisation wait alone is not enough: it ends before the starter command
-     * runs and before the binder arrives, and a start with an already-authorised key never waits.
+     * @param attempt the background start this call belongs to (see [AdbAuthWait.scheduleAttempt]);
+     * its authorisation prompt is posted as that attempt's. Ignored when [log] is given: an
+     * interactive start reports through its log and posts nothing.
      */
-    fun isStarting(): Boolean = inFlight.get() > 0
-
     suspend fun startAdb(
         context: Context,
         port: Int,
         log: ((String) -> Unit)? = null,
+        attempt: Long = AdbAuthWait.NO_ATTEMPT,
     ) {
         if (port !in 1..65535) {
             Timber.tag(TAG).w("startAdb called with invalid port $port — skipping")
@@ -94,7 +90,9 @@ object AdbStarter {
             command(cmd) { log?.invoke(String(it)) }
         }
 
-        inFlight.incrementAndGet()
+        // Counted from here to the end of the starter command: the authorisation wait alone ends
+        // before the server is deployed, and an already-authorised key never waits at all.
+        AdbAuthWait.starts.begin()
         try {
             ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
             Timber.tag(TAG).i("startAdb: initiating connection on port %d", port)
@@ -120,9 +118,7 @@ object AdbStarter {
                     if (log != null) {
                         log.invoke(listOfNotNull(context.getString(R.string.wadb_notification_awaiting_auth), fingerprint).joinToString(". ") + "\n")
                     } else {
-                        AdbAuthWait.postAuthPrompt {
-                            ShizukuReceiverStarter.updateNotification(context, ShizukuReceiverStarter.WorkerState.AWAITING_AUTH, fingerprint)
-                        }
+                        ShizukuReceiverStarter.postAuthPrompt(context, attempt, fingerprint)
                     }
                 }
 
@@ -195,7 +191,7 @@ object AdbStarter {
             }
             throw e
         } finally {
-            inFlight.decrementAndGet()
+            AdbAuthWait.starts.end()
             if (!stoodDown && ShizukuSettings.getAutoDisableUsbDebugging() && context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
                 Settings.Global.putInt(context.contentResolver, "adb_wifi_enabled", 0)
             }

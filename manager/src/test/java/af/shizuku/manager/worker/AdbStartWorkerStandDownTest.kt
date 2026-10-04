@@ -23,8 +23,9 @@ class AdbStartWorkerStandDownTest :
         beforeTest {
             nm = mockk(relaxed = true)
             context = mockk(relaxed = true)
+            every { context.applicationContext } returns context
             every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns nm
-            AdbAuthWait.clearStartNotification {}
+            AdbAuthWait.cancelAttempts({}, {})
             AdbAuthWait.tryBegin() shouldBe true
         }
 
@@ -32,7 +33,7 @@ class AdbStartWorkerStandDownTest :
             AdbAuthWait.end()
         }
 
-        test("stands down before posting progress and clears a notification no start has claimed") {
+        test("stands down before posting progress and clears a leftover no start in this process posted") {
             AdbStartWorker(context, workerParams).doWork() shouldBe Result.failure()
 
             verify(exactly = 0) { nm.notify(any<Int>(), any<Notification>()) }
@@ -40,7 +41,9 @@ class AdbStartWorkerStandDownTest :
         }
 
         test("leaves the holder's authorisation prompt in place") {
-            AdbAuthWait.postAuthPrompt {}
+            // No preferences on the JVM, so nothing can be numbered here; the holder is some
+            // attempt scheduled elsewhere.
+            AdbAuthWait.postAuthPrompt(1L, {}, {})
 
             AdbStartWorker(context, workerParams).doWork() shouldBe Result.failure()
 
@@ -49,35 +52,20 @@ class AdbStartWorkerStandDownTest :
         }
 
         test("leaves a notification another start posted") {
-            AdbAuthWait.postStartNotification(Any()) {}
+            var removed = false
+            AdbAuthWait.postStartNotice({}, { removed = true }) shouldBe true
 
             AdbStartWorker(context, workerParams).doWork() shouldBe Result.failure()
 
+            removed shouldBe false
             verify(exactly = 0) { nm.cancel(any<Int>()) }
         }
 
-        test("progress cannot cover the prompt while its wait is held, and can once it ends") {
-            var posts = 0
-            AdbAuthWait.postAuthPrompt {}
+        test("a stood-down worker is not left counted as start work in flight") {
+            val before = AdbAuthWait.starts.state.value.running
 
-            AdbAuthWait.postStartNotification(Any()) { posts++ }
-            posts shouldBe 0
+            AdbStartWorker(context, workerParams).doWork() shouldBe Result.failure()
 
-            AdbAuthWait.end()
-            AdbAuthWait.postStartNotification(Any()) { posts++ }
-            posts shouldBe 1
-        }
-
-        test("a stood-down start removes its own progress but not what replaced it") {
-            val self = Any()
-            var cancels = 0
-            AdbAuthWait.postStartNotification(self) {}
-            AdbAuthWait.withdrawStartNotification(self) { cancels++ }
-            cancels shouldBe 1
-
-            AdbAuthWait.postStartNotification(self) {}
-            AdbAuthWait.postAuthPrompt {}
-            AdbAuthWait.withdrawStartNotification(self) { cancels++ }
-            cancels shouldBe 1
+            AdbAuthWait.starts.state.value.running shouldBe before
         }
     })

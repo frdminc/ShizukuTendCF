@@ -131,11 +131,15 @@ class StarterActivity : AppBarActivity() {
             // to a port it chose (see the manifest comment on ExternalStarterActivity).
             val external = intent.component?.className != StarterActivity::class.java.name
             val port = if (external) 0 else intent.getIntExtra(EXTRA_PORT, 0)
+            // StarterActivity itself is not exported and no PendingIntent to it is mutable, so only
+            // this app's own code can set the extra; the exported alias never counts as a gesture.
+            val userGesture = UnansweredConfirmation.isUserGesture(external, intent.getBooleanExtra(EXTRA_USER_GESTURE, false))
 
             viewModel.start(
                 intent.getBooleanExtra(EXTRA_IS_ROOT, false),
                 intent.getBooleanExtra(EXTRA_IS_SYSTEM, false),
                 port,
+                userGesture,
             )
         }
     }
@@ -144,6 +148,15 @@ class StarterActivity : AppBarActivity() {
         const val EXTRA_IS_SYSTEM = "$EXTRA.IS_SYSTEM"
         const val EXTRA_IS_ROOT = "$EXTRA.IS_ROOT"
         const val EXTRA_PORT = "$EXTRA.PORT"
+
+        /**
+         * Set only on a start that follows from a tap on the Home card's Start button: its direct
+         * launches, and the discovery dialog that tap opens (AdbDialogFragment.forUserGesture).
+         * Such a start is itself the explicit gesture the unanswered-prompt guard asks for, so it
+         * does not ask again. Never set it on a path another app can reach: the exported
+         * start_service_via_wadb route, or a discovery dialog that route or a shortcut opened.
+         */
+        const val EXTRA_USER_GESTURE = "$EXTRA.USER_GESTURE"
     }
 }
 
@@ -177,7 +190,7 @@ class ViewModel(
         }
 
     private var started = false
-    private var unansweredConfirmed = false
+    private val confirmation = UnansweredConfirmation()
     private var lastRoot = false
     private var lastSystem = false
     private var lastPort = 0
@@ -186,10 +199,12 @@ class ViewModel(
         root: Boolean,
         isSystem: Boolean,
         port: Int,
+        userGesture: Boolean = false,
     ) {
         lastRoot = root
         lastSystem = isSystem
         lastPort = port
+        if (userGesture) confirmation.confirm()
         if (!root && !isSystem && port !in 1..65535) {
             log(error = IllegalArgumentException("Invalid port value: $port. Port must be between 1 and 65535."))
             return
@@ -198,9 +213,10 @@ class ViewModel(
         // Not every route here is a fresh start gesture in the manager: MainActivity is exported
         // and turns its start_service_via_wadb extra into a launch of this screen. So once a
         // dialog has gone unanswered, an ADB start waits for the user to confirm here first —
-        // the one-dialog-per-explicit-start rule background triggers already follow. It is a
-        // question, not a failure: nothing was attempted, so no error and no stack trace.
-        if (!root && !isSystem && !unansweredConfirmed && AdbAuthWait.isUnanswered()) {
+        // the one-dialog-per-explicit-start rule background triggers already follow — unless
+        // the launch was itself a tap in the manager (EXTRA_USER_GESTURE). It is a question, not
+        // a failure: nothing was attempted, so no error and no stack trace.
+        if (!confirmation.mayStart(adb = !root && !isSystem, unanswered = AdbAuthWait.isUnanswered())) {
             // A recreated activity calls start() again; the prompt is already pending.
             if (_confirmUnanswered.value != true) _confirmUnanswered.value = true
             return
@@ -208,35 +224,39 @@ class ViewModel(
         started = true
 
         viewModelScope.launch(handler) {
-            if (root) {
-                startRoot()
-            } else if (isSystem) {
-                startSys()
-            } else {
-                try {
-                    AdbStarter.startAdb(appContext, port, { log(it) })
-                } catch (e: af.shizuku.manager.adb.AdbAuthPendingException) {
-                    // Another start owns the authorisation dialog. Informational, not a failure:
-                    // the generic handler would reset the owner's STARTING state to STOPPED and
-                    // file a spurious Sentry report. Leave the owner's state and wait alone.
-                    log(appContext.getString(af.shizuku.manager.R.string.wadb_notification_awaiting_auth) + "\n")
-                    started = false
-                    return@launch
+            // In flight until the binder arrives or the wait for it gives up, so the tile does not
+            // settle a start that has deployed the server and is only waiting for it to bind.
+            AdbAuthWait.starts.track {
+                if (root) {
+                    startRoot()
+                } else if (isSystem) {
+                    startSys()
+                } else {
+                    try {
+                        AdbStarter.startAdb(appContext, port, { log(it) })
+                    } catch (e: af.shizuku.manager.adb.AdbAuthPendingException) {
+                        // Another start owns the authorisation dialog. Informational, not a failure:
+                        // the generic handler would reset the owner's STARTING state to STOPPED and
+                        // file a spurious Sentry report. Leave the owner's state and wait alone.
+                        log(appContext.getString(af.shizuku.manager.R.string.wadb_notification_awaiting_auth) + "\n")
+                        started = false
+                        return@launch
+                    }
                 }
+                Starter.waitForBinder({ log(it) })
             }
-            Starter.waitForBinder({ log(it) })
         }
     }
 
     fun confirmUnanswered() {
-        unansweredConfirmed = true
+        confirmation.confirm()
         _confirmUnanswered.value = false
         start(lastRoot, lastSystem, lastPort)
     }
 
     fun retry() {
         started = false
-        unansweredConfirmed = true
+        confirmation.confirm()
         sb.clear()
         _output.postValue(Resource.success(sb))
         start(lastRoot, lastSystem, lastPort)

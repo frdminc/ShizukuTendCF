@@ -7,7 +7,6 @@ import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.ShizukuSettings.LaunchMethod
 import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.starter.Starter
-import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.SettingsPage
 import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.worker.AdbStartWorker
@@ -30,6 +29,11 @@ import timber.log.Timber
 
 object ShizukuReceiverStarter {
     const val NOTIFICATION_ID = 1447
+
+    // The start worker's foreground notification. WorkManager posts it and removes it again on its
+    // own schedule, asynchronously, so it must never be NOTIFICATION_ID: nothing could order those
+    // writes against the ownership scheme's, and a late one would replace or remove its content.
+    const val FOREGROUND_NOTIFICATION_ID = 1451
     private const val CHANNEL_ID = "AdbStartWorker"
 
     enum class WorkerState {
@@ -77,13 +81,6 @@ object ShizukuReceiverStarter {
         } else if (ShizukuSettings.getLastLaunchMode() == LaunchMethod.ADB) {
             if (context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
                 AdbStartWorker.enqueue(context)
-                val initialState =
-                    if (EnvironmentUtils.getAdbTcpPort() > 0 && !EnvironmentUtils.isWifiRequired()) {
-                        WorkerState.RUNNING
-                    } else {
-                        WorkerState.AWAITING_WIFI
-                    }
-                updateNotification(context, initialState)
             } else {
                 showPermissionErrorNotification(context)
             }
@@ -101,12 +98,9 @@ object ShizukuReceiverStarter {
             .onFailure { Timber.tag(AppConstants.TAG).w(it, "Shizuku.exit failed") }
     }
 
-    fun buildNotification(
-        context: Context,
-        msg: String? = null,
-    ): Notification {
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val channel =
                 NotificationChannel(
                     CHANNEL_ID,
@@ -115,15 +109,39 @@ object ShizukuReceiverStarter {
                 )
             nm.createNotificationChannel(channel)
         }
+    }
 
-        val cancelIntent = Intent(context, NotifCancelReceiver::class.java)
-        val cancelPendingIntent =
-            PendingIntent.getBroadcast(
-                context,
-                0,
-                cancelIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
+    private fun cancelPendingIntent(context: Context): PendingIntent =
+        PendingIntent.getBroadcast(
+            context,
+            0,
+            Intent(context, NotifCancelReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+    /**
+     * For [FOREGROUND_NOTIFICATION_ID] only. The attempt's own progress, prompt and notice stay in
+     * [NOTIFICATION_ID]; this one just keeps the worker alive while it waits for an unlock, so it
+     * has no restore or "Attempt now" of its own.
+     */
+    fun buildForegroundNotification(context: Context): Notification {
+        ensureChannel(context)
+        return NotificationCompat
+            .Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification_icon)
+            .setContentTitle(context.getString(R.string.wadb_notification_title))
+            .setOngoing(true)
+            .setSilent(true)
+            .addAction(R.drawable.ic_notification_close_24, context.getString(android.R.string.cancel), cancelPendingIntent(context))
+            .build()
+    }
+
+    private fun buildNotification(
+        context: Context,
+        msg: String? = null,
+    ): Notification {
+        ensureChannel(context)
+        val cancelPendingIntent = cancelPendingIntent(context)
 
         val attemptNowIntent = Intent(context, NotifAttemptReceiver::class.java)
         val attemptNowPendingIntent =
@@ -170,7 +188,98 @@ object ShizukuReceiverStarter {
             .build()
     }
 
-    fun updateNotification(
+    // Every post or removal of NOTIFICATION_ID goes through AdbAuthWait's ownership scheme via the
+    // functions below; nothing else touches it directly.
+
+    /** WorkManager confirmed background start [attempt]'s enqueue: [state] is its pending status. */
+    fun postPending(
+        context: Context,
+        attempt: Long,
+        state: WorkerState,
+    ) {
+        val app = context.applicationContext
+        AdbAuthWait.attemptEnqueued(attempt, { updateNotification(app, state) }, { cancel(app) })
+    }
+
+    /** [attempt]'s run ended but it will run again; [state] says what it is waiting for. */
+    fun postRetrying(
+        context: Context,
+        attempt: Long,
+        state: WorkerState,
+    ) {
+        val app = context.applicationContext
+        AdbAuthWait.retryStartNotification(attempt, { updateNotification(app, state) }, { cancel(app) })
+    }
+
+    /** Progress of background start [attempt], from its running worker only. */
+    fun postProgress(
+        context: Context,
+        attempt: Long,
+        state: WorkerState,
+    ) {
+        val app = context.applicationContext
+        AdbAuthWait.postStartNotification(attempt, { updateNotification(app, state) }, { cancel(app) })
+    }
+
+    /** adbd's dialog is up for background start [attempt]. */
+    fun postAuthPrompt(
+        context: Context,
+        attempt: Long,
+        fingerprint: String?,
+    ) {
+        val app = context.applicationContext
+        AdbAuthWait.postAuthPrompt(attempt, { updateNotification(app, WorkerState.AWAITING_AUTH, fingerprint) }, { cancel(app) })
+    }
+
+    /** [attempt] is over; [state] says why and stays until the user acts on it. */
+    fun finishWithNotice(
+        context: Context,
+        attempt: Long,
+        state: WorkerState,
+    ) {
+        val app = context.applicationContext
+        AdbAuthWait.finishStartNotification(attempt, { updateNotification(app, state) }, { cancel(app) })
+    }
+
+    /** [attempt] started the server. */
+    fun clearProgress(
+        context: Context,
+        attempt: Long,
+    ) {
+        val app = context.applicationContext
+        AdbAuthWait.clearStartNotification(attempt) { cancel(app) }
+    }
+
+    /** [attempt]'s worker stopped running for good: stood down, failed or cancelled. */
+    fun withdrawProgress(
+        context: Context,
+        attempt: Long,
+    ) {
+        val app = context.applicationContext
+        AdbAuthWait.withdrawStartNotification(attempt) { cancel(app) }
+    }
+
+    /** [attempt] is still under way, shown by its worker's foreground notification for now. */
+    fun hideProgress(attempt: Long) = AdbAuthWait.hideStartProgress(attempt)
+
+    /** The user cancelled background starts: ends them, then runs [cancelWork], as one step. */
+    fun cancelNotification(
+        context: Context,
+        cancelWork: () -> Unit,
+    ) {
+        val app = context.applicationContext
+        AdbAuthWait.cancelAttempts({ cancel(app) }, cancelWork)
+    }
+
+    /** The user swiped the notification away. */
+    fun restoreNotification() = AdbAuthWait.restoreStartNotification()
+
+    private fun cancel(context: Context) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.cancel(NOTIFICATION_ID)
+    }
+
+    private fun updateNotification(
         context: Context,
         state: WorkerState,
         detail: String? = null,
@@ -243,15 +352,7 @@ object ShizukuReceiverStarter {
 
     private fun showPermissionErrorNotification(context: Context) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel =
-                NotificationChannel(
-                    CHANNEL_ID,
-                    context.getString(R.string.wadb_notification_title),
-                    NotificationManager.IMPORTANCE_LOW,
-                )
-            nm.createNotificationChannel(channel)
-        }
+        ensureChannel(context)
 
         val webpageIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/thejaustin/ShizukuPlus/wiki#shizuku-isnt-starting-on-boot-for-me"))
         val pendingWebpageIntent =
@@ -275,6 +376,6 @@ object ShizukuReceiverStarter {
                 .setStyle(NotificationCompat.BigTextStyle().bigText(msg))
                 .build()
 
-        nm.notify(NOTIFICATION_ID, notification)
+        AdbAuthWait.postStartNotice({ nm.notify(NOTIFICATION_ID, notification) }, { nm.cancel(NOTIFICATION_ID) })
     }
 }
