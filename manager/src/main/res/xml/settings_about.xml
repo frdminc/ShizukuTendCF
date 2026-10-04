@@ -14,6 +14,14 @@
             android:title="@string/settings_version"
             android:icon="@drawable/ic_info_24" />
 
+        <!-- Shown only once a fleet profile has been applied on this device. -->
+        <Preference
+            android:key="fleet_profile_status"
+            android:title="@string/settings_fleet_profile_title"
+            android:icon="@drawable/ic_info_24"
+            android:selectable="false"
+            android:visible="false" />
+
         <Preference
             android:key="check_for_update"
             android:title="@string/settings_check_for_update_title"

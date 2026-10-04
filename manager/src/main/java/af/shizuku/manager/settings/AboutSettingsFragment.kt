@@ -6,6 +6,7 @@ import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.backup.BackupKeyUnavailableException
 import af.shizuku.manager.backup.BackupRestoreManager
 import af.shizuku.manager.backup.CryptoUtils
+import af.shizuku.manager.fleet.FleetApplyReport
 import af.shizuku.manager.home.ChangelogDialogFragment
 import af.shizuku.manager.security.BiometricLock
 import af.shizuku.manager.update.UpdateChecker
@@ -15,6 +16,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.security.keystore.KeyPermanentlyInvalidatedException
+import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricPrompt
@@ -214,6 +216,7 @@ class AboutSettingsFragment : BaseSettingsFragment() {
         setupAutoInstallPreference()
         setupChannelPreference()
         updateLastCheckSummary()
+        updateFleetProfileSummary()
 
         findPreference<Preference>("changelog")?.setOnPreferenceClickListener {
             val activity = activity as? androidx.fragment.app.FragmentActivity ?: return@setOnPreferenceClickListener true
@@ -370,7 +373,27 @@ class AboutSettingsFragment : BaseSettingsFragment() {
     override fun onResume() {
         super.onResume()
         updateLastCheckSummary()
+        updateFleetProfileSummary()
         applyBackupCategoryVisibility()
+    }
+
+    private fun updateFleetProfileSummary() {
+        val pref = findPreference<Preference>("fleet_profile_status") ?: return
+        val last = FleetApplyReport.read(requireContext())
+        setChildAvailable(pref, last != null)
+        if (last == null) return
+        val ago =
+            DateUtils.getRelativeTimeSpanString(
+                last.ts * 1000,
+                System.currentTimeMillis(),
+                DateUtils.MINUTE_IN_MILLIS,
+            )
+        pref.summary =
+            if (last.success) {
+                getString(R.string.settings_fleet_profile_applied, ago)
+            } else {
+                getString(R.string.settings_fleet_profile_failed, ago, last.message)
+            }
     }
 
     private fun applyBackupCategoryVisibility() {

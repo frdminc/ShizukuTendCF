@@ -27,6 +27,8 @@ object FleetProfileApplier {
         val skippedCount: Int,
         val errors: List<String>,
         val message: String,
+        /** Hex SHA-256 of the profile bytes as read; null when they were never read. */
+        val profileSha256: String? = null,
     )
 
     @JvmStatic
@@ -70,7 +72,7 @@ object FleetProfileApplier {
             return Result(false, 0, 0, listOf("Path not allowed"), "Profile must be under $where")
         }
         return try {
-            applyJson(context, file.readText(Charsets.UTF_8))
+            applyBytes(context, file.readBytes())
         } catch (e: Exception) {
             Result(false, 0, 0, listOf(e.javaClass.simpleName), "Failed to read profile: ${e.javaClass.simpleName}")
         }
@@ -97,12 +99,15 @@ object FleetProfileApplier {
         return try {
             val stream = context.contentResolver.openInputStream(uri)
                 ?: return Result(false, 0, 0, listOf("Cannot open URI"), "Cannot open profile URI")
-            val json = stream.use { it.reader(Charsets.UTF_8).readText() }
-            applyJson(context, json)
+            applyBytes(context, stream.use { it.readBytes() })
         } catch (e: Exception) {
             Result(false, 0, 0, listOf(e.javaClass.simpleName), "Failed to read profile URI: ${e.javaClass.simpleName}")
         }
     }
+
+    private fun applyBytes(context: Context, bytes: ByteArray): Result =
+        applyJson(context, String(bytes, Charsets.UTF_8))
+            .copy(profileSha256 = FleetApplyReport.sha256Hex(bytes))
 
     private fun applyProfile(context: Context, profile: JSONObject): Result {
         val errors = mutableListOf<String>()

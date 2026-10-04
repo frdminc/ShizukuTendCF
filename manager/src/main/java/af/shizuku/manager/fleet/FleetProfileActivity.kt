@@ -17,6 +17,9 @@ class FleetProfileActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val result = handleIntent(intent)
+        // A missing data URI counts as the path channel: that is the extra the caller left out.
+        val source = if (intent.data != null) FleetApplyReport.SOURCE_URI else FleetApplyReport.SOURCE_PATH
+        FleetApplyReport.record(this, result, source)
         if (!intent.getBooleanExtra(EXTRA_SILENT, false)) {
             Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
         }
