@@ -120,8 +120,7 @@ class SettingsActivity :
             .replace(R.id.fragment_container, fragment)
             .addToBackStack(null)
             .commit()
-
-        currentTitle = item.title
+        // Title is updated by the fragment's onResume → updateTitle(); no need to set it here.
     }
 
     override fun onPreferenceStartFragment(
