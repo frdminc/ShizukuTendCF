@@ -130,7 +130,7 @@ class ShizukuTileService : TileService() {
 
                     ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
                     updateTile()
-                    AdbStartWorker.enqueue(this@ShizukuTileService)
+                    AdbStartWorker.enqueue(this@ShizukuTileService, explicit = true)
                     superviseStart()
                 }
             }

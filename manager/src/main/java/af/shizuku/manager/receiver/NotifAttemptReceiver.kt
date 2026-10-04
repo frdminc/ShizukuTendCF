@@ -22,6 +22,6 @@ class NotifAttemptReceiver : BroadcastReceiver() {
         // "Attempt now" is an explicit user start: it may raise one new dialog even if a
         // previous one went unanswered.
         AdbAuthWait.clearUnanswered()
-        AdbStartWorker.enqueue(context)
+        AdbStartWorker.enqueue(context, explicit = true)
     }
 }

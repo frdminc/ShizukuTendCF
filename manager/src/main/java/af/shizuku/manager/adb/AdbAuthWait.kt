@@ -1,6 +1,7 @@
 package af.shizuku.manager.adb
 
 import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicInteger
@@ -34,115 +35,87 @@ object AdbAuthWait {
         waiting.compareAndSet(0, 1).also { if (it) starts.begin() }
 
     internal fun end() {
-        notifications.waitEnded()
+        // Cleared before the slot is released, so it can never clear the next holder's prompt.
+        heldPrompt = null
         if (waiting.compareAndSet(1, 0)) starts.end()
+        ShizukuReceiverStarter.refreshNotification()
     }
 
     /** Start work in flight in this process; what the quick-settings tile supervises. */
     val starts = StartsInFlight()
 
-    const val NO_ATTEMPT = StartNotificationLedger.NO_ATTEMPT
+    // Attempts are no longer numbered; only AdbStarter.startAdb's `attempt` parameter, which is
+    // ignored, still names this.
+    const val NO_ATTEMPT = 0L
 
-    private const val PREF_LAST_ATTEMPT = "adb_start_last_attempt"
+    // The dialog the held wait is showing, for the shared start notification. In memory only: it
+    // is true exactly while this process holds the connection, and a dead process holds none.
+    @Volatile
+    private var heldPrompt: StartNotificationState.Display.Prompt? = null
 
-    // The notification background starts share, as a function of the ledger's slots; see the
-    // ledger. Nothing posts, replaces or cancels ShizukuReceiverStarter.NOTIFICATION_ID except
-    // through the functions below. Attempt numbers are committed synchronously: the worker carrying
-    // one is persisted by WorkManager right after, and must never outlive the record of its number.
-    // Neither lambda swallows a failure; the ledger refuses to number a start it cannot record.
-    private val notifications =
-        StartNotificationLedger(
-            lastIssued = { ShizukuSettings.getPreferences().getLong(PREF_LAST_ATTEMPT, NO_ATTEMPT) },
-            recordIssued = { attempt -> ShizukuSettings.getPreferences().edit().putLong(PREF_LAST_ATTEMPT, attempt).commit() },
-        )
+    internal fun prompt(): StartNotificationState.Display.Prompt? = heldPrompt
 
-    /**
-     * Numbers a background start and runs [submit] (enqueueUniqueWork) as one step against every
-     * other start, cancel and adoption. Returns [NO_ATTEMPT], without running [submit], when the
-     * number could not be durably recorded. Nothing is posted for the attempt until WorkManager
-     * confirms the enqueue ([attemptEnqueued]) or its worker runs.
-     */
-    internal fun scheduleAttempt(submit: (attempt: Long) -> Unit): Long = notifications.schedule(submit)
-
-    /**
-     * WorkManager confirmed [attempt]'s enqueue: [show] becomes its pending status, unless the
-     * attempt has meanwhile run, been replaced or been cancelled.
-     */
-    internal fun attemptEnqueued(
-        attempt: Long,
-        show: () -> Unit,
-        hide: () -> Unit,
-    ) = notifications.enqueued(attempt, show, hide)
-
-    /** The attempt a worker that just started running belongs to, or [NO_ATTEMPT] if it may not post progress. */
-    internal fun adoptAttempt(attempt: Long): Long = notifications.adopt(attempt)
-
-    internal fun hideStartProgress(attempt: Long) = notifications.hideProgress(attempt)
-
-    internal fun postAuthPrompt(
-        attempt: Long,
-        show: () -> Unit,
-        hide: () -> Unit,
-    ) = notifications.postPrompt(attempt, show, hide)
-
-    internal fun postStartNotification(
-        attempt: Long,
-        show: () -> Unit,
-        hide: () -> Unit,
-    ) = notifications.post(attempt, show, hide)
-
-    internal fun finishStartNotification(
-        attempt: Long,
-        show: () -> Unit,
-        hide: () -> Unit,
-    ) = notifications.finish(attempt, show, hide)
-
-    internal fun retryStartNotification(
-        attempt: Long,
-        show: () -> Unit,
-        hide: () -> Unit,
-    ) = notifications.retrying(attempt, show, hide)
-
-    internal fun clearStartNotification(
-        attempt: Long,
-        hide: () -> Unit,
-    ) = notifications.clear(attempt, hide)
-
-    internal fun withdrawStartNotification(
-        attempt: Long,
-        hide: () -> Unit,
-    ) = notifications.withdraw(attempt, hide)
-
-    /** Ends every attempt issued so far, removes the notification, then runs [cancelWork], as one step. */
-    internal fun cancelAttempts(
-        hide: () -> Unit,
-        cancelWork: () -> Unit,
-    ) = notifications.cancel(hide, cancelWork)
-
-    internal fun postStartNotice(
-        show: () -> Unit,
-        hide: () -> Unit,
-    ) = notifications.notice(show, hide)
-
-    internal fun restoreStartNotification() = notifications.restore()
+    /** The key has been offered and adbd's dialog is up; it shows over everything until [end]. */
+    internal fun postAuthPrompt(fingerprint: String?) {
+        if (!isWaiting()) return
+        heldPrompt = StartNotificationState.Display.Prompt(fingerprint)
+        ShizukuReceiverStarter.refreshNotification()
+    }
 
     private const val PREF_UNANSWERED_AT = "adb_auth_unanswered_at"
+
+    // The PREF_UNANSWERED_AT value whose notice the user dismissed. Durable, so a notice swiped
+    // away (or cancelled) stays away across process restarts until a new dialog goes unanswered.
+    private const val PREF_UNANSWERED_DISMISSED = "adb_auth_unanswered_dismissed"
 
     /**
      * Set when a background start ended because the dialog was not accepted. The boot retry loop
      * and background (non-forced) starts stop while it is set, so an unattended device gets one
      * dialog per boot or explicit start rather than one per retry. Cleared by a successful start,
      * at the start of each boot's loop, and by explicit start paths (headless, token-authenticated
-     * broadcast, the notification's "Attempt now").
+     * broadcast, the notification's "Attempt now"). While set, and not dismissed, it is also the
+     * shared start notification's "not answered" notice, so every clear removes that notice.
      */
     fun isUnanswered(): Boolean = runCatching { ShizukuSettings.getPreferences().contains(PREF_UNANSWERED_AT) }.getOrDefault(false)
 
-    fun markUnanswered() {
+    internal fun isUnansweredNoticeDue(): Boolean =
+        runCatching {
+            val prefs = ShizukuSettings.getPreferences()
+            prefs.contains(PREF_UNANSWERED_AT) &&
+                prefs.getLong(PREF_UNANSWERED_AT, 0L) != prefs.getLong(PREF_UNANSWERED_DISMISSED, Long.MIN_VALUE)
+        }.getOrDefault(false)
+
+    @Synchronized
+    fun markUnanswered(): Boolean {
         runCatching { ShizukuSettings.getPreferences().edit().putLong(PREF_UNANSWERED_AT, System.currentTimeMillis()).apply() }
+        ShizukuReceiverStarter.refreshNotification()
+        return true
     }
 
+    internal fun unansweredStamp(): Long = runCatching { ShizukuSettings.getPreferences().getLong(PREF_UNANSWERED_AT, 0L) }.getOrDefault(0L)
+
+    @Synchronized
     fun clearUnanswered() {
-        runCatching { ShizukuSettings.getPreferences().edit().remove(PREF_UNANSWERED_AT).apply() }
+        runCatching {
+            ShizukuSettings
+                .getPreferences()
+                .edit()
+                .remove(PREF_UNANSWERED_AT)
+                .remove(PREF_UNANSWERED_DISMISSED)
+                .apply()
+        }
+        ShizukuReceiverStarter.refreshNotification()
+    }
+
+    /** The user dismissed the "not answered" notice; the marker itself, and its start guard, stay. */
+    @Synchronized
+    internal fun dismissUnansweredNotice(stamp: Long? = null) {
+        runCatching {
+            val prefs = ShizukuSettings.getPreferences()
+            if (prefs.contains(PREF_UNANSWERED_AT) && (stamp == null || stamp == prefs.getLong(PREF_UNANSWERED_AT, 0L))) {
+                prefs.edit().putLong(PREF_UNANSWERED_DISMISSED, prefs.getLong(PREF_UNANSWERED_AT, 0L)).apply()
+            }
+        }
     }
 }
 

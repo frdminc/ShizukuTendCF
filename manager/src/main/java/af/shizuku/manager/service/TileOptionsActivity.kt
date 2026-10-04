@@ -95,7 +95,7 @@ class TileOptionsActivity : AppCompatActivity() {
                 ShizukuStateMachine.update()
             }
         } else {
-            AdbStartWorker.enqueue(this)
+            AdbStartWorker.enqueue(this, explicit = true)
             ShizukuTileService.superviseStart()
         }
     }

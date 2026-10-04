@@ -1,7 +1,6 @@
 package af.shizuku.manager.worker
 
 import af.shizuku.manager.adb.AdbAuthWait
-import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
@@ -18,14 +17,14 @@ class AdbStartWorkerStandDownTest :
 
         lateinit var nm: NotificationManager
         lateinit var context: Context
-        val workerParams: WorkerParameters = mockk(relaxed = true)
+        lateinit var workerParams: WorkerParameters
 
         beforeTest {
             nm = mockk(relaxed = true)
             context = mockk(relaxed = true)
+            workerParams = mockk(relaxed = true)
             every { context.applicationContext } returns context
             every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns nm
-            AdbAuthWait.cancelAttempts({}, {})
             AdbAuthWait.tryBegin() shouldBe true
         }
 
@@ -33,32 +32,17 @@ class AdbStartWorkerStandDownTest :
             AdbAuthWait.end()
         }
 
-        test("stands down before posting progress and clears a leftover no start in this process posted") {
-            AdbStartWorker(context, workerParams).doWork() shouldBe Result.failure()
-
-            verify(exactly = 0) { nm.notify(any<Int>(), any<Notification>()) }
-            verify(exactly = 1) { nm.cancel(ShizukuReceiverStarter.NOTIFICATION_ID) }
-        }
-
-        test("leaves the holder's authorisation prompt in place") {
-            // No preferences on the JVM, so nothing can be numbered here; the holder is some
-            // attempt scheduled elsewhere.
-            AdbAuthWait.postAuthPrompt(1L, {}, {})
-
+        test("stands down without touching the shared notification") {
             AdbStartWorker(context, workerParams).doWork() shouldBe Result.failure()
 
             verify(exactly = 0) { nm.notify(any<Int>(), any<Notification>()) }
             verify(exactly = 0) { nm.cancel(any<Int>()) }
         }
 
-        test("leaves a notification another start posted") {
-            var removed = false
-            AdbAuthWait.postStartNotice({}, { removed = true }) shouldBe true
-
+        test("stands down before publishing progress, so it never shows over the holder's prompt") {
             AdbStartWorker(context, workerParams).doWork() shouldBe Result.failure()
 
-            removed shouldBe false
-            verify(exactly = 0) { nm.cancel(any<Int>()) }
+            verify(exactly = 0) { workerParams.progressUpdater }
         }
 
         test("a stood-down worker is not left counted as start work in flight") {

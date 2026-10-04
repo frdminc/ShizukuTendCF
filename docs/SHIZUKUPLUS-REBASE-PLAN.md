@@ -339,45 +339,37 @@ Reports were in the session scratchpad and are summarised here because that is v
       (`AdbDialogFragment.forUserGesture()`, kept in the fragment arguments), carry
       `EXTRA_USER_GESTURE`, which is honoured only on the non-exported component. The exported
       `start_service_via_wadb` route, the launcher shortcut and onboarding still ask.
-   2. ~~A worker notification that can outlive a stood-down worker.~~ Closed: the shared start
-      notification (1447) is a function of state held by `AdbAuthWait`'s
-      `StartNotificationLedger`. Each background start is an attempt number;
-      `AdbStartWorker.enqueue` numbers it and calls `enqueueUniqueWork` as one step under the
-      ledger's lock, and `cancel` takes the same lock. The ledger keeps three independent slots,
-      each owned by one attempt: *prompt* (adbd's dialog is up, until the wait ends; or a notice
-      such as "not answered"), *running* (a worker's progress) and *pending* (a request that is
-      queued and not running). Events set or clear only their own attempt's slots; ownership only
-      moves forward (a newer request's pending status or a newer run's progress displaces an older
-      one, never the reverse), and a cancel ends every attempt issued so far. After every change
-      one function, under the same lock, shows the prompt if set, else the progress, else the
-      pending status, else removes the notification; nothing else posts or cancels 1447. So the
-      order in which the enqueue listener (main executor), a replaced worker's `finally`, the
-      prompt and the end of its wait arrive cannot change the result. A worker that stands down decides so before it
-      becomes the owner, so it cannot displace the slots of the start holding the dialog, and a
-      confirmation that arrives after its attempt has ended for good is refused, so it leaves no
-      orphan; the unit tests run every
-      interleaving of those events from the review scenarios and expect one outcome. The pending
-      slot is set only from the success of the enqueue's `Operation`, with that request's own
-      text ("Wi-Fi required" while its network constraint holds it, otherwise the bare title) and
-      Cancel, "Attempt now" and the Wi-Fi-settings tap, for every caller (receiver, tile, tile
-      options, Home, "Attempt now"); a failed enqueue sets nothing, and a confirmation is refused
-      once its worker has run, a newer enqueue was confirmed or a cancel ended it. The worker's
-      first progress replaces its own pending status. A run that WorkManager will run again
-      (`Result.retry()`, or a stop by the system) clears its progress and, if it is still the
-      running owner, sets a "will retry" / "discovery timed out" / "Wi-Fi required" pending status;
-      a terminal run (success, failure, stand-down, cancellation by the user or by REPLACE) clears
-      its own progress and pending status, so a replaced worker cannot remove its replacement's.
-      An older attempt's prompt shows over a newer request's pending status while its wait is
-      held; when the wait ends the pending status beneath shows again. An unanswered dialog's
-      "not answered" notice is posted even if a newer request was confirmed meanwhile (it shows
-      over that request's pending status until swiped away or a newer run shows progress), and
-      is refused only after a cancel, or once a newer attempt has shown progress or a prompt or
-      started the server. Success clears its own and older attempts' slots and notices, never a
-      prompt. A number is issued only once it is committed to preferences, so after a restart
-      every new start outranks any persisted worker, and a start whose number cannot be recorded
-      is not scheduled. A worker from an older build (no number) never takes one, and posts
-      neither progress nor a notice. The worker's foreground notification is a separate id
-      (1451) that only WorkManager writes.
+   2. ~~A worker notification that can outlive a stood-down worker.~~ Closed (reworked
+      2026-10-04 after ten review rounds each found the previous in-memory "ledger" of attempt
+      numbers and slots disagreeing with WorkManager): the shared start notification (1447) is
+      rendered from state the app does not shadow. One function in `ShizukuReceiverStarter`, on
+      one serial thread, is the only code that posts or cancels 1447; it shows, in order, adbd's
+      prompt (an in-memory flag `AdbAuthWait` sets when the key is offered and clears when the
+      wait ends, so it exists only while this process holds the connection), else the running
+      worker's progress, else the queued request's status, else the "not answered" notice, else
+      nothing. Progress and queue state come from WorkManager's `WorkInfo` for the unique work
+      `adb_start_worker`: RUNNING shows the step the worker publishes with `setProgress`
+      (STARTING, or FOREGROUND while its separate foreground notification 1451 shows it);
+      ENQUEUED/BLOCKED shows "Wi-Fi required" while its unmetered-network constraint is unmet,
+      "Waiting to retry" once it has run, otherwise the bare title, always with Cancel,
+      "Attempt now" and the Wi-Fi-settings tap. The notice is the durable unanswered marker
+      (`PREF_UNANSWERED_AT`) itself, unless the user swiped or cancelled that marker's notice;
+      every verified success clears the marker (`AdbStarter`, the binder-received listener, the
+      worker's success-after-exception path), so it clears the notice too, and a worker timeout
+      that finds the server running sets neither. The render reads `WorkInfo` afresh each time
+      and runs when the `WorkInfo` flow emits (followed once per process from the first use),
+      when the prompt flag or marker changes, and on a swipe, so after a process restart a
+      still-queued request gets its controls back. A system stop that re-enqueues a run which
+      returned, a REPLACE whose `Operation` failed after its database commit, and process death
+      (WorkManager resets interrupted RUNNING work to ENQUEUED) are all simply what `WorkInfo`
+      then says. Enqueue reads `WorkInfo` and acts on the same thread: while a worker is RUNNING
+      or the authorisation wait is held a new request does nothing (REPLACE would cancel the
+      start in flight and risk a second dialog), otherwise it enqueues with REPLACE, so "Attempt
+      now" is immediate. Cancel cancels the unique work and dismisses the notice; a prompt stays
+      until the wait ends, which cancelling the worker that holds it causes by closing its
+      connection (adbd's own dialog stays on screen; nothing can dismiss it). The decisions are
+      pure functions in `StartNotificationState`, unit-tested with a table that includes each
+      review finding. A missing-permission notice now has its own id (1452).
    3. ~~The tile's 15 s STARTING reset predating this work.~~ Closed: the tile follows
       `AdbAuthWait.starts` (a worker's whole run, an interactive start through its binder wait,
       every `startAdb`, every authorisation wait) as a generation-counted StateFlow. Only 25 s

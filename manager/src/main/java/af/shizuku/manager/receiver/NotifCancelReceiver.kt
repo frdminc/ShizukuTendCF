@@ -11,16 +11,16 @@ class NotifCancelReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        // Ends every attempt before cancelling the worker, so the worker cannot post its "will
-        // retry" state over the removal, and as one step against scheduling, so a start enqueued
-        // concurrently is either cancelled with its notification or not at all.
+        // Cancelled on the thread every enqueue decision runs on, so a start being enqueued
+        // concurrently is either cancelled too or comes after the cancel.
+        val pending = goAsync()
         try {
-            AdbStartWorker.cancel(context)
+            AdbStartWorker.cancel(context) { pending.finish() }
         } catch (e: Throwable) {
-            // WorkManager may throw NoSuchMethodError / NoSuchMethodException / LinkageError or IllegalStateException when
-            // called from a BroadcastReceiver context before the app process is fully
-            // initialized (e.g. direct boot, process re-creation for receiver only).
-            Timber.tag("NotifCancelReceiver").w("WorkManager unavailable: ${e.message}")
+            // WorkManager failures (direct boot, a process created only for this receiver) are
+            // handled where it is called; this only guarantees the broadcast is finished.
+            Timber.tag("NotifCancelReceiver").w("cancel not scheduled: ${e.message}")
+            pending.finish()
         }
     }
 }
