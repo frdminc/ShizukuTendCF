@@ -47,7 +47,19 @@ class ToggleAllViewHolder(
         job =
             CoroutineScope(Dispatchers.IO).launch {
                 val makeEnabled = !areAllEnabled(items)
-                setAllEnabled(items, makeEnabled)
+                // Trusted-signer apps still count towards "all enabled" (the server reports them
+                // granted), but turning everything off leaves them alone.
+                val targets =
+                    if (makeEnabled) {
+                        items
+                    } else {
+                        items.filterNot { pi -> pi.applicationInfo?.uid?.let(TrustedSignerApps::isAlwaysAllowed) == true }
+                    }
+                if (targets.isEmpty()) {
+                    withContext(Dispatchers.Main) { switchWidget.isEnabled = true }
+                    return@launch
+                }
+                setAllEnabled(targets, makeEnabled)
                 withContext(Dispatchers.Main) {
                     switchWidget.isEnabled = true
                     switchWidget.isChecked = makeEnabled

@@ -68,6 +68,11 @@ class AppViewHolder(
     private val switchWidget get() = binding.switchWidget
     private val root get() = binding.requiresRoot
     private val plus get() = binding.requiresPlus
+    private val trustedSigner get() = binding.trustedSigner
+
+    // Set on the main thread once the async granted/trusted lookup lands (null until then, and in
+    // selection mode); read live by the accessibility delegate and by onClick.
+    private var shownAuthorization: TrustedSignerApps.Authorization? = null
 
     init {
         itemView.filterTouchesWhenObscured = true
@@ -85,6 +90,13 @@ class AppViewHolder(
                     info: AccessibilityNodeInfoCompat,
                 ) {
                     super.onInitializeAccessibilityNodeInfo(host, info)
+                    when (shownAuthorization) {
+                        TrustedSignerApps.Authorization.ALWAYS_ALLOWED ->
+                            info.stateDescription = host.context.getString(R.string.app_management_item_state_trusted_signer)
+                        TrustedSignerApps.Authorization.UNRESOLVED ->
+                            info.stateDescription = host.context.getString(R.string.app_management_item_state_unresolved)
+                        else -> {}
+                    }
                     swipeActionLabel(host.context, ShizukuSettings.getSwipeRightAction())?.let { label ->
                         info.addAction(AccessibilityNodeInfoCompat.AccessibilityActionCompat(R.id.accessibility_action_swipe_right, label))
                     }
@@ -158,11 +170,11 @@ class AppViewHolder(
         val appLabel = AppIconCache.getLabel(context, appInfo)
 
         CoroutineScope(Dispatchers.IO).launch {
-            val isGranted =
+            val auth =
                 runCatching {
-                    AuthorizationManager.granted(capturedPackage, appInfo.uid)
-                }.getOrDefault(false)
-            val enabled = buildEnabledActions(context, capturedPackage, capturedUid, appLabel, appInfo, isGranted)
+                    TrustedSignerApps.authorization(capturedPackage, appInfo.uid)
+                }.getOrDefault(TrustedSignerApps.Authorization.UNRESOLVED)
+            val enabled = buildEnabledActions(context, capturedPackage, capturedUid, appLabel, appInfo, auth)
             withContext(Dispatchers.Main) {
                 when {
                     enabled.isEmpty() -> {
@@ -187,8 +199,9 @@ class AppViewHolder(
         capturedUid: Int,
         appLabel: String,
         appInfo: android.content.pm.ApplicationInfo,
-        isGranted: Boolean,
+        auth: TrustedSignerApps.Authorization,
     ): List<LpAction> {
+        val isGranted = auth.granted
         val pm = context.packageManager
         return buildList {
             if (ShizukuSettings.getLongPressOpenApp()) {
@@ -218,7 +231,7 @@ class AppViewHolder(
                     },
                 )
             }
-            if (ShizukuSettings.getLongPressTogglePermission()) {
+            if (ShizukuSettings.getLongPressTogglePermission() && auth.toggleable) {
                 val label =
                     if (isGranted) {
                         context.getString(R.string.app_management_context_revoke)
@@ -326,6 +339,13 @@ class AppViewHolder(
                 .segmentTick(v)
             return
         }
+        // A row showing no state retries the lookup on tap instead of toggling: the user could not
+        // see what the tap would change.
+        if (shownAuthorization == TrustedSignerApps.Authorization.UNRESOLVED) {
+            val pos = adapterPosition
+            if (pos != androidx.recyclerview.widget.RecyclerView.NO_POSITION) adapter.notifyItemChanged(pos, Any())
+            return
+        }
         val context = v.context
         val appInfo = ai ?: return
         val capturedPackage = packageName
@@ -334,7 +354,20 @@ class AppViewHolder(
         val grantLabel = context.getString(R.string.app_management_log_permission_toggle, context.getString(R.string.app_management_context_grant))
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val wasGranted = AuthorizationManager.granted(capturedPackage, appInfo.uid)
+                val auth = TrustedSignerApps.authorization(capturedPackage, appInfo.uid)
+                // A locked row is not clickable, but a tap can land before its lookup does.
+                if (!auth.toggleable) {
+                    if (auth == TrustedSignerApps.Authorization.UNRESOLVED) {
+                        withContext(Dispatchers.Main) {
+                            af.shizuku.manager.utils.HapticUtils
+                                .error(v)
+                            val pos = adapterPosition
+                            if (pos != androidx.recyclerview.widget.RecyclerView.NO_POSITION) adapter.notifyItemChanged(pos, Any())
+                        }
+                    }
+                    return@launch
+                }
+                val wasGranted = auth.granted
                 if (wasGranted) {
                     AuthorizationManager.revoke(capturedPackage, appInfo.uid)
                     ActivityLogManager.log(appLabel, capturedPackage, revokeLabel)
@@ -480,6 +513,8 @@ class AppViewHolder(
         }
 
         val appsAdapter = adapter as AppsAdapter
+        // Selection mode needs every row tappable, so the lock only applies outside it.
+        applyAuthorization(null)
         if (appsAdapter.isSelectionMode()) {
             checkbox.visibility = View.VISIBLE
             checkbox.isChecked = appsAdapter.selectedPackages.contains(capturedPackage)
@@ -492,7 +527,7 @@ class AppViewHolder(
             grantedLoadJob?.cancel()
             grantedLoadJob =
                 CoroutineScope(Dispatchers.IO).launch {
-                    val granted = AuthorizationManager.granted(capturedPackage, appInfo.uid)
+                    val auth = TrustedSignerApps.authorization(capturedPackage, appInfo.uid)
                     val isPlusMissing =
                         AuthorizationManager.isPlusApiSupported(capturedData) &&
                             !ShizukuSettings.isCustomApiEnabled()
@@ -501,8 +536,9 @@ class AppViewHolder(
                         // the case where the holder was recycled and rebound to a new item at the
                         // same position before this continuation ran.
                         if (gen == bindGeneration && adapterPosition != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-                            switchWidget.isChecked = granted
-                            if (!isPlusMissing) switchWidget.isEnabled = true
+                            switchWidget.isChecked = auth.granted
+                            applyAuthorization(auth)
+                            if (!isPlusMissing && auth.toggleable) switchWidget.isEnabled = true
                         }
                     }
                 }
@@ -549,17 +585,37 @@ class AppViewHolder(
     override fun onBind(payloads: List<Any>) {
         val appInfo = ai ?: return
         val capturedPackage = packageName
+        val capturedData = data
         grantedLoadJob?.cancel()
         val gen = ++bindGeneration
         grantedLoadJob =
             CoroutineScope(Dispatchers.IO).launch {
-                val granted = AuthorizationManager.granted(capturedPackage, appInfo.uid)
+                val auth = TrustedSignerApps.authorization(capturedPackage, appInfo.uid)
+                val isPlusMissing =
+                    AuthorizationManager.isPlusApiSupported(capturedData) &&
+                        !ShizukuSettings.isCustomApiEnabled()
                 withContext(Dispatchers.Main) {
                     if (gen == bindGeneration && adapterPosition != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-                        switchWidget.isChecked = granted
+                        switchWidget.isChecked = auth.granted
+                        if (!(adapter as AppsAdapter).isSelectionMode()) {
+                            applyAuthorization(auth)
+                            switchWidget.isEnabled = !isPlusMissing && auth.toggleable
+                        }
                     }
                 }
             }
+    }
+
+    // The trusted-signer row follows Settings' "enabled by admin" pattern: checked switch shown
+    // disabled, a summary line saying why, and no tap-to-toggle. Long-press, swipe and the
+    // package-name copy keep working. Locked only when the server reports the app granted and
+    // says it enforces always-allowed for that uid (TrustedSignerApps). An UNRESOLVED row stays
+    // clickable so a tap can retry the lookup; its switch is disabled by the caller.
+    private fun applyAuthorization(auth: TrustedSignerApps.Authorization?) {
+        shownAuthorization = auth
+        val locked = auth?.locked == true
+        trustedSigner.visibility = if (locked) View.VISIBLE else View.GONE
+        itemView.isClickable = !locked
     }
 
     override fun onRecycle() {

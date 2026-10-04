@@ -308,6 +308,8 @@
     <string name="app_management_item_summary_requires_root">* requires Shizuku runs with root</string>
     <string name="app_management_item_summary_partial_root">⚠ Partially supported — some functions still need Shizuku with root</string>
     <string name="app_management_item_summary_requires_plus">* requires Shizuku+ Enhanced API</string>
+    <string name="app_management_item_summary_trusted_signer">Always allowed: signed with a key this build trusts</string>
+    <string name="app_management_item_state_trusted_signer">Always on, can\'t be turned off</string>
     <string name="app_management_item_context">About this app: %s</string>
     <string name="app_management_enhancements">Enhancements</string>
     <string name="app_management_enhancements_desc">Enable Plus features for this app to improve performance and compatibility.</string>
@@ -1632,4 +1634,15 @@
     <string name="accessibility_sim_toggle_automation">Toggle Automation card visibility</string>
     <string name="accessibility_sim_toggle_activity_log">Toggle Activity Log card visibility</string>
     <string name="accessibility_sim_toggle_learn_more">Toggle Learn More card visibility</string>
+
+    <!-- About: result of the last fleet-profile apply (see fleet/FleetApplyReport.kt) -->
+    <string name="settings_fleet_profile_title">Fleet profile</string>
+    <string name="settings_fleet_profile_applied">Applied %1$s</string>
+    <string name="settings_fleet_profile_failed">Failed %1$s: %2$s</string>
+
+    <!-- Permission dialog: the server kept a trusted-signer app allowed despite Deny -->
+    <string name="permission_always_allowed_by_policy">Always allowed by this build\'s policy</string>
+
+    <!-- App list: the server could not be asked for this app's permission state; tap retries -->
+    <string name="app_management_item_state_unresolved">Permission state unavailable, tap to retry</string>
 </resources>

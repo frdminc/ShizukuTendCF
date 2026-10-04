@@ -1,5 +1,6 @@
 package af.shizuku.manager.authorization
 
+import af.shizuku.common.util.TrustedSigners
 import af.shizuku.core.ui.AppActivity
 import af.shizuku.manager.Helps
 import af.shizuku.manager.R
@@ -11,9 +12,11 @@ import android.app.Dialog
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Parcel
 import android.text.method.LinkMovementMethod
 import android.view.WindowManager
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -26,6 +29,7 @@ import kotlinx.coroutines.withTimeout
 import rikka.core.res.resolveColor
 import rikka.html.text.HtmlCompat
 import rikka.shizuku.Shizuku
+import rikka.shizuku.ShizukuApiConstants
 import rikka.shizuku.ShizukuApiConstants.REQUEST_PERMISSION_REPLY_ALLOWED
 import rikka.shizuku.ShizukuApiConstants.REQUEST_PERMISSION_REPLY_IS_ONETIME
 
@@ -49,6 +53,64 @@ class RequestPermissionActivity : AppActivity() {
             Shizuku.dispatchPermissionConfirmationResult(requestUid, requestPid, requestCode, data)
         } catch (e: Throwable) {
             LOGGER.e("dispatchPermissionConfirmationResult")
+        }
+    }
+
+    // The server, not this activity, decides whether a Deny stands: it keeps a confirmed trusted
+    // signer allowed, judged against whoever holds the uid when the Deny lands. So Deny goes out
+    // as a synchronous dispatchPermissionConfirmationResult, and the server's reply says what
+    // took effect. Returns a TrustedSigners.CONFIRMATION_* value, or null if the server sent no
+    // reply (one without the rule runs the AIDL's oneway handler, which writes none) or the call
+    // failed. Must be called from Dispatchers.IO.
+    private fun dispatchDenyForOutcome(
+        requestUid: Int,
+        requestPid: Int,
+        requestCode: Int,
+    ): Int? {
+        val binder = Shizuku.getBinder()
+        if (binder == null) {
+            LOGGER.e("dispatchPermissionConfirmationResult: no binder")
+            return null
+        }
+        val result = Bundle()
+        result.putBoolean(REQUEST_PERMISSION_REPLY_ALLOWED, false)
+        result.putBoolean(REQUEST_PERMISSION_REPLY_IS_ONETIME, true)
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        return try {
+            data.writeInterfaceToken(ShizukuApiConstants.BINDER_DESCRIPTOR)
+            data.writeInt(requestUid)
+            data.writeInt(requestPid)
+            data.writeInt(requestCode)
+            data.writeInt(1)
+            result.writeToParcel(data, 0)
+            binder.transact(TrustedSigners.CONFIRMATION_TRANSACTION, data, reply, 0)
+            if (reply.dataAvail() == 0) {
+                null
+            } else {
+                reply.readException()
+                reply.readInt()
+            }
+        } catch (e: Throwable) {
+            LOGGER.e(e, "dispatchPermissionConfirmationResult")
+            null
+        } finally {
+            reply.recycle()
+            data.recycle()
+        }
+    }
+
+    private suspend fun dispatchDeny(
+        requestUid: Int,
+        requestPid: Int,
+        requestCode: Int,
+    ) {
+        val outcome = withContext(Dispatchers.IO) { dispatchDenyForOutcome(requestUid, requestPid, requestCode) }
+        when (outcome) {
+            TrustedSigners.CONFIRMATION_DENY_OVERRIDDEN ->
+                Toast.makeText(applicationContext, R.string.permission_always_allowed_by_policy, Toast.LENGTH_LONG).show()
+            TrustedSigners.CONFIRMATION_DENIED_UNVERIFIED ->
+                LOGGER.w("Deny for uid $requestUid honoured: the server could not verify its signer")
         }
     }
 
@@ -133,9 +195,7 @@ class RequestPermissionActivity : AppActivity() {
     ) {
         if (!hasSelfPermission) {
             // Can't grant — dispatch denial and show informational dialog
-            lifecycleScope.launch(Dispatchers.IO) {
-                dispatchResult(uid, pid, requestCode, allowed = false, onetime = true)
-            }
+            lifecycleScope.launch { dispatchDeny(uid, pid, requestCode) }
             showSelfPermissionMissingDialog()
             return
         }
@@ -163,9 +223,7 @@ class RequestPermissionActivity : AppActivity() {
                 }
                 button3.setOnClickListener {
                     lifecycleScope.launch {
-                        withContext(Dispatchers.IO) {
-                            dispatchResult(uid, pid, requestCode, allowed = false, onetime = true)
-                        }
+                        dispatchDeny(uid, pid, requestCode)
                         if (!isFinishing && !isDestroyed) dialog.dismiss()
                     }
                 }

@@ -326,7 +326,9 @@ open class ApplicationManagementActivity :
                             viewModel.packages.value
                                 ?.data
                                 ?.find { it.packageName == pkg }
-                        pi?.applicationInfo?.uid?.let { uid -> AuthorizationManager.revoke(pkg, uid) }
+                        pi?.applicationInfo?.uid?.let { uid ->
+                            if (!TrustedSignerApps.isAlwaysAllowed(uid)) AuthorizationManager.revoke(pkg, uid)
+                        }
                     }
                     adapter.isSelectionMode = false
                     viewModel.load()
@@ -509,10 +511,13 @@ open class ApplicationManagementActivity :
                 // a grantedLoadJob that raced against this IO work and read the pre-toggle state.
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        if (AuthorizationManager.granted(item.packageName, uid)) {
-                            AuthorizationManager.revoke(item.packageName, uid)
-                        } else {
-                            AuthorizationManager.grant(item.packageName, uid)
+                        val auth = TrustedSignerApps.authorization(item.packageName, uid)
+                        if (auth.toggleable) {
+                            if (auth.granted) {
+                                AuthorizationManager.revoke(item.packageName, uid)
+                            } else {
+                                AuthorizationManager.grant(item.packageName, uid)
+                            }
                         }
                         withContext(Dispatchers.Main) {
                             val items = adapter.getItems<Any>()

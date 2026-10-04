@@ -1,6 +1,6 @@
 # Trusted signer allowlist — permanent Shizuku access for your own apps
 
-Last updated: **2026-07-31**
+Last updated: **2026-10-03**
 
 ## The problem this solves
 
@@ -34,25 +34,110 @@ For an app that's supposed to be an **always-on fleet automation agent**,
 "silently loses privileged access for no visible reason, with no
 notification" is a real reliability problem, not just an inconvenience.
 
-## The fix: `TRUSTED_SIGNER_SHA256` in `ShizukuConfigManager`
+## The fix: `TrustedSigners.SHA256`, enforced in `ShizukuConfigManager`
+
+The allowlist of trusted **APK signing certificate SHA-256 fingerprints** is
+`TrustedSigners.SHA256` in
+`common/src/main/java/af/shizuku/common/util/TrustedSigners.java` — the one
+copy, shared by server and manager (it used to be `TRUSTED_SIGNER_SHA256`
+inside `ShizukuConfigManager`):
+
+```java
+public static final Set<String> SHA256 = Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList(
+        "35bbc3d1a93c2a726df14bcc066bdc791f7f55f21b57d9455da27439c5ff9b6a"
+)));
+```
 
 `ShizukuConfigManager.find(uid)` — the method that actually gates every
 permission check (see its call sites in `ShizukuService.getFlagsForUidInternal`)
-— now checks a hardcoded allowlist of trusted **APK signing certificate SHA-256
-fingerprints** before ever consulting the persisted config:
+— returns a synthetic entry with `FLAG_ALLOWED` set whenever the persisted
+entry is not already an allow and `trustOf(uid)` is `TRUSTED`. That lookup
+looks at every package currently installed under the UID and accepts a
+package's certificate only if its `PackageInfo` has an `applicationInfo` whose
+full UID equals the one being checked and which is installed for that user. It
+has four results:
 
-```java
-private static final Set<String> TRUSTED_SIGNER_SHA256 = new LinkedHashSet<>(List.of(
-        "35bbc3d1a93c2a726df14bcc066bdc791f7f55f21b57d9455da27439c5ff9b6a"
-));
-```
+1. `TRUSTED`: some package under the UID passed that check and is signed by a
+   listed certificate. Only this result grants anything.
+2. `NOT_TRUSTED`: every package under the UID was read, belongs to it, and none
+   is signed by a listed certificate.
+3. `LOOKUP_FAILED`: no package list, a package that could not be read or no
+   longer belongs to the UID, or an exception.
+4. `UNCHECKED`: no lookup ran, because the global lookup budget was spent or
+   the query accepts only a cached positive (see below).
 
-If any package installed under the calling UID is signed by one of these
-certificates, `find()` returns a synthetic entry with `FLAG_ALLOWED` set —
-unconditionally, regardless of what's (or isn't) persisted. The existing
-reconciliation/removal logic in the constructor is untouched; this is a
-pure addition that short-circuits `find()` before it, so it can't affect
-Shizuku's behavior for any other app.
+**Anything but `TRUSTED` is never trusted.** Every decision treats
+`LOOKUP_FAILED` and `UNCHECKED` exactly like `NOT_TRUSTED` (fail closed); they
+are told apart only so the server can report which one happened. The existing
+reconciliation/removal logic in the constructor is untouched, so this can't
+affect Shizuku's behavior for any other app.
+
+### Lookup cost: positive cache, coalescing, cooldown and a global budget
+
+`find()` and the permission checks call the lookup synchronously, so
+`TrustedSignerCache` bounds the work. No part of it can produce a false
+positive:
+
+1. **Positive cache, per UID, at most 16 entries.** A `TRUSTED` result from a
+   lookup that read every package under the UID is remembered together with a
+   fingerprint of that package set: each package's name, version code, first
+   install time and last update time, taken from the same `PackageInfo` whose
+   certificate was checked. Every hit re-reads the UID's packages (the name
+   list plus one flag-less `getPackageInfo` each, no certificates and no
+   hashing) and is believed only if the fingerprint is identical. Changing a
+   signer needs an update or a reinstall, and either changes an install or
+   update time; a reused UID holds different packages or different install
+   times. Any mismatch, or a failed re-read, forgets the entry and runs a full
+   lookup. A lookup that missed any package is still `TRUSTED` but is not
+   cached. Only a verified `TRUSTED` lookup adds an entry, so traffic for
+   other UIDs cannot push a trusted app out.
+2. **One lookup per UID at a time.** A caller that arrives while a lookup for
+   the same UID is running waits for it (up to five seconds, then
+   `LOOKUP_FAILED`) instead of starting another. A shared negative is used as
+   is. A shared `TRUSTED` was read before that caller arrived, so it is
+   believed only if the UID's package set still matches it, exactly as for a
+   cached positive; otherwise the caller looks once itself.
+3. **Negative cooldown, per UID.** After a full lookup returns `NOT_TRUSTED` or
+   `LOOKUP_FAILED`, that UID is answered with the same result, without another
+   lookup, for one second measured from when the lookup **finished**. A fresh
+   negative is never evicted early, so no amount of traffic for other UIDs
+   shortens it; expired ones are purged on every insert. This is not a cached
+   answer in the granting direction: it can only say "not trusted", so the
+   worst it does is make a trusted app wait up to a second for its next real
+   lookup.
+4. **Global budget of 32 full lookups per second**, across all UIDs, for every
+   lookup a client can trigger (permission checks and requests from its own
+   UID). Once it is spent such a query answers `UNCHECKED` without a lookup.
+   `UNCHECKED` is not recorded, so it starts no cooldown and the next query
+   after the budget refills does a real lookup. A re-validated positive costs
+   no budget, so a trusted app that has been verified once since the server
+   started is never affected.
+
+Not charged to the budget: transactions only the manager app may make
+(`getFlagsForUid`, `updateFlagsForUid`, the permission-dialog reply, and the
+manager's own `getApplications`). They are bounded by the operator's UI plus
+items 2 and 3, and an `UNCHECKED` answer there would show a trusted app as
+revocable, or let a revoke force-stop it. `getApplications` from any other
+granted client sees trust only from a cached positive and never starts a
+lookup, and `isHidden(uid)`, which any binder holder may call, no longer
+touches `find()` at all.
+
+### Manager and server agree from one decision
+
+The manager does not evaluate the list itself. It reads an app's grant and its
+locked state from one `getFlagsForUid` call with the permission mask plus the
+`TrustedSigners.FLAG_ALWAYS_ALLOWED` capability bit. The server answers both
+from a single lookup, so a row is never shown locked beside a grant computed
+from a different answer. Only a server enforcing this rule sets the bit.
+
+If the server cannot be asked (the binder stays dead through the same
+retry-with-back-off `AuthorizationManager.granted()` uses, or the query
+throws), the row's state is **unresolved**: its switch is off and disabled,
+TalkBack reads "Permission state unavailable, tap to retry", a tap re-queries
+instead of toggling, and long-press and swipe offer neither Grant nor Revoke.
+An unresolved state is never shown as a grant that could be revoked. Only a
+pre-v11 server, which has no `getFlagsForUid` and no such rule, is read
+through the plain unlocked grant check.
 
 ## Why signing certificate, not package name or UID
 
@@ -121,8 +206,8 @@ keystore).
 
 2. **Add the SHA-256 digest** (lowercase hex, no colons — the digest as
    printed by `apksigner` is already in this format) to
-   `TRUSTED_SIGNER_SHA256` in
-   `server/src/main/java/rikka/shizuku/server/ShizukuConfigManager.java`.
+   `TrustedSigners.SHA256` in
+   `common/src/main/java/af/shizuku/common/util/TrustedSigners.java`.
    Add a one-line comment naming the app/identity it belongs to, matching
    the existing entry.
 
@@ -133,7 +218,8 @@ keystore).
 
 4. Any app signed with that key now gets Shizuku access automatically the
    first time it's installed and asks — no interactive "Allow" dialog, no
-   risk of the grant silently disappearing later.
+   risk of the grant silently disappearing later, and no way to switch it
+   off from the manager (see below).
 
 ## What this does *not* protect against
 
@@ -148,10 +234,52 @@ approval step for keys you already fully trust — it doesn't change what
 
 ## Revocation semantics on the ShizukuPlus base (2026-10-03)
 
-The default applies **only when no config entry exists** for the UID. Any persisted decision wins:
-an explicit Deny from the permission dialog (`FLAG_DENIED`) and the manager's ordinary "revoke"
-toggle (an entry with neither flag) both stick, and the app has to `requestPermission()` again like
-any other client. Known residual: the server's start-up reconciliation drops an entry when the UID's
-live package set differs from what was persisted (the very bug this allowlist works around), and a
-dropped *revoke* is then replaced by the signer default on the next start. If you revoke a trusted app
-and need that to survive reinstall/reconciliation, remove its certificate from the list and rebuild.
+**A trusted-signer app is always allowed; revoke and deny are ignored.** This reverses commit
+`ca52b44d` ("make revoke stick for trusted-signer apps"), by owner decision on 2026-10-03: the point
+of the allowlist is that the fleet agent can never lose access.
+
+1. The server ignores a revoke (`updateFlagsForUid` / `update` with the permission bits cleared) and a
+   Deny from the permission dialog for a trusted UID: nothing is stored, and the app is neither
+   force-stopped nor has its user services torn down. A persisted deny or revoke from before this
+   rule is overridden by `find()`.
+2. A UID confirmed `TRUSTED` when it asks is never shown the permission dialog:
+   `showPermissionConfirmation` allows it without UI. If the answer then is anything else
+   (`NOT_TRUSTED`, `LOOKUP_FAILED`, or `UNCHECKED` because the budget was spent), the dialog is
+   shown as for any app, and the manager still sends only what the user tapped; it never sends an
+   Allow the user did not tap.
+3. On a Deny the server looks up trust again, for whoever holds the UID at that moment:
+   a. `TRUSTED`: the deny is not honoured; the requesting process is allowed.
+   b. `NOT_TRUSTED`: the deny is honoured as for any app.
+   c. `LOOKUP_FAILED` (or `UNCHECKED`, which a manager-sent reply cannot normally get): the deny
+      is honoured (fail closed) and the server logs that it could not verify the signer.
+
+   The manager sends Deny as the existing `dispatchPermissionConfirmationResult` transaction
+   (`TrustedSigners.CONFIRMATION_TRANSACTION`, AIDL `= 104`), but without `FLAG_ONEWAY`, so the
+   server can reply with the outcome that actually took effect (`TrustedSigners.CONFIRMATION_*`).
+   No new transaction code and no change under `api/`. The manager shows "Always allowed by this
+   build's policy" only when that reply says the deny was overridden; it never infers the outcome
+   from a second query. A server without the rule runs the AIDL's oneway handler, writes no reply,
+   and the manager shows nothing extra. Allow is still sent oneway, unchanged.
+4. A deny honoured because of a failed lookup lasts only until a lookup succeeds. Shared
+   `Service.checkSelfPermission()` is final and answers from the attached client record, which
+   attach sets once, so `ShizukuService.onTransact` re-checks trust for the caller before that
+   transaction runs and marks its unallowed records allowed if the UID is `TRUSTED`. A trusted
+   client that attached while lookups failed, and only polls `checkSelfPermission()`, is allowed
+   on its first poll after the lookup works (at most a second after the failed lookup finished,
+   because of the cooldown, or once the global budget refills).
+   Privileged calls and `requestPermission()` already re-check through `find()`.
+5. The manager's app list shows the app with its switch on and disabled, plus a summary line, and
+   its toggle, long-press, swipe, multi-select and toggle-all revoke paths skip it. It locks a row
+   only when a server enforcing this rule says so, so against an older server, or while the
+   server's signer lookup is failing, the row stays an ordinary switch (a revoke sent then is still
+   ignored by the server if its own lookup says `TRUSTED`). When the manager cannot reach the
+   server at all, the row is unresolved and offers no toggle (see above).
+
+To cut a trusted-signer app off, do one of:
+
+1. remove its digest from `TrustedSigners.SHA256`, rebuild, restart the server, and then revoke
+   the app in the manager (its switch is ordinary again). The last step matters: an Allow the user
+   ever tapped in the dialog was stored as a normal grant, and `find()` honours a stored grant
+   without looking at the signer;
+2. uninstall the app;
+3. stop Shizuku.

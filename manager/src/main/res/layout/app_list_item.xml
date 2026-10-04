@@ -96,6 +96,18 @@
                 android:text="@string/app_management_item_summary_requires_plus" />
 
             <TextView
+                android:id="@+id/trusted_signer"
+                android:layout_width="wrap_content"
+                android:textAppearance="?textAppearanceLabelSmall"
+                android:layout_height="wrap_content"
+                android:textColor="?colorOnSurfaceVariant"
+                android:visibility="gone"
+                android:drawableStart="@drawable/ic_shield_24"
+                android:drawablePadding="4dp"
+                android:drawableTint="?colorOnSurfaceVariant"
+                android:text="@string/app_management_item_summary_trusted_signer" />
+
+            <TextView
                 android:id="@+id/shizuku_aware"
                 android:layout_width="wrap_content"
                 android:textAppearance="?textAppearanceLabelSmall"

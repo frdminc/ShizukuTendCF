@@ -2,10 +2,11 @@ package rikka.shizuku.server;
 
 import static rikka.shizuku.server.ServerConstants.PERMISSION;
 
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.Signature;
 import android.os.Build;
+import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.AtomicFile;
@@ -21,19 +22,18 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 import kotlin.collections.ArraysKt;
 import af.shizuku.common.compat.Android17Compat;
 import af.shizuku.common.compat.InstalledPackagesCompat;
+import af.shizuku.common.util.TrustedSigners;
 import af.shizuku.common.util.UserHandleCompat;
 import rikka.hidden.compat.PackageManagerApis;
 import rikka.hidden.compat.UserManagerApis;
@@ -65,26 +65,6 @@ public class ShizukuConfigManager extends ConfigManager {
         } catch (Throwable ignored) {}
         return new File("/data/local/tmp/shizuku.json");
     }
-
-
-    /**
-     * SHA-256 fingerprints (lowercase hex, no colons) of APK signing certificates that are always
-     * granted Shizuku access, regardless of what is (or isn't) persisted in the config file.
-     *
-     * Works around a gap in the reconciliation loop in the constructor: on every server start it
-     * drops a UID's entry the moment the live package set for that UID differs from what was last
-     * persisted — including a transient/inconsistent read during an unrelated install or uninstall
-     * elsewhere on the device — so a trusted app's grant can silently disappear and must be
-     * re-approved by hand. See docs/trusted-signer-allowlist.md.
-     *
-     * Keyed by signing certificate, not package name or UID: a package-name allowlist is defeated
-     * by installing another app under that name once the real one is gone, and UIDs are reassigned
-     * across installs. This must never be a shared/debug keystore.
-     */
-    private static final Set<String> TRUSTED_SIGNER_SHA256 = new LinkedHashSet<>(List.of(
-            // stayturgid-agent release signing key (CN=stayturgid, O=stayturgid, C=US).
-            "35bbc3d1a93c2a726df14bcc066bdc791f7f55f21b57d9455da27439c5ff9b6a"
-    ));
 
     public static ShizukuConfig load() {
         FileInputStream stream;
@@ -304,62 +284,222 @@ public class ShizukuConfigManager extends ConfigManager {
 
     @Nullable
     public ShizukuConfig.PackageEntry find(int uid) {
+        return find(uid, TrustQuery.BUDGETED);
+    }
+
+    @Nullable
+    ShizukuConfig.PackageEntry find(int uid, TrustQuery query) {
         ShizukuConfig.PackageEntry entry;
         synchronized (this) {
             entry = findLocked(uid);
         }
-        // Any persisted decision wins, including the manager's "revoke", which stores an entry
-        // with neither flag set. The signer default only fills the gap left when reconciliation
-        // dropped the entry or nothing was ever decided; it is not a way around the user.
-        if (entry == null && isTrustedSignerUid(uid)) {
+        if (entry != null && (entry.flags & ConfigManager.FLAG_ALLOWED) != 0) {
+            return entry;
+        }
+        return effectiveEntry(uid, entry, isTrustedSignerUid(uid, query));
+    }
+
+    /** find() with the trust decision supplied, so a caller reporting it answers from one lookup. */
+    @Nullable
+    ShizukuConfig.PackageEntry find(int uid, boolean trusted) {
+        ShizukuConfig.PackageEntry entry;
+        synchronized (this) {
+            entry = findLocked(uid);
+        }
+        return effectiveEntry(uid, entry, trusted);
+    }
+
+    // A trusted signer is always allowed: a stored revoke or deny (including one written before
+    // this rule, or by a client other than the manager's list) does not take it away. Taking the
+    // certificate out of TrustedSigners ends this, but not an allow stored earlier by the dialog:
+    // that one has to be revoked as for any other app.
+    @Nullable
+    static ShizukuConfig.PackageEntry effectiveEntry(int uid, @Nullable ShizukuConfig.PackageEntry stored, boolean trusted) {
+        if (stored != null && (stored.flags & ConfigManager.FLAG_ALLOWED) != 0) {
+            return stored;
+        }
+        if (trusted) {
             return new ShizukuConfig.PackageEntry(uid, ConfigManager.FLAG_ALLOWED);
         }
-        return entry;
+        return stored;
+    }
+
+    /** True if a write with this mask/values would leave the uid without FLAG_ALLOWED. */
+    static boolean clearsAllowed(int mask, int values) {
+        return (mask & ConfigManager.MASK_PERMISSION) != 0 && (values & ConfigManager.FLAG_ALLOWED) == 0;
     }
 
     /**
-     * True if any package currently installed under {@code uid} is signed by a certificate in
-     * {@link #TRUSTED_SIGNER_SHA256}. Fails closed: any error, including the missing
-     * SigningInfo class below API 28, means "not trusted", never a crashed server.
+     * Result of a signer lookup. Only TRUSTED grants anything; every other value is "not
+     * trusted" to every decision, and they are told apart only so a caller can report which.
      */
-    private boolean isTrustedSignerUid(int uid) {
-        if (TRUSTED_SIGNER_SHA256.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            return false;
+    enum Trust {
+        TRUSTED,
+        /** Every package under the uid was read, installed under it, and none is trusted. */
+        NOT_TRUSTED,
+        /** No package list, an unreadable or inconsistent package, or an exception. */
+        LOOKUP_FAILED,
+        /**
+         * No full lookup ran: the global lookup budget was spent, or the query accepts only a
+         * cached positive. Never recorded, so the next query that may look does.
+         */
+        UNCHECKED
+    }
+
+    /** Who is asking, which decides whether the question may cost a full signer lookup. */
+    enum TrustQuery {
+        /**
+         * Anything a client can trigger, such as a permission check or request from its own uid:
+         * charged to {@link TrustedSignerCache}'s global budget, UNCHECKED once that is spent.
+         */
+        BUDGETED,
+        /**
+         * A transaction only the manager app may make. Not charged: it is bounded by the
+         * operator's UI and the per-uid coalescing and cooldown, and an UNCHECKED here would show
+         * a trusted app as revocable or let a revoke force-stop it.
+         */
+        MANAGER,
+        /** Only a cached, re-validated positive counts; never starts a full lookup. */
+        CACHED_ONLY
+    }
+
+    /** What a dialog Deny for a uid with this trust actually does, as a TrustedSigners.CONFIRMATION_* value. */
+    static int denyOutcome(Trust trust) {
+        switch (trust) {
+            case TRUSTED:
+                return TrustedSigners.CONFIRMATION_DENY_OVERRIDDEN;
+            case NOT_TRUSTED:
+                return TrustedSigners.CONFIRMATION_DENIED;
+            default:
+                return TrustedSigners.CONFIRMATION_DENIED_UNVERIFIED;
         }
-        try {
-            int userId = UserHandleCompat.getUserId(uid);
-            for (String packageName : PackageManagerApis.getPackagesForUidNoThrow(uid)) {
-                PackageInfo pi = Android17Compat.getPackageInfo(
-                        packageName, PackageManager.GET_SIGNING_CERTIFICATES, userId);
-                if (pi == null || pi.signingInfo == null) {
-                    continue;
-                }
-                for (Signature signature : pi.signingInfo.getApkContentsSigners()) {
-                    String digest = sha256Hex(signature.toByteArray());
-                    if (digest != null && TRUSTED_SIGNER_SHA256.contains(digest)) {
-                        return true;
-                    }
-                }
+    }
+
+    private final TrustedSignerCache trustCache = new TrustedSignerCache();
+
+    boolean isTrustedSignerUid(int uid) {
+        return isTrustedSignerUid(uid, TrustQuery.BUDGETED);
+    }
+
+    boolean isTrustedSignerUid(int uid, TrustQuery query) {
+        return trustOf(uid, query) == Trust.TRUSTED;
+    }
+
+    Trust trustOf(int uid) {
+        return trustOf(uid, TrustQuery.BUDGETED);
+    }
+
+    /**
+     * Whether any package currently installed under {@code uid} is signed by a certificate in
+     * {@link TrustedSigners#SHA256}. Fails closed: any error is LOOKUP_FAILED, never TRUSTED and
+     * never a crashed server.
+     *
+     * Find and the permission checks call this synchronously, so {@link TrustedSignerCache}
+     * bounds the work: a positive is re-validated against the uid's current package set on every
+     * hit (a package-name list and one flag-less getPackageInfo per package, no certificates or
+     * hashing), concurrent callers for one uid share one lookup, a negative suppresses further
+     * full lookups for that uid for a second after it completed, and {@code query} decides
+     * whether a full lookup is charged to the global budget or not run at all.
+     */
+    Trust trustOf(int uid, TrustQuery query) {
+        if (TrustedSigners.SHA256.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            return Trust.NOT_TRUSTED;
+        }
+        int userId = UserHandleCompat.getUserId(uid);
+        TrustedSignerCache.PositiveCheck positive =
+                () -> trustCache.hasPositive(uid) && trustCache.confirmPositive(uid, currentFingerprint(uid, userId));
+        if (query == TrustQuery.CACHED_ONLY) {
+            return positive.confirmed() ? Trust.TRUSTED : Trust.UNCHECKED;
+        }
+        return trustCache.resolve(uid, query == TrustQuery.BUDGETED, SystemClock::uptimeMillis, positive, () -> {
+            try {
+                return lookUpTrust(uid, userId);
+            } catch (Throwable t) {
+                LOGGER.w(t, "trusted signer lookup failed for uid " + uid);
+                return Trust.LOOKUP_FAILED;
             }
-        } catch (Throwable t) {
-            LOGGER.w(t, "trusted signer lookup failed for uid " + uid);
+        });
+    }
+
+    private Trust lookUpTrust(int uid, int userId) {
+        List<String> names = PackageManagerApis.getPackagesForUidNoThrow(uid);
+        if (names.isEmpty()) {
+            return Trust.LOOKUP_FAILED;
         }
-        return false;
+        List<PackageInfo> verified = new ArrayList<>();
+        boolean complete = true;
+        boolean trusted = false;
+        for (String packageName : names) {
+            PackageInfo pi = Android17Compat.getPackageInfo(
+                    packageName, PackageManager.GET_SIGNING_CERTIFICATES, userId);
+            // The name came from one PackageManager read and the certificate from another; a
+            // remove-and-reinstall in between can hand back a same-named package that now
+            // belongs to a different uid, whose signer says nothing about this one.
+            if (!isInstalledUnderUid(pi, uid)) {
+                complete = false;
+                continue;
+            }
+            verified.add(pi);
+            if (TrustedSigners.isSignedByTrustedKey(pi)) {
+                trusted = true;
+            }
+        }
+        if (trusted) {
+            // Only a complete read describes the uid's package set well enough to re-validate.
+            String fingerprint = complete ? packageSetFingerprint(uid, verified) : null;
+            if (fingerprint != null) {
+                trustCache.putPositive(uid, fingerprint);
+            }
+            return Trust.TRUSTED;
+        }
+        return complete ? Trust.NOT_TRUSTED : Trust.LOOKUP_FAILED;
     }
 
     @Nullable
-    private static String sha256Hex(byte[] data) {
+    private static String currentFingerprint(int uid, int userId) {
         try {
-            byte[] hash = MessageDigest.getInstance("SHA-256").digest(data);
-            StringBuilder sb = new StringBuilder(hash.length * 2);
-            for (byte b : hash) {
-                sb.append(String.format(Locale.ROOT, "%02x", b));
+            List<PackageInfo> infos = new ArrayList<>();
+            for (String packageName : PackageManagerApis.getPackagesForUidNoThrow(uid)) {
+                infos.add(Android17Compat.getPackageInfo(packageName, 0, userId));
             }
-            return sb.toString();
-        } catch (NoSuchAlgorithmException e) {
-            LOGGER.w(e, "sha256");
+            return packageSetFingerprint(uid, infos);
+        } catch (Throwable t) {
             return null;
         }
+    }
+
+    /**
+     * Identifies the exact set of package installs under {@code uid}, or null if the set is empty
+     * or any member is missing or not installed under that uid. Re-signing needs an update or a
+     * reinstall, either of which changes an install/update time, so an equal fingerprint means
+     * the same APKs, and so the same signers, as when it was taken.
+     */
+    @Nullable
+    static String packageSetFingerprint(int uid, List<PackageInfo> infos) {
+        if (infos.isEmpty()) {
+            return null;
+        }
+        List<String> parts = new ArrayList<>(infos.size());
+        for (PackageInfo pi : infos) {
+            if (!isInstalledUnderUid(pi, uid)) {
+                return null;
+            }
+            long version = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? pi.getLongVersionCode() : pi.versionCode;
+            parts.add(pi.packageName + '/' + version + '/' + pi.firstInstallTime + '/' + pi.lastUpdateTime);
+        }
+        Collections.sort(parts);
+        StringBuilder sb = new StringBuilder().append(uid);
+        for (String part : parts) {
+            sb.append('|').append(part);
+        }
+        return sb.toString();
+    }
+
+    static boolean isInstalledUnderUid(@Nullable PackageInfo pi, int uid) {
+        return pi != null
+                && pi.applicationInfo != null
+                && pi.applicationInfo.uid == uid
+                && (pi.applicationInfo.flags & ApplicationInfo.FLAG_INSTALLED) != 0;
     }
 
     public List<Integer> getAllowedUids() {
@@ -398,6 +538,22 @@ public class ShizukuConfigManager extends ConfigManager {
     }
 
     public void update(int uid, List<String> packages, int mask, int values) {
+        // Computed per query, never stored: a persisted copy would outlive the signer that earned
+        // it and would be reported by an older server that does not enforce the rule.
+        if ((mask & TrustedSigners.FLAG_ALWAYS_ALLOWED) != 0) {
+            mask &= ~TrustedSigners.FLAG_ALWAYS_ALLOWED;
+            if (mask == 0) {
+                return;
+            }
+        }
+        // Revoke and deny writes come only from the manager (updateFlagsForUid, the dialog).
+        if (clearsAllowed(mask, values) && isTrustedSignerUid(uid, TrustQuery.MANAGER)) {
+            LOGGER.i("uid %d is signed by a trusted key; not storing a revoke for it", uid);
+            mask &= ~ConfigManager.MASK_PERMISSION;
+            if (mask == 0) {
+                return;
+            }
+        }
         synchronized (this) {
             updateLocked(uid, packages, mask, values);
         }

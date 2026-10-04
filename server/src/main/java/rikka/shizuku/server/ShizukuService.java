@@ -77,6 +77,7 @@ import rikka.shizuku.ShizukuApiConstants;
 import rikka.shizuku.server.api.IContentProviderUtils;
 import rikka.shizuku.server.util.HandlerUtil;
 import rikka.shizuku.server.util.Logger;
+import af.shizuku.common.util.TrustedSigners;
 import af.shizuku.common.util.UserHandleCompat;
 import rikka.shizuku.server.ClientManager;
 import rikka.shizuku.server.ClientRecord;
@@ -2203,6 +2204,21 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     @Override
 @android.annotation.SuppressLint("NewApi")
     public void showPermissionConfirmation(int requestCode, @NonNull ClientRecord clientRecord, int callingUid, int callingPid, int userId) {
+        // A trusted signer is always allowed, so asking would offer a Deny that
+        // confirmPermission then turns into Allow. Reached when attach-time lookup failed
+        // transiently and left this record unallowed. Any other answer here, including UNCHECKED
+        // from a spent lookup budget, still asks: it is not trusted for this decision.
+        ShizukuConfigManager.Trust trust = configManager.trustOf(callingUid);
+        if (trust == ShizukuConfigManager.Trust.TRUSTED) {
+            LOGGER.i("showPermissionConfirmation: uid %d is signed by a trusted key; allowing without asking", callingUid);
+            clientRecord.allowed = true;
+            clientRecord.dispatchRequestPermissionResult(requestCode, true);
+            return;
+        }
+        if (trust != ShizukuConfigManager.Trust.NOT_TRUSTED) {
+            LOGGER.w("showPermissionConfirmation: signer lookup for uid %d was %s; asking the user", callingUid, trust);
+        }
+
         // ai may be null for a caller PackageManager can't resolve on this device/profile (same
         // class of PM-lookup gap already worked around for the shell-consent path, #391) - that
         // used to make this method bail silently, leaving the client's requestPermission() call
@@ -2239,13 +2255,23 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
     @Override
     public void dispatchPermissionConfirmationResult(int requestUid, int requestPid, int requestCode, Bundle data) throws RemoteException {
+        confirmPermission(requestUid, requestPid, requestCode, data);
+    }
+
+    /**
+     * Applies the user's answer from the permission dialog and returns what actually took
+     * effect, as a TrustedSigners.CONFIRMATION_* value. The manager reads it from the reply of a
+     * synchronous dispatchPermissionConfirmationResult (see onTransact), so it never has to
+     * guess afterwards whether its Deny stood.
+     */
+    private int confirmPermission(int requestUid, int requestPid, int requestCode, Bundle data) {
         if (!isManagerAppId(UserHandleCompat.getAppId(Binder.getCallingUid()))) {
             LOGGER.w("dispatchPermissionConfirmationResult called not from the manager package");
-            return;
+            return TrustedSigners.CONFIRMATION_IGNORED;
         }
 
         if (data == null) {
-            return;
+            return TrustedSigners.CONFIRMATION_IGNORED;
         }
 
         boolean allowed = data.getBoolean(REQUEST_PERMISSION_REPLY_ALLOWED);
@@ -2253,6 +2279,27 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
         LOGGER.i("dispatchPermissionConfirmationResult: uid=%d, pid=%d, requestCode=%d, allowed=%s, onetime=%s",
                 requestUid, requestPid, requestCode, Boolean.toString(allowed), Boolean.toString(onetime));
+
+        // Same rule as updateFlagsForUid: a deny cannot take a trusted signer's access away, so
+        // tell the requester the truth and leave its other processes and the config alone. Trust
+        // is judged here, against whoever holds the uid now, because the manager only relays
+        // the user's tap. Only a confirmed TRUSTED overrides: a failed lookup honours the deny.
+        int outcome = allowed
+                ? TrustedSigners.CONFIRMATION_ALLOWED
+                : ShizukuConfigManager.denyOutcome(configManager.trustOf(requestUid, ShizukuConfigManager.TrustQuery.MANAGER));
+        if (outcome == TrustedSigners.CONFIRMATION_DENY_OVERRIDDEN) {
+            LOGGER.i("dispatchPermissionConfirmationResult: uid %d is signed by a trusted key; ignoring deny", requestUid);
+            for (ClientRecord record : clientManager.findClients(requestUid)) {
+                if (record.pid == requestPid) {
+                    record.allowed = true;
+                    record.dispatchRequestPermissionResult(requestCode, true);
+                }
+            }
+            return outcome;
+        }
+        if (outcome == TrustedSigners.CONFIRMATION_DENIED_UNVERIFIED) {
+            LOGGER.w("dispatchPermissionConfirmationResult: signer lookup for uid %d failed; honouring deny", requestUid);
+        }
 
         List<ClientRecord> records = clientManager.findClients(requestUid);
         List<String> packages = new ArrayList<>();
@@ -2316,10 +2363,14 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 }
             }
         }
+        return outcome;
     }
 
     private int  getFlagsForUidInternal(int uid, int mask, boolean allowRuntimePermission) {
-        ShizukuConfig.PackageEntry entry = configManager.find(uid);
+        return getFlagsForUidInternal(configManager.find(uid), uid, mask, allowRuntimePermission);
+    }
+
+    private int getFlagsForUidInternal(@Nullable ShizukuConfig.PackageEntry entry, int uid, int mask, boolean allowRuntimePermission) {
         if (entry != null) {
             return entry.flags & mask;
         }
@@ -2352,7 +2403,20 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             LOGGER.w("updateFlagsForUid is allowed to be called only from the manager");
             return 0;
         }
-        return getFlagsForUidInternal(uid, mask, true);
+        if ((mask & TrustedSigners.FLAG_ALWAYS_ALLOWED) == 0) {
+            return getFlagsForUidInternal(configManager.find(uid, ShizukuConfigManager.TrustQuery.MANAGER), uid, mask, true);
+        }
+        // One lookup decides both the grant and the lock, so the manager never sees "locked"
+        // next to a grant computed from a different answer.
+        boolean trusted = configManager.isTrustedSignerUid(uid, ShizukuConfigManager.TrustQuery.MANAGER);
+        int storedMask = mask & ~TrustedSigners.FLAG_ALWAYS_ALLOWED;
+        int flags = storedMask != 0
+                ? getFlagsForUidInternal(configManager.find(uid, trusted), uid, storedMask, true)
+                : 0;
+        if (trusted) {
+            flags |= TrustedSigners.FLAG_ALWAYS_ALLOWED;
+        }
+        return flags;
     }
 
     @Override
@@ -2360,6 +2424,17 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         if (!isManagerAppId(UserHandleCompat.getAppId(Binder.getCallingUid()))) {
             LOGGER.w("updateFlagsForUid is allowed to be called only from the manager");
             return;
+        }
+
+        // find() keeps a trusted signer allowed whatever is stored, so a revoke here would only
+        // force-stop the app and tear down its user services for nothing.
+        if (ShizukuConfigManager.clearsAllowed(mask, value)
+                && configManager.isTrustedSignerUid(uid, ShizukuConfigManager.TrustQuery.MANAGER)) {
+            LOGGER.i("updateFlagsForUid: uid %d is signed by a trusted key; ignoring revoke", uid);
+            mask &= ~ConfigManager.MASK_PERMISSION;
+            if (mask == 0) {
+                return;
+            }
         }
 
         int userId = UserHandleCompat.getUserId(uid);
@@ -2448,7 +2523,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         getUserServiceManager().removeUserServicesForPackage(packageName);
     }
 
-    private ParcelableListSlice<PackageInfo> getApplications(int userId) {
+    private ParcelableListSlice<PackageInfo> getApplications(int userId, ShizukuConfigManager.TrustQuery trustQuery) {
         List<PackageInfo> list = new ArrayList<>();
         List<Integer> users = new ArrayList<>();
         if (userId == -1) {
@@ -2470,7 +2545,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 }
                 
                 int flags = 0;
-                ShizukuConfig.PackageEntry entry = configManager.find(uid);
+                ShizukuConfig.PackageEntry entry = configManager.find(uid, trustQuery);
                 if (entry != null) {
                     // An empty packages list means no package name was ever recorded for this
                     // uid (e.g. an entry written before updateFlagsForUid started recording
@@ -2516,7 +2591,12 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             data.enforceInterface(ShizukuApiConstants.BINDER_DESCRIPTOR);
             enforceCallingPermission("getApplications");
             int userId = data.readInt();
-            ParcelableListSlice<PackageInfo> result = getApplications(userId);
+            // One find() per installed package: any granted client may ask, so only the manager's
+            // list pays for signer lookups; others see trust only from a cached positive.
+            ShizukuConfigManager.TrustQuery trustQuery = isManagerAppId(UserHandleCompat.getAppId(Binder.getCallingUid()))
+                    ? ShizukuConfigManager.TrustQuery.MANAGER
+                    : ShizukuConfigManager.TrustQuery.CACHED_ONLY;
+            ParcelableListSlice<PackageInfo> result = getApplications(userId, trustQuery);
             reply.writeNoException();
             result.writeToParcel(reply, android.os.Parcelable.PARCELABLE_WRITE_RETURN_VALUE);
             return true;
@@ -2598,6 +2678,22 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             reply.writeNoException();
             return true;
         }
+        if (code == TrustedSigners.CONFIRMATION_TRANSACTION && (flags & IBinder.FLAG_ONEWAY) == 0) {
+            // The manager sends Deny without FLAG_ONEWAY to learn what took effect; the AIDL
+            // handler for this oneway method would run it but write no reply. Same parcel layout.
+            data.enforceInterface(ShizukuApiConstants.BINDER_DESCRIPTOR);
+            int requestUid = data.readInt();
+            int requestPid = data.readInt();
+            int requestCode = data.readInt();
+            Bundle result = data.readInt() != 0 ? Bundle.CREATOR.createFromParcel(data) : null;
+            int outcome = confirmPermission(requestUid, requestPid, requestCode, result);
+            reply.writeNoException();
+            reply.writeInt(outcome);
+            return true;
+        }
+        if (code == IBinder.FIRST_CALL_TRANSACTION + 15 /* checkSelfPermission */) {
+            reconcileTrustedClients(Binder.getCallingUid());
+        }
         try {
             return super.onTransact(code, data, reply, flags);
         } catch (SecurityException e) {
@@ -2608,6 +2704,30 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             // leaves a client-side "IllegalStateException" with no server-side trace.
             LOGGER.w(e, "onTransact code=%d from uid=%d pid=%d failed", code, Binder.getCallingUid(), Binder.getCallingPid());
             throw e;
+        }
+    }
+
+    // Service.checkSelfPermission() is final and answers from the attached record's flag, which
+    // attach set once. If the signer lookup failed then, a trusted client that only polls would
+    // stay denied while the manager shows it locked on, so bring its records in line with find()
+    // first. Only unallowed records cost a lookup, and TrustedSignerCache rate-limits negatives
+    // and charges it to the global budget.
+    private void reconcileTrustedClients(int callingUid) {
+        if (callingUid == OsUtils.getUid()) {
+            return;
+        }
+        List<ClientRecord> unallowed = new ArrayList<>();
+        for (ClientRecord record : clientManager.findClients(callingUid)) {
+            if (!record.allowed) {
+                unallowed.add(record);
+            }
+        }
+        if (unallowed.isEmpty() || !configManager.isTrustedSignerUid(callingUid)) {
+            return;
+        }
+        LOGGER.i("checkSelfPermission: uid %d is signed by a trusted key; allowing its attached clients", callingUid);
+        for (ClientRecord record : unallowed) {
+            record.allowed = true;
         }
     }
 
@@ -3107,13 +3227,9 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
     @Override
     public boolean isHidden(int uid) throws RemoteException {
-        ShizukuConfig.PackageEntry entry = configManager.find(uid);
-        if (entry != null) {
-            // Check if it's hidden in Shizuku+ terms (this might need to be linked to ShizukuSettings in the future,
-            // but for now the manager app handles the 'hidden' state via its own shared prefs).
-            // Actually, the server's 'isHidden' might be used for something else.
-            // Let's ensure it returns the correct state if we ever sync hidden state to server.
-        }
+        // Nothing is hidden server-side yet: the manager keeps its 'hidden' state in its own
+        // shared prefs. Any binder holder may call this for any uid, so if hidden state is ever
+        // synced here, read the stored entry, not find(), which can start a signer lookup.
         return false;
     }
 }
