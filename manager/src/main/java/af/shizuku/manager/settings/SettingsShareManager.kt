@@ -28,7 +28,7 @@ object SettingsShareManager {
         if (context.packageName == DROPIN_PACKAGE) OFFICIAL_PLUS_PACKAGE else DROPIN_PACKAGE
 
     fun getPeerLabel(context: Context): String =
-        if (context.packageName == DROPIN_PACKAGE) "Shizuku+" else "Shizuku"
+        if (context.packageName == DROPIN_PACKAGE) "ShizukuTendCF" else "Shizuku"
 
     fun getPeerAuthority(context: Context): String =
         "${getPeerPackage(context)}.settings.share"

@@ -35,7 +35,7 @@
         android:protectionLevel="dangerous" />
 
     <application
-        android:label="Shizuku+ Compat Hub"
+        android:label="ShizukuTendCF Compat Hub"
         android:hasCode="true"
         android:icon="@android:drawable/ic_secure">
 

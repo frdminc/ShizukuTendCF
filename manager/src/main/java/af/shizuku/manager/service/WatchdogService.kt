@@ -211,7 +211,7 @@ class WatchdogService : Service() {
         val disablePendingIntent = PendingIntent.getActivity(this, 11, disableIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
         // Manual crash report via BugReportDialogActivity or similar
-        val reportIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/thejaustin/ShizukuPlus/issues/new"))
+        val reportIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/frdminc/ShizukuTendCF/issues/new"))
         val reportPendingIntent = PendingIntent.getActivity(this, 12, reportIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
         val builder =

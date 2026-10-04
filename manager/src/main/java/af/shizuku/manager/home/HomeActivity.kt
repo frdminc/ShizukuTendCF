@@ -812,7 +812,7 @@ open class HomeActivity :
                 android.content
                     .Intent(
                         android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse("https://github.com/thejaustin/ShizukuPlus/releases"),
+                        android.net.Uri.parse("https://github.com/frdminc/ShizukuTendCF/releases"),
                     ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }

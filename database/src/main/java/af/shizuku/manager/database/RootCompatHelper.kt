@@ -624,7 +624,7 @@ object RootCompatHelper {
                 "features that require true root — e.g. reading another app's private data — cannot, " +
                 "even though the app may detect \"root\".")
         }
-        sb.append("\n\nRemember: the calling app must be authorized in Shizuku+ before its own commands " +
+        sb.append("\n\nRemember: the calling app must be authorized in ShizukuTendCF before its own commands " +
             "through the bridge succeed.")
 
         BridgeSelfTest(deployed && uid != null, sb.toString())

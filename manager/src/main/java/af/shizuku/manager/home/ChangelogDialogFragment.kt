@@ -337,7 +337,7 @@ class ChangelogDialogFragment : BottomSheetDialogFragment() {
                         } else if (isAdded && !isDetached) {
                             CustomTabsHelper.launchUrlOrCopy(
                                 requireContext(),
-                                "https://github.com/thejaustin/ShizukuPlus/releases/tag/$targetTag",
+                                "https://github.com/frdminc/ShizukuTendCF/releases/tag/$targetTag",
                             )
                         }
                     } catch (e: Exception) {
@@ -364,7 +364,7 @@ class ChangelogDialogFragment : BottomSheetDialogFragment() {
                 startActivity(
                     Intent(
                         Intent.ACTION_VIEW,
-                        Uri.parse("https://github.com/thejaustin/ShizukuPlus/releases/tag/$currentSelectedTag"),
+                        Uri.parse("https://github.com/frdminc/ShizukuTendCF/releases/tag/$currentSelectedTag"),
                     ),
                 )
             } catch (e: Exception) {

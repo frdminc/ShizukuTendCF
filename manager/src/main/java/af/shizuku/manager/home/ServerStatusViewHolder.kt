@@ -110,7 +110,7 @@ class ServerStatusViewHolder(
                 .setPositiveButton(android.R.string.ok, null)
                 .setNeutralButton(R.string.update_view_on_github) { _, _ ->
                     af.shizuku.manager.utils.CustomTabsHelper
-                        .launchUrlOrCopy(context, "https://github.com/thejaustin/ShizukuPlus/issues")
+                        .launchUrlOrCopy(context, "https://github.com/frdminc/ShizukuTendCF/issues")
                 }.show()
         }
 

@@ -110,7 +110,7 @@ class MainActivity : HomeActivity() {
         val lastSeenCode = ShizukuSettings.getLastSeenChangelogVersion()
         if (currentCode <= lastSeenCode) return
 
-        val versionSuffix = BuildConfig.VERSION_NAME.removePrefix("Shizuku+ ").trim()
+        val versionSuffix = BuildConfig.VERSION_NAME.substringAfterLast(' ').trim()
         val tagName =
             when {
                 // Current format: "Shizuku+ 13.7.0.r2700" → tag is "13.7.0.r2700"

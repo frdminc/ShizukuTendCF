@@ -136,6 +136,6 @@ object CryptoUtils {
 class BackupKeyUnavailableException :
     java.security.GeneralSecurityException(
         "The encryption key for this backup no longer exists on this device. Settings backups are " +
-            "encrypted with a hardware-backed key that is destroyed when Shizuku+ is uninstalled or its " +
+            "encrypted with a hardware-backed key that is destroyed when ShizukuTendCF is uninstalled or its " +
             "data is cleared, so a backup can only be restored by the installation that created it.",
     )

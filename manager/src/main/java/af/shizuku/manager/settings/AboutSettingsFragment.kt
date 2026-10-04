@@ -62,7 +62,7 @@ class AboutSettingsFragment : BaseSettingsFragment() {
             is BackupKeyUnavailableException -> "$prefix: ${e.message}"
             is AEADBadTagException ->
                 "$prefix: this backup could not be decrypted. It was most likely created by a different " +
-                    "installation of Shizuku+ — backups are encrypted per-install and can't be restored " +
+                    "installation of ShizukuTendCF — backups are encrypted per-install and can't be restored " +
                     "after reinstalling or clearing the app's data."
             else -> "$prefix: ${e.message ?: e.javaClass.simpleName}"
         }
@@ -218,7 +218,7 @@ class AboutSettingsFragment : BaseSettingsFragment() {
         findPreference<Preference>("changelog")?.setOnPreferenceClickListener {
             val activity = activity as? androidx.fragment.app.FragmentActivity ?: return@setOnPreferenceClickListener true
             activity.lifecycleScope.launch {
-                val currentTag = BuildConfig.VERSION_NAME.removePrefix("Shizuku+ ").trim()
+                val currentTag = BuildConfig.VERSION_NAME.substringAfterLast(' ').trim()
                 val releases =
                     try {
                         UpdateChecker.fetchReleasesSince(sinceVersionCode = 0, maxReleases = 25)
@@ -241,7 +241,7 @@ class AboutSettingsFragment : BaseSettingsFragment() {
         }
 
         findPreference<Preference>("open_source_licenses")?.setOnPreferenceClickListener {
-            CustomTabsHelper.launchUrlOrCopy(requireContext(), "https://github.com/thejaustin/ShizukuPlus/blob/main/OPEN_SOURCE_LICENSES.md")
+            CustomTabsHelper.launchUrlOrCopy(requireContext(), "https://github.com/frdminc/ShizukuTendCF/blob/master/OPEN_SOURCE_LICENSES.md")
             true
         }
 
