@@ -72,9 +72,9 @@ class StartNotificationStateTest :
                     waitHeld = true,
                 ),
                 Case(
-                    "a standing-down worker does not hide the notice",
+                    "no notice while a wait is held: that dialog is still up",
                     listOf(justStarted),
-                    Display.Unanswered,
+                    Display.None,
                     waitHeld = true,
                     unanswered = true,
                 ),

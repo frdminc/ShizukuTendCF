@@ -346,10 +346,9 @@ class AdbStartWorker(
                 ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
             }
             if (ShizukuStateMachine.update() == ShizukuStateMachine.State.RUNNING) {
-                // The server is verifiably up despite the exception (e.g. the connection dropped
-                // after the starter command ran), so the key is authorised: a stale unanswered
-                // marker here would wrongly suppress watchdog recovery after a later crash.
-                AdbAuthWait.clearUnanswered()
+                // A server is up despite the exception (e.g. the connection dropped after the
+                // starter command ran). That does not show the key was accepted, so the
+                // unanswered marker is left to AdbClient, which clears it on acceptance.
                 return Result.success()
             } else {
                 // After repeated mDNS timeouts, suggest TCP Mode — the device may be

@@ -63,6 +63,7 @@ internal object StartNotificationState {
         waitHeld: Boolean,
         unmeteredAvailable: Boolean,
         unanswered: Boolean,
+        serverRunning: Boolean = false,
     ): Display {
         if (prompt != null) return prompt
         if (works == null) return Display.Unknown
@@ -88,7 +89,9 @@ internal object StartNotificationState {
             return Display.Pending(reason)
         }
         // While a wait is held the dialog is still up: not yet "not answered".
-        return if (unanswered && !waitHeld) Display.Unanswered else Display.None
+        // Nor is it news while a server is running: nothing needs starting. The marker itself
+        // stays and still stops unattended starts once that server is gone.
+        return if (unanswered && !waitHeld && !serverRunning) Display.Unanswered else Display.None
     }
 
     enum class Enqueue {

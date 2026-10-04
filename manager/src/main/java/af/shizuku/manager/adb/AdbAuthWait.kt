@@ -87,7 +87,7 @@ object AdbAuthWait {
 
     @Synchronized
     fun markUnanswered(): Boolean {
-        runCatching { ShizukuSettings.getPreferences().edit().putLong(PREF_UNANSWERED_AT, System.currentTimeMillis()).apply() }
+        runCatching { ShizukuSettings.getPreferences().edit().putLong(PREF_UNANSWERED_AT, System.currentTimeMillis()).commit() }
         ShizukuReceiverStarter.refreshNotification()
         return true
     }

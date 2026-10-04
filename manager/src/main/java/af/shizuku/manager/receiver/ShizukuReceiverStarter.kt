@@ -443,6 +443,7 @@ object ShizukuReceiverStarter {
                 waitHeld = AdbAuthWait.isWaiting(),
                 unmeteredAvailable = unmeteredAvailable(app),
                 unanswered = AdbAuthWait.isUnansweredNoticeDue(),
+                serverRunning = ShizukuStateMachine.isRunning(),
             )
         if (display == Display.Unknown) return
         runCatching {

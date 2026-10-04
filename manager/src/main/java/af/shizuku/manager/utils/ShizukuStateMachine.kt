@@ -55,12 +55,11 @@ object ShizukuStateMachine {
                         category = "shizuku.service"
                     },
                 )
-                // A live binder means a server started, however it was launched (including the
-                // external `adb shell` command path that never goes through AdbStarter), so the
-                // key question the unanswered marker answers is settled: clear it, or a stale
-                // marker from an earlier failed attempt would suppress watchdog recovery after
-                // a later crash.
-                runCatching { af.shizuku.manager.adb.AdbAuthWait.clearUnanswered() }
+                // A live binder does not say this manager's ADB key was accepted (the server may
+                // have been started as root, from a computer, or before the key was revoked), so
+                // the unanswered marker stays: it is cleared where adbd accepts the key
+                // (AdbClient) and by explicit starts. Its notice is hidden while a server runs.
+                runCatching { af.shizuku.manager.receiver.ShizukuReceiverStarter.refreshNotification() }
                 set(State.RUNNING)
             },
         )
