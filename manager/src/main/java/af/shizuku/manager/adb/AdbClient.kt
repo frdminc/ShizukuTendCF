@@ -141,7 +141,8 @@ class AdbClient(
             // other way this wait can end (the deadline, a rejection, a dropped connection, the
             // worker being stopped or cancelled, this process dying) leaves the marker that stops
             // unattended starts from offering the key again. Whoever offered it, worker or not.
-            AdbAuthWait.markUnanswered()
+            // An offer that cannot be recorded is not made.
+            check(AdbAuthWait.markUnanswered()) { "the pending authorisation could not be recorded" }
             write(A_AUTH, ADB_AUTH_RSAPUBLICKEY, 0, key.adbPublicKey)
             runCatching { onAuthorizationPending?.invoke() }
             s.soTimeout = AdbAuthWait.TIMEOUT_MS

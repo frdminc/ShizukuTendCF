@@ -58,8 +58,9 @@ object ShizukuStateMachine {
                 // A live binder does not say this manager's ADB key was accepted (the server may
                 // have been started as root, from a computer, or before the key was revoked), so
                 // the unanswered marker stays: it is cleared where adbd accepts the key
-                // (AdbClient) and by explicit starts. Its notice is hidden while a server runs.
-                runCatching { af.shizuku.manager.receiver.ShizukuReceiverStarter.refreshNotification() }
+                // (AdbClient) and by explicit starts. Its notice is hidden while a server runs;
+                // the start notification follows this state machine's flow, so it comes back
+                // when the server stops.
                 set(State.RUNNING)
             },
         )

@@ -87,12 +87,17 @@ object AdbAuthWait {
 
     @Synchronized
     fun markUnanswered(): Boolean {
-        runCatching { ShizukuSettings.getPreferences().edit().putLong(PREF_UNANSWERED_AT, System.currentTimeMillis()).commit() }
+        val written =
+            runCatching { ShizukuSettings.getPreferences().edit().putLong(PREF_UNANSWERED_AT, System.currentTimeMillis()).commit() }
+                .getOrDefault(false)
         ShizukuReceiverStarter.refreshNotification()
-        return true
+        return written
     }
 
-    internal fun unansweredStamp(): Long = runCatching { ShizukuSettings.getPreferences().getLong(PREF_UNANSWERED_AT, 0L) }.getOrDefault(0L)
+    // 0 means no marker. Storage that cannot be read counts as a marker newer than any request,
+    // so the guards that compare against it refuse rather than offer the key unrecorded.
+    internal fun unansweredStamp(): Long =
+        runCatching { ShizukuSettings.getPreferences().getLong(PREF_UNANSWERED_AT, 0L) }.getOrDefault(Long.MAX_VALUE)
 
     @Synchronized
     fun clearUnanswered() {

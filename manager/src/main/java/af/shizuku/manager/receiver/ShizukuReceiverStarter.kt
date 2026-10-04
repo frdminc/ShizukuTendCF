@@ -94,6 +94,7 @@ object ShizukuReceiverStarter {
         // the notification's "Attempt now").
         if (!forceStart && ShizukuSettings.getLastLaunchMode() != LaunchMethod.ROOT && AdbAuthWait.isUnanswered()) {
             Timber.tag(AppConstants.TAG).i("Start skipped: adbd authorisation dialog went unanswered; waiting for an explicit start")
+            refreshNotification(context)
             return
         }
 
@@ -421,6 +422,13 @@ object ShizukuReceiverStarter {
                     Timber.tag(TAG).w(it, "cannot follow the start work yet")
                     return
                 }
+        // The notice is hidden while a server runs, so it must be re-rendered when one arrives
+        // and, above all, when it dies: the marker then stops the watchdog, and the notice with
+        // "Attempt now" is the user's way to start again.
+        scope.launch {
+            runCatching { ShizukuStateMachine.asFlow().collect { refreshNotification(app) } }
+                .onFailure { Timber.tag(TAG).w(it, "stopped following the service state") }
+        }
         scope.launch {
             flow
                 .catch { Timber.tag(TAG).w(it, "stopped following the start work") }
