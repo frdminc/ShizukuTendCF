@@ -99,7 +99,7 @@ object ShizukuReceiverStarter {
         }
 
         if (ShizukuSettings.getLastLaunchMode() == LaunchMethod.ROOT) {
-            rootStart(context)
+            rootStart()
         } else if (ShizukuSettings.getLastLaunchMode() == LaunchMethod.ADB) {
             if (context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
                 AdbStartWorker.enqueue(context, explicit = forceStart)
@@ -531,7 +531,11 @@ object ShizukuReceiverStarter {
             cm != null && cm.activeNetwork != null && !cm.isActiveNetworkMetered
         }.getOrDefault(false)
 
-    private fun rootStart(context: Context) {
+    // Counted as start work, so update() keeps its STARTING and the upgrade replacement sees a start
+    // in flight; neither trusts a bare STARTING.
+    private fun rootStart() = AdbAuthWait.starts.track { startAsRoot() }
+
+    private fun startAsRoot() {
         Sentry.addBreadcrumb(Breadcrumb("Background Root start initiated").apply { category = "shizuku.starter" })
         if (!Shell.getShell().isRoot) {
             Sentry.addBreadcrumb(
@@ -575,9 +579,10 @@ object ShizukuReceiverStarter {
     }
 
     /** Clears a stuck STARTING state after a failed start attempt, then re-detects: if a previous
-     *  server instance is actually still alive, update() flips the state back to RUNNING. */
+     *  server instance is actually still alive, update() flips the state back to RUNNING.
+     *  CRASHED, not STOPPED: STOPPED is a deliberate stop, which the watchdog respects. */
     private fun recoverFromFailedStart() {
-        ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
+        ShizukuStateMachine.set(ShizukuStateMachine.State.CRASHED)
         ShizukuStateMachine.update()
     }
 

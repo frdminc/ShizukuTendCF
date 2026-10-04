@@ -39,6 +39,9 @@ class AdbClient(
     /** Called once, right after the public key was offered to adbd and the connection starts
      *  waiting for the user to accept the "Allow USB debugging?" dialog. */
     private val onAuthorizationPending: (() -> Unit)? = null,
+    /** False: never send the public key, so adbd has nothing to raise its dialog for; a key it
+     *  does not already accept fails [connect] with [AdbKeyNotAcceptedException] instead. */
+    private val offerKey: Boolean = true,
 ) : Closeable {
     @Volatile
     private var socket: Socket? = null
@@ -102,6 +105,7 @@ class AdbClient(
 
                 message = read()
                 if (message.command != A_CNXN) {
+                    if (!offerKey) throw AdbKeyNotAcceptedException("adbd does not accept this app's key without authorisation")
                     message = offerKeyAndAwaitAuthorization(s)
                 }
             }
@@ -299,3 +303,8 @@ class AdbClient(
         }
     }
 }
+
+/** adbd rejected the key's signature and the client was told not to offer the key itself. */
+class AdbKeyNotAcceptedException(
+    message: String,
+) : java.io.IOException(message)

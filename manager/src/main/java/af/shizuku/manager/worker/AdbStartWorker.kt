@@ -309,8 +309,12 @@ class AdbStartWorker(
             // Retrying (WorkManager backoff) would open a new connection and raise a new dialog.
             // Stop here; the notification's "Attempt now" or the next explicit start tries again.
             timber.log.Timber.tag("AdbStartWorker").w(e, "doWork: authorisation dialog not answered, not retrying")
-            if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
-                ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
+            // This start failed and nothing retries it: CRASHED, which the watchdog answers under
+            // its backoff and withholds while the marker below stands. STOPPING is this start's
+            // own, from stopTcp. STOPPED would read as a deliberate stop.
+            val state = ShizukuStateMachine.get()
+            if (state == ShizukuStateMachine.State.STARTING || state == ShizukuStateMachine.State.STOPPING) {
+                ShizukuStateMachine.set(ShizukuStateMachine.State.CRASHED)
             }
             // The marker was recorded when the key was offered (AdbClient) and stays: a server
             // that happens to be running did not come from this offer, and its key is still
@@ -340,6 +344,8 @@ class AdbStartWorker(
             // Reset STARTING → STOPPED so update() can re-detect the real state.
             // Without this, update() perpetually preserves STARTING (binder never
             // arrived) and every subsequent button click shows "already starting".
+            // Not CRASHED: this path always ends in a success or Result.retry(), so the start
+            // is still in flight, and a watchdog start would REPLACE the queued retry.
             if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
                 ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
             }

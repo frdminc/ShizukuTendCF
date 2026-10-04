@@ -425,6 +425,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- Not part of BootCompleteReceiver: the start-on-boot toggle disables that component,
+             and an upgrade must replace a server still running the old build either way. -->
+        <receiver
+            android:name=".receiver.PackageReplacedReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".receiver.WatchdogAlarmReceiver"
             android:enabled="true"

@@ -34,7 +34,6 @@ object ShizukuStateMachine {
     private val startingTimestamp =
         java.util.concurrent.atomic
             .AtomicLong(0L)
-    private const val STARTING_TIMEOUT_MS = 90_000L
 
     private fun loadPersistedSettledState(): State =
         try {
@@ -220,11 +219,16 @@ object ShizukuStateMachine {
                 isAlive -> State.RUNNING
                 currentState == State.STARTING -> {
                     // Break out of STARTING after 90 s so a failed start (server process died,
-                    // ADB connection refused, etc.) never leaves the UI permanently locked.
+                    // ADB connection refused, etc.) never leaves the UI permanently locked, and
+                    // as CRASHED, so the watchdog treats the failed start as it treats a crash.
                     val elapsed = System.currentTimeMillis() - startingTimestamp.get()
-                    // A start waiting on adbd's authorisation dialog is still in progress; calling
-                    // it STOPPED would invite a second start, and with it a second dialog.
-                    if (elapsed > STARTING_TIMEOUT_MS && !af.shizuku.manager.adb.AdbAuthWait.isWaiting()) State.STOPPED else State.STARTING
+                    // A start waiting on adbd's authorisation dialog, or still running, is in
+                    // progress; ending it here would invite a second start, and a second dialog.
+                    af.shizuku.manager.service.WatchdogPolicy.staleStarting(
+                        elapsedMs = elapsed,
+                        authWaitHeld = af.shizuku.manager.adb.AdbAuthWait.isWaiting(),
+                        startsRunning = af.shizuku.manager.adb.AdbAuthWait.starts.state.value.running,
+                    )
                 }
                 currentState == State.STOPPING -> State.STOPPING
                 currentState == State.CRASHED -> State.CRASHED

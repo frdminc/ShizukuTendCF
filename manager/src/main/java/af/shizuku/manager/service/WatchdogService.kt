@@ -89,35 +89,44 @@ class WatchdogService : Service() {
         job =
             scope.launch {
                 ShizukuStateMachine.asFlow().collectLatest { state ->
-                    if (state == ShizukuStateMachine.State.CRASHED) {
-                        val now = System.currentTimeMillis()
+                    if (WatchdogPolicy.restarts(state)) {
+                        // CRASHED includes a start that failed, which can come back within the
+                        // cooldown: wait it out rather than drop it. collectLatest cancels the
+                        // wait on any state change, so the restart below only follows a CRASHED
+                        // that lasted the whole cooldown.
                         val cooldown = backoffMs(consecutiveCrashes)
-                        if (now - lastRestartMs > cooldown) {
-                            consecutiveCrashes++
-                            lastRestartMs = now
-                            // An unanswered authorisation dialog stops unattended ADB starts, so
-                            // start() below will do nothing: do not announce a restart that is
-                            // not going to happen. The "not answered" notice, with "Attempt
-                            // now", is what the user sees instead.
-                            val withheld =
-                                ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ADB &&
-                                    af.shizuku.manager.adb.AdbAuthWait.isUnanswered()
-                            if (withheld) {
-                                ManagerActivityLog.log(
-                                    applicationContext,
-                                    "Watchdog: crash #$consecutiveCrashes, restart withheld until an explicit start (authorisation dialog unanswered)",
-                                )
-                            } else {
-                                showCrashNotification()
-                                ManagerActivityLog.log(applicationContext, "Watchdog: restarting after crash #$consecutiveCrashes")
-                            }
-                            ShizukuReceiverStarter.start(applicationContext)
-                            Timber.tag(TAG).d("Watchdog: restart #$consecutiveCrashes (cooldown was ${cooldown}ms)")
-                        } else {
-                            Timber.tag(TAG).d("Watchdog: restart suppressed (cooldown active, ${now - lastRestartMs}ms / ${cooldown}ms)")
+                        val wait = WatchdogPolicy.cooldownRemainingMs(System.currentTimeMillis(), lastRestartMs, consecutiveCrashes)
+                        if (wait > 0) {
+                            Timber.tag(TAG).d("Watchdog: restart deferred %dms (cooldown %dms)", wait, cooldown)
+                            delay(wait)
                         }
+                        consecutiveCrashes++
+                        lastRestartMs = System.currentTimeMillis()
+                        // An unanswered authorisation dialog stops unattended ADB starts, so
+                        // start() below will do nothing: do not announce a restart that is
+                        // not going to happen. The "not answered" notice, with "Attempt
+                        // now", is what the user sees instead.
+                        val withheld =
+                            WatchdogPolicy.restartWithheld(
+                                adbMode = ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ADB,
+                                unanswered = af.shizuku.manager.adb.AdbAuthWait.isUnanswered(),
+                            )
+                        if (withheld) {
+                            ManagerActivityLog.log(
+                                applicationContext,
+                                "Watchdog: crash #$consecutiveCrashes, restart withheld until an explicit start (authorisation dialog unanswered)",
+                            )
+                        } else {
+                            showCrashNotification()
+                            ManagerActivityLog.log(applicationContext, "Watchdog: restarting after crash #$consecutiveCrashes")
+                        }
+                        ShizukuReceiverStarter.start(applicationContext)
+                        Timber.tag(TAG).d("Watchdog: restart #$consecutiveCrashes (cooldown was ${cooldown}ms)")
                     } else if (state == ShizukuStateMachine.State.RUNNING) {
-                        // Reset backoff counter once service is confirmed stable
+                        // Reset backoff counter once service is confirmed stable: a server that
+                        // dies within STABLE_MS keeps the backoff growing, so a start that comes
+                        // up and dies again cannot restart faster than the backoff.
+                        delay(WatchdogPolicy.STABLE_MS)
                         consecutiveCrashes = 0
                     }
                 }
@@ -272,12 +281,9 @@ class WatchdogService : Service() {
         const val WATCHDOG_CHANNEL_ID = "shizuku_watchdog"
         const val CRASH_CHANNEL_ID = "crash_reports"
 
-        private const val BASE_COOLDOWN_MS = 5_000L
-        private const val MAX_COOLDOWN_MS = 300_000L // 5 min cap
         private val isRunning = AtomicBoolean(false)
 
-        fun backoffMs(crashes: Int): Long =
-            minOf(BASE_COOLDOWN_MS * (1L shl crashes.coerceAtMost(10)), MAX_COOLDOWN_MS)
+        fun backoffMs(crashes: Int): Long = WatchdogPolicy.backoffMs(crashes)
 
         @JvmStatic
         fun start(context: Context) {
