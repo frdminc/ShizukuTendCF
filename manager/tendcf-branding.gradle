@@ -6,12 +6,15 @@ import javax.xml.parsers.DocumentBuilderFactory
 // resource overlay, so the upstream strings.xml files (and their translations)
 // stay byte-identical and rebasing on ShizukuPlus does not conflict on them.
 
-// Add "dropin" here to rebrand the Drop-In flavor too.
-def tendcfBrandedFlavors = ["shizukuplus"]
+// Drop-In keeps "Shizuku" as its launcher name (app_name resValue) for drop-in
+// compatibility; only its in-app text names the fork.
+def tendcfBrandedFlavors = ["shizukuplus", "dropin"]
 
-// translation_url points at upstream's repo. The "Shizuku+ Enhanced API" brand
-// is kept until its owner decides otherwise.
-def tendcfKeptStrings = ["translation_url", "settings_enhanced_api", "app_management_item_summary_requires_plus"]
+// translation_url points at upstream's repo.
+def tendcfKeptStrings = ["translation_url"]
+
+// Untranslatable strings replaced outright (default locale only).
+def tendcfOverrides = [support_email: "djbclark@gmail.com"]
 
 abstract class TendcfBrandingTask extends DefaultTask {
     // Comments are matched so that commented-out elements are skipped, not copied.
@@ -19,8 +22,10 @@ abstract class TendcfBrandingTask extends DefaultTask {
     private static final Pattern NAME = ~/\bname\s*=\s*"([^"]*)"/
     private static final Pattern NAMESPACE = ~/\bxmlns:\w+\s*=\s*"[^"]*"/
     private static final Pattern URL = ~/[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s<>"']+/
-    // ShizukuPlusAPI and similar identifiers are API names, not the app's name.
-    private static final Pattern OLD_NAME = ~/Shizuku\+|ShizukuPlus(?![A-Za-z0-9_])/
+    // The app is renamed; the API third-party apps target is not (package
+    // af.shizuku.plus.api, class ShizukuPlusAPI), so "Shizuku+ API" and
+    // "Shizuku+ Enhanced API" keep upstream's name.
+    private static final Pattern OLD_NAME = ~/Shizuku\+(?! (?:Enhanced )?API)|ShizukuPlus(?![A-Za-z0-9_])/
 
     @InputFiles
     @PathSensitive(PathSensitivity.RELATIVE)
@@ -31,6 +36,9 @@ abstract class TendcfBrandingTask extends DefaultTask {
 
     @Input
     abstract Property<String> getNewName()
+
+    @Input
+    abstract MapProperty<String, String> getOverrides()
 
     @OutputDirectory
     abstract DirectoryProperty getOutputDir()
@@ -64,6 +72,11 @@ abstract class TendcfBrandingTask extends DefaultTask {
                     if (body != m.group(3)) {
                         elements << "<${m.group(1)}${m.group(2)}>${body}</${m.group(1)}>"
                     }
+                }
+            }
+            if (qualifier == "values") {
+                overrides.get().each { name, value ->
+                    elements << "<string name=\"${name}\" translatable=\"false\">${value}</string>"
                 }
             }
             if (elements.isEmpty()) return
@@ -107,6 +120,7 @@ androidComponents {
             })
             keptStrings.addAll(tendcfKeptStrings)
             newName.set("ShizukuTendCF")
+            overrides.putAll(tendcfOverrides)
         }
         // AGP places the output under build/generated/ and makes merge<Variant>Resources depend on it.
         variant.sources.res?.addGeneratedSourceDirectory(task) { it.outputDir }

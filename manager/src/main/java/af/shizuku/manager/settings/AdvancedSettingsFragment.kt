@@ -35,7 +35,7 @@ class AdvancedSettingsFragment : BaseSettingsFragment() {
         findPreference<Preference>("update_app_database")?.setOnPreferenceClickListener {
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    val url = java.net.URL("https://raw.githubusercontent.com/thejaustin/ShizukuPlus/master/database/apps.json")
+                    val url = java.net.URL("https://raw.githubusercontent.com/frdminc/ShizukuTendCF/master/database/apps.json")
                     val connection = url.openConnection() as java.net.HttpURLConnection
                     val content =
                         try {
