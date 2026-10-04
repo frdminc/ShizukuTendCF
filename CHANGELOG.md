@@ -7,6 +7,11 @@ All notable changes to ShizukuPlus are documented here. See [AI_ATTRIBUTIONS.md]
 ### 🔒 Security
 - **Root mode now asks before granting Shizuku access, exactly like ADB mode** — since ShizukuPlus e3b2f7f2 the server marked every app that attached as allowed whenever it ran as root (uid 0), so in root mode any installed app that bundled the Shizuku client got full privileged access with no dialog. That auto-grant is removed: an app with no grant now gets the usual permission dialog when it requests access, and Deny works as in ADB mode. **Behaviour change for root users:** apps that only ever had the silent root grant (it was never saved) will show the permission dialog once after updating; grants you already approved in the dialog, grants held as the Shizuku runtime permission, and apps covered by the trusted signer allowlist keep working without a new prompt. Same fix as SnakyGD/ShizukuPlus-RootConsent.
 
+### 🐛 Bug Fixes
+
+#### Server / Binder
+- **Fixed manual `pm revoke` being silently overridden on every server restart** — `migratePermissionGrants()` was designed as a one-time backfill for apps that had a ConfigManager authorization entry but no OS-level runtime permission grant (a side-effect of a silent bug in versions prior to 2026-07-19). Running it unconditionally on startup meant that any permission manually revoked with `pm revoke <pkg> af.shizuku.plus.permission.API_V23` was re-granted moments later when the server started. The migration is now gated by a `permGrantMigrationDone` flag persisted in `shizuku.json`; it runs exactly once, marks the flag, and skips on all subsequent starts. New grants continue to be issued at connect time in `attachApplication`. ([#568](https://github.com/thejaustin/ShizukuPlus/issues/568))
+
 ---
 
 ## [v13.7.0.r2737 — Stable Release]
