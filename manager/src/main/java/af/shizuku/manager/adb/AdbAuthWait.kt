@@ -69,12 +69,15 @@ object AdbAuthWait {
     private const val PREF_UNANSWERED_DISMISSED = "adb_auth_unanswered_dismissed"
 
     /**
-     * Set when a background start ended because the dialog was not accepted. The boot retry loop
-     * and background (non-forced) starts stop while it is set, so an unattended device gets one
-     * dialog per boot or explicit start rather than one per retry. Cleared by a successful start,
-     * at the start of each boot's loop, and by explicit start paths (headless, token-authenticated
-     * broadcast, the notification's "Attempt now"). While set, and not dismissed, it is also the
-     * shared start notification's "not answered" notice, so every clear removes that notice.
+     * Set just before this manager's ADB key is offered (AdbClient) and cleared only when adbd
+     * accepts it, so it stands for "a key offer has not been accepted", however that wait ended.
+     * The boot retry loop, every background (non-forced) start and a plain headless start stop
+     * while it is set, so an unattended device gets one dialog per boot or explicit start rather
+     * than one per retry. Besides acceptance it is cleared at BOOT_COMPLETED, by the
+     * notification's "Attempt now", by the token-authenticated start broadcast, and by a headless
+     * start sent with --ez force true. A running server does not clear it. While set, not
+     * dismissed, no wait held and no server running, it is also the shared start notification's
+     * "not answered" notice.
      */
     fun isUnanswered(): Boolean = runCatching { ShizukuSettings.getPreferences().contains(PREF_UNANSWERED_AT) }.getOrDefault(false)
 

@@ -57,6 +57,22 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                     return
                 }
                 val launchMode = ShizukuSettings.getLastLaunchMode()
+                // Decided before anything is changed on the device (wireless debugging below).
+                // One dialog per boot or explicit start. This broadcast is sent by people and by
+                // unattended repair loops alike, and a loop that finds the server down every few
+                // minutes would otherwise raise a fresh dialog on each pass. So a plain request
+                // respects an unanswered dialog, and only one that says so (--ez force true, for
+                // an operator who is at the device) clears it and may raise a new one.
+                if (launchMode != LaunchMethod.ROOT && AdbAuthWait.isUnanswered()) {
+                    if (!intent.getBooleanExtra(EXTRA_FORCE, false)) {
+                        HeadlessLogger.w("Start", "Withheld: the adbd authorisation dialog went unanswered; send --ez $EXTRA_FORCE true or tap Attempt now")
+                        ShizukuReceiverStarter.refreshNotification(context)
+                        setResult(RESULT_AUTH_UNANSWERED, "AUTH_UNANSWERED", null)
+                        return
+                    }
+                    HeadlessLogger.i("Start", "Forced: clearing the unanswered authorisation marker")
+                    AdbAuthWait.clearUnanswered()
+                }
                 if (launchMode == LaunchMethod.ROOT) {
                     HeadlessLogger.i("Start", "Launch mode=ROOT, delegating to ShizukuReceiverStarter")
                 } else {
@@ -72,21 +88,6 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                         ShizukuSettings.setLastLaunchMode(LaunchMethod.ADB)
                     }
                     HeadlessLogger.i("Start", "Starting via ADB (TCP port ${ShizukuSettings.getTcpPort()})")
-                }
-                // One dialog per boot or explicit start. This broadcast is sent by people and by
-                // unattended repair loops alike, and a loop that finds the server down every few
-                // minutes would otherwise raise a fresh dialog on each pass. So a plain request
-                // respects an unanswered dialog, and only one that says so (--ez force true, for
-                // an operator who is at the device) clears it and may raise a new one.
-                if (launchMode != LaunchMethod.ROOT && AdbAuthWait.isUnanswered()) {
-                    if (!intent.getBooleanExtra(EXTRA_FORCE, false)) {
-                        HeadlessLogger.w("Start", "Withheld: the adbd authorisation dialog went unanswered; send --ez $EXTRA_FORCE true or tap Attempt now")
-                        ShizukuReceiverStarter.refreshNotification(context)
-                        setResult(RESULT_AUTH_UNANSWERED, "AUTH_UNANSWERED", null)
-                        return
-                    }
-                    HeadlessLogger.i("Start", "Forced: clearing the unanswered authorisation marker")
-                    AdbAuthWait.clearUnanswered()
                 }
                 ShizukuReceiverStarter.start(context)
                 setResult(0, "STARTING", null)
