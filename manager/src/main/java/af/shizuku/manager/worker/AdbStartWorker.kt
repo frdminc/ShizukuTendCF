@@ -61,8 +61,10 @@ class AdbStartWorker(
             // stops at any unanswered marker. An explicit one may pass a marker that was already
             // there when it was made (the user asked in spite of it) and keeps that right across
             // retries, but stops at a newer one: its own dialog, or a later one, went unanswered.
-            if (AdbAuthWait.isUnanswered() &&
-                (!inputData.getBoolean(KEY_EXPLICIT, false) || AdbAuthWait.unansweredStamp() > inputData.getLong(KEY_REQUESTED_AT, 0L))
+            // Read once: 0 means no marker.
+            val unansweredAt = AdbAuthWait.unansweredStamp()
+            if (unansweredAt != 0L &&
+                (!inputData.getBoolean(KEY_EXPLICIT, false) || unansweredAt > inputData.getLong(KEY_REQUESTED_AT, 0L))
             ) {
                 throw AdbAuthPendingException("the adbd authorisation dialog went unanswered; waiting for an explicit start")
             }
@@ -312,12 +314,9 @@ class AdbStartWorker(
             if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
                 ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
             }
-            // Don't let a stale failed attempt suppress future background starts when a server
-            // is in fact running (some other start succeeded while this one waited). The marker
-            // is also the "not answered" notice, so a timeout that lost to a success shows none.
-            if (ShizukuStateMachine.update() != ShizukuStateMachine.State.RUNNING) {
-                AdbAuthWait.markUnanswered()
-            }
+            // The marker was recorded when the key was offered (AdbClient) and stays: a server
+            // that happens to be running did not come from this offer, and its key is still
+            // not authorised.
             return Result.failure()
         } catch (e: Exception) {
             timber.log.Timber

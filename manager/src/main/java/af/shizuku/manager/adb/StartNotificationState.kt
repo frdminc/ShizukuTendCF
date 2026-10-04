@@ -87,7 +87,8 @@ internal object StartNotificationState {
                 }
             return Display.Pending(reason)
         }
-        return if (unanswered) Display.Unanswered else Display.None
+        // While a wait is held the dialog is still up: not yet "not answered".
+        return if (unanswered && !waitHeld) Display.Unanswered else Display.None
     }
 
     enum class Enqueue {

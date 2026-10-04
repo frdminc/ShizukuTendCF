@@ -137,6 +137,11 @@ class AdbClient(
             // soTimeout bounds each read call, not the whole wait, so a peer trickling bytes could
             // hold the connection (and the process-wide gate) open. Close the socket at a deadline.
             deadline = Timer("adb-auth-deadline", true)
+            // Recorded before the key goes out and removed only when adbd accepts it, so every
+            // other way this wait can end (the deadline, a rejection, a dropped connection, the
+            // worker being stopped or cancelled, this process dying) leaves the marker that stops
+            // unattended starts from offering the key again. Whoever offered it, worker or not.
+            AdbAuthWait.markUnanswered()
             write(A_AUTH, ADB_AUTH_RSAPUBLICKEY, 0, key.adbPublicKey)
             runCatching { onAuthorizationPending?.invoke() }
             s.soTimeout = AdbAuthWait.TIMEOUT_MS
@@ -151,6 +156,7 @@ class AdbClient(
             )
             val message = read()
             if (message.command != A_CNXN) error("not A_CNXN")
+            AdbAuthWait.clearUnanswered()
             return message
         } catch (e: Exception) {
             throw if (deadlineHit.get() || e is java.net.SocketTimeoutException) {
