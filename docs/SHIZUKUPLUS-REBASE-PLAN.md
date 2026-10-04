@@ -243,6 +243,34 @@ Adversary text for a PR body, verbatim from `adversary-fleet-verdict3.md`:
 - **`frdminc/Shizuku-API` archived on GitHub** (superseded by the thejaustin/ShizukuPlus-API submodule).
   No local checkout existed under `~/src`, so there was nothing to register with `~/src/justfile`.
 
+## User-visible naming: ShizukuTendCF everywhere, with deliberate exceptions (2026-10-04)
+
+Owner decision: every user-visible string names the app **ShizukuTendCF**, in both flavours. It is
+done at build time by `manager/tendcf-branding.gradle`, which overlays renamed copies of
+`values*/strings.xml`, `strings_companion.xml` and the fork's `strings_fork.xml`, so upstream's
+translated files stay untouched. It renames `Shizuku+` and `ShizukuPlus`, and since 2026-10-04 a bare
+`Shizuku` too. Text built in Kotlin goes through a string resource so the overlay reaches it: the
+manager's own activity-log entries use `ManagerActivityLog` (resource `activity_log_self_name`).
+
+Deliberate exceptions. Anything that says "Shizuku" and is not covered here was missed:
+
+1. The Drop-In flavour's launcher label stays `Shizuku` (`app_name` resValue in `manager/build.gradle`),
+   for drop-in compatibility. Its in-app text names ShizukuTendCF.
+2. `Shizuku+ API` and `Shizuku+ Enhanced API` stay, as does every identifier third-party apps target:
+   package names, permission names, class names, intent actions, provider authorities.
+3. URLs keep their spelling.
+4. The original Shizuku project as a third party stays: stock Shizuku, the original server, "an enhanced
+   Shizuku", the legacy and modern Shizuku API generations, Sui replacing Shizuku.
+5. The Shizuku API and the "Shizuku permission" that client apps request stay ("apps that don't support
+   Shizuku", "Shizuku API calls", "Grant Shizuku permission").
+6. Log tags, Sentry tags, User-Agent strings, file names and anything else not shown to a user stay.
+7. Undecided, so unchanged for now: the labels Android shows for the API permission
+   (`permission_group_label`, `permission_label`, `permission_description` and their `_plus` forms) and
+   `dialog_requesting_legacy_message`, which uses "Shizuku" for both the legacy API and this app.
+
+Exceptions 4, 5 and 7 are string names in `tendcfBareKeptStrings`, so they hold in every locale; a new
+upstream string is renamed unless it is added there.
+
 ## Queued follow-ups (operator said "queue all", 2026-10-03)
 
 All are in base-inherited code; none blocks a release. Order is by value.

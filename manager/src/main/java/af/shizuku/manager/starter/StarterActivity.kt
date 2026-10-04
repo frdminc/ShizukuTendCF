@@ -6,9 +6,9 @@ import af.shizuku.manager.R
 import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.adb.AdbKeyException
 import af.shizuku.manager.adb.AdbStarter
-import af.shizuku.manager.database.ActivityLogManager
 import af.shizuku.manager.databinding.StarterActivityBinding
 import af.shizuku.manager.utils.HapticUtils
+import af.shizuku.manager.utils.ManagerActivityLog
 import af.shizuku.manager.utils.ShizukuStateMachine
 import android.app.Application
 import android.os.Bundle
@@ -345,7 +345,7 @@ class ViewModel(
                         if (cont.isActive) {
                             if (it.isSuccess) {
                                 ShizukuStateMachine.update()
-                                ActivityLogManager.log("Shizuku", appContext.packageName, "Service started via root")
+                                ManagerActivityLog.log(appContext, "Service started via root")
                                 cont.resume(Unit)
                             } else {
                                 cont.resumeWithException(Exception("Failed to start with root"))

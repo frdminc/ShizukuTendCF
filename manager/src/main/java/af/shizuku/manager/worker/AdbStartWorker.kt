@@ -10,11 +10,11 @@ import af.shizuku.manager.adb.AdbMdns
 import af.shizuku.manager.adb.AdbPortProber
 import af.shizuku.manager.adb.AdbStarter
 import af.shizuku.manager.adb.StartNotificationState
-import af.shizuku.manager.database.ActivityLogManager
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.settings.BugReportDialogActivity
 import af.shizuku.manager.starter.Starter
 import af.shizuku.manager.utils.EnvironmentUtils
+import af.shizuku.manager.utils.ManagerActivityLog
 import af.shizuku.manager.utils.ShizukuStateMachine
 import android.app.KeyguardManager
 import android.app.NotificationChannel
@@ -111,9 +111,8 @@ class AdbStartWorker(
                     if (AdbPortProber.isPortOpen(desiredPort, 600)) {
                         AdbStarter.startAdb(applicationContext, desiredPort)
                         Starter.waitForBinder()
-                        ActivityLogManager.log(
-                            "Shizuku",
-                            applicationContext.packageName,
+                        ManagerActivityLog.log(
+                            applicationContext,
                             "Service started via direct TCP port $desiredPort (no Wi-Fi required)",
                         )
                         return Result.success()
@@ -141,9 +140,8 @@ class AdbStartWorker(
                 if (AdbPortProber.isPortOpen(probePort, 400)) {
                     AdbStarter.startAdb(applicationContext, probePort)
                     Starter.waitForBinder()
-                    ActivityLogManager.log(
-                        "Shizuku",
-                        applicationContext.packageName,
+                    ManagerActivityLog.log(
+                        applicationContext,
                         "Service started via force_start_wadb TCP probe on port $probePort",
                     )
                     return Result.success()
@@ -287,7 +285,7 @@ class AdbStartWorker(
                 .i("doWork: resolved port %d, starting ADB client", port)
             AdbStarter.startAdb(applicationContext, port)
             Starter.waitForBinder()
-            ActivityLogManager.log("Shizuku", applicationContext.packageName, "Service started via background ADB worker on port $port")
+            ManagerActivityLog.log(applicationContext, "Service started via background ADB worker on port $port")
             timber.log.Timber
                 .tag("AdbStartWorker")
                 .i("doWork: Shizuku service successfully started and binder ready on port %d", port)

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork-only text that used to be hard-coded in Kotlin. Written with upstream's name, which
+     manager/tendcf-branding.gradle renames as it does in strings.xml. -->
+<resources>
+    <string name="activity_log_self_name" translatable="false">Shizuku</string>
+    <string name="live_activity_channel_name">Shizuku Live Status</string>
+    <string name="live_activity_channel_description">Shows live Shizuku activity</string>
+    <string name="live_activity_notification_title">Shizuku Active</string>
+</resources>

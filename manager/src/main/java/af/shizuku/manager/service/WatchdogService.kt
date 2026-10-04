@@ -3,8 +3,8 @@ package af.shizuku.manager.service
 import af.shizuku.manager.MainActivity
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
-import af.shizuku.manager.database.ActivityLogManager
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
+import af.shizuku.manager.utils.ManagerActivityLog
 import af.shizuku.manager.utils.SettingsPage
 import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.utils.StockShizukuCompat
@@ -103,14 +103,13 @@ class WatchdogService : Service() {
                                 ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ADB &&
                                     af.shizuku.manager.adb.AdbAuthWait.isUnanswered()
                             if (withheld) {
-                                ActivityLogManager.log(
-                                    "Shizuku",
-                                    applicationContext.packageName,
+                                ManagerActivityLog.log(
+                                    applicationContext,
                                     "Watchdog: crash #$consecutiveCrashes, restart withheld until an explicit start (authorisation dialog unanswered)",
                                 )
                             } else {
                                 showCrashNotification()
-                                ActivityLogManager.log("Shizuku", applicationContext.packageName, "Watchdog: restarting after crash #$consecutiveCrashes")
+                                ManagerActivityLog.log(applicationContext, "Watchdog: restarting after crash #$consecutiveCrashes")
                             }
                             ShizukuReceiverStarter.start(applicationContext)
                             Timber.tag(TAG).d("Watchdog: restart #$consecutiveCrashes (cooldown was ${cooldown}ms)")

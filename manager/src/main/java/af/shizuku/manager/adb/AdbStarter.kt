@@ -1,10 +1,10 @@
 package af.shizuku.manager.adb
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
-import af.shizuku.manager.database.ActivityLogManager
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.starter.Starter
 import af.shizuku.manager.utils.EnvironmentUtils
+import af.shizuku.manager.utils.ManagerActivityLog
 import af.shizuku.manager.utils.SettingsPage
 import af.shizuku.manager.utils.ShizukuStateMachine
 import android.Manifest.permission.WRITE_SECURE_SETTINGS
@@ -160,7 +160,7 @@ object AdbStarter {
                     }.onFailure { Timber.tag(TAG).w(it, "Failed to auto-elevate privileges on ADB start") }
                     ShizukuSettings.setLastPort(activePort)
                     AdbAuthWait.clearUnanswered()
-                    ActivityLogManager.log("Shizuku", context.packageName, "Service started via ADB on port $activePort")
+                    ManagerActivityLog.log(context, "Service started via ADB on port $activePort")
                     ShizukuStateMachine.update()
                     Timber.tag(TAG).i("Shizuku service started successfully via ADB on port %d", activePort)
                 }

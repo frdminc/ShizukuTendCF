@@ -167,9 +167,14 @@ object ShizukuReceiverStarter {
         ensureChannel(context)
         val cancelPendingIntent = cancelPendingIntent(context)
 
-        val attemptNowIntent = Intent(context, NotifAttemptReceiver::class.java)
+        // An activity, not a broadcast, so that tapping it collapses the shade and the dialog this
+        // start raises is not hidden behind it. Cancel raises nothing and stays a broadcast; the
+        // content tap already opens an activity.
+        val attemptNowIntent =
+            Intent(context, NotifAttemptActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
         val attemptNowPendingIntent =
-            PendingIntent.getBroadcast(
+            PendingIntent.getActivity(
                 context,
                 0,
                 attemptNowIntent,

@@ -13,6 +13,58 @@ def tendcfBrandedFlavors = ["shizukuplus", "dropin"]
 // translation_url points at upstream's repo.
 def tendcfKeptStrings = ["translation_url"]
 
+// A bare "Shizuku" names this app too, except in these strings, where every bare "Shizuku" means
+// the original project or the API and permission that third-party apps target. Kept by name so
+// the exception holds in every locale; "Shizuku+" in them is still renamed. The reasons are in
+// docs/SHIZUKUPLUS-REBASE-PLAN.md ("User-visible naming"); a string not listed here is renamed.
+def tendcfBareKeptStrings = [
+    // The original project, stock Shizuku, and the legacy/modern API generations.
+    "home_root_description",
+    "onboarding_welcome_desc",
+    "help_general_plus_summary",
+    "stock_shizuku_conflict_description",
+    "stock_shizuku_conflict_dialog_message",
+    "dialog_legacy_not_support_title",
+    "dialog_legacy_not_support_message",
+    "dialog_requesting_legacy_title",
+    "settings_main_nav_root_compat_summary",
+    "settings_root_category_stock_compat",
+    "settings_shadow_binder_hidden_packages_summary",
+    "settings_companion_mode_summary",
+    "settings_companion_fallback_summary",
+    "home_companion_title",
+    "home_companion_description",
+    "home_companion_not_installed",
+    "watchdog_open_stock_shizuku",
+    "settings_stealth_mode_summary",
+    "help_stealth_mode_detail",
+    "companion_conflict_title",
+    "companion_conflict_description",
+    "companion_disable_success",
+    "companion_disable_failure",
+    "compat_hub_missing_desc",
+    "compat_hub_install_signature_conflict",
+    // The Shizuku API and the "Shizuku permission" client apps request.
+    "home_learn_more_description",
+    "su_bridge_description",
+    "settings_enable_activity_log_summary",
+    "empty_state_description_activity_log_empty",
+    "home_app_management_empty",
+    "empty_state_description_no_apps",
+    "settings_lp_toggle_permission",
+    "accessibility_action_grant_permission",
+    "accessibility_action_revoke_permission",
+    // Undecided, so unchanged: permission labels the system shows for the API permission, and a
+    // dialog that means both the legacy API and this app.
+    "permission_group_label",
+    "permission_label",
+    "permission_description",
+    "permission_group_label_plus",
+    "permission_label_plus",
+    "permission_description_plus",
+    "dialog_requesting_legacy_message",
+]
+
 // Untranslatable strings replaced outright (default locale only).
 def tendcfOverrides = [support_email: "djbclark@gmail.com"]
 
@@ -26,6 +78,9 @@ abstract class TendcfBrandingTask extends DefaultTask {
     // af.shizuku.plus.api, class ShizukuPlusAPI), so "Shizuku+ API" and
     // "Shizuku+ Enhanced API" keep upstream's name.
     private static final Pattern OLD_NAME = ~/Shizuku\+(?! (?:Enhanced )?API)|ShizukuPlus(?![A-Za-z0-9_])/
+    // Lookarounds rather than \b: a translation may run a letter straight on ("Shizukuを"), and
+    // a dotted identifier (rikka.shizuku.Shizuku) is not a name.
+    private static final Pattern BARE_NAME = ~/(?<![A-Za-z0-9_.])Shizuku(?![A-Za-z0-9_+])/
 
     @InputFiles
     @PathSensitive(PathSensitivity.RELATIVE)
@@ -33,6 +88,9 @@ abstract class TendcfBrandingTask extends DefaultTask {
 
     @Input
     abstract SetProperty<String> getKeptStrings()
+
+    @Input
+    abstract SetProperty<String> getBareKeptStrings()
 
     @Input
     abstract Property<String> getNewName()
@@ -52,6 +110,7 @@ abstract class TendcfBrandingTask extends DefaultTask {
         sourceFiles.files.each { byQualifier.computeIfAbsent(it.parentFile.name) { [] } << it }
 
         def kept = keptStrings.get()
+        def bareKept = bareKeptStrings.get()
         def replacement = Matcher.quoteReplacement(newName.get())
         byQualifier.each { qualifier, files ->
             def namespaces = new LinkedHashSet<String>()
@@ -67,8 +126,9 @@ abstract class TendcfBrandingTask extends DefaultTask {
                 while (m.find()) {
                     if (m.group(1) == null) continue
                     def name = m.group(2) =~ NAME
-                    if (name.find() && name.group(1) in kept) continue
-                    def body = rebrand(m.group(3), replacement)
+                    def stringName = name.find() ? name.group(1) : null
+                    if (stringName in kept) continue
+                    def body = rebrand(m.group(3), replacement, !(stringName in bareKept))
                     if (body != m.group(3)) {
                         elements << "<${m.group(1)}${m.group(2)}>${body}</${m.group(1)}>"
                     }
@@ -97,17 +157,23 @@ ${elements.collect { "    ${it}" }.join("\n")}
     }
 
     // A URL keeps its old spelling, so links to upstream keep resolving.
-    static String rebrand(String body, String replacement) {
+    static String rebrand(String body, String replacement, boolean bare) {
         def result = new StringBuilder()
         def url = body =~ URL
         int last = 0
         while (url.find()) {
-            result << (body.substring(last, url.start()) =~ OLD_NAME).replaceAll(replacement)
+            result << rebrandText(body.substring(last, url.start()), replacement, bare)
             result << url.group()
             last = url.end()
         }
-        result << (body.substring(last) =~ OLD_NAME).replaceAll(replacement)
+        result << rebrandText(body.substring(last), replacement, bare)
         return result.toString()
+    }
+
+    // OLD_NAME first: its result, "ShizukuTendCF", is not a bare "Shizuku".
+    private static String rebrandText(String text, String replacement, boolean bare) {
+        def renamed = (text =~ OLD_NAME).replaceAll(replacement)
+        return bare ? (renamed =~ BARE_NAME).replaceAll(replacement) : renamed
     }
 }
 
@@ -116,9 +182,10 @@ androidComponents {
         if (!variant.productFlavors.any { it.second in tendcfBrandedFlavors }) return
         def task = tasks.register("generate${variant.name.capitalize()}TendcfBrandingRes", TendcfBrandingTask) {
             sourceFiles.from(fileTree("src/main/res") {
-                include "values*/strings.xml", "values*/strings_companion.xml"
+                include "values*/strings.xml", "values*/strings_companion.xml", "values*/strings_fork.xml"
             })
             keptStrings.addAll(tendcfKeptStrings)
+            bareKeptStrings.addAll(tendcfBareKeptStrings)
             newName.set("ShizukuTendCF")
             overrides.putAll(tendcfOverrides)
         }
