@@ -238,11 +238,11 @@ class HomeAdapter(
                     }
                 ID_START_WADB ->
                     if (isEditMode || (isPrimaryUser && (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R || EnvironmentUtils.getAdbTcpPort() > 0))) {
-                        addItem(startWadbCreator, null, id)
+                        addItem(startWadbCreator, status, id)
                     }
                 ID_START_ADB ->
                     if (isEditMode || isPrimaryUser) {
-                        addItem(StartAdbViewHolder.CREATOR, null, id)
+                        addItem(StartAdbViewHolder.CREATOR, status, id)
                     }
                 ID_AUTOMATION -> addItem(AutomationViewHolder.CREATOR, null, id)
                 ID_BACKUP ->

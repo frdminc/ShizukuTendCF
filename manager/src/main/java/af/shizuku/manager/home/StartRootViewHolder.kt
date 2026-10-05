@@ -110,16 +110,20 @@ class StartRootViewHolder(
             }
         }
 
-        val sb =
-            StringBuilder()
-                .append(
-                    context.getString(
+        val isSamsungMode =
+            af.shizuku.manager.ShizukuSettings
+                .isSamsungSystemUidEscalationEnabled() &&
+                !af.shizuku.manager.utils.EnvironmentUtils.isRooted()
+        binding.text1.text =
+            if (isSamsungMode) {
+                context.getString(R.string.home_root_description_samsung)
+            } else {
+                context
+                    .getString(
                         R.string.home_root_description,
                         "<b><a href=\"${Helps.SUI.get()}\">Sui</a></b>",
                         "Sui",
-                    ),
-                )
-
-        binding.text1.text = sb.toHtml(HtmlCompat.FROM_HTML_OPTION_TRIM_WHITESPACE)
+                    ).toHtml(HtmlCompat.FROM_HTML_OPTION_TRIM_WHITESPACE)
+            }
     }
 }
