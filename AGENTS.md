@@ -6,19 +6,15 @@ that apply to every agent regardless of vendor.
 
 ## Per-agent guides
 
-| Agent | File |
-|-------|------|
-| Claude Code | [`CLAUDE.md`](CLAUDE.md) |
-| Gemini | [`GEMINI.md`](GEMINI.md) |
-| Jules | [`JULES.md`](JULES.md) |
-
-Read the guide for the agent you are. They share most rules but the
-Claude file is the most fleshed-out — start there if your guide is sparse.
+`CLAUDE.md` and `GEMINI.md` are symlinks to this file, so every agent reads
+the same rules. Jules has its own setup notes in [`JULES.md`](JULES.md).
 
 ## Rules that apply to every agent
 
-1. **Never reintroduce the items in `CLAUDE.md` → "Critical Crash Rules"**.
-   Those each correspond to a real production crash.
+1. **Crash rules were never published.** Earlier versions of this file pointed
+   at "Critical Crash Rules" in a `CLAUDE.md` that was gitignored and never
+   committed, here or upstream. Before changing startup, binder or service
+   lifecycle code, read the git history of the file you touch for crash fixes.
 2. **The build target is `:manager:assembleRelease`** for verification.
    Debug builds skip Sentry symbol upload and are fine for fast iteration.
 3. **Do not edit `key.jks`, `signing.properties`, or files matching
