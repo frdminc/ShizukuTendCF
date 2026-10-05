@@ -55,4 +55,5 @@ dependencies {
     testImplementation libs.kotlinx.coroutines.test
     testImplementation libs.androidx.test.core
     testImplementation libs.room.testing
+    testRuntimeOnly libs.junit.vintage.engine
 }
