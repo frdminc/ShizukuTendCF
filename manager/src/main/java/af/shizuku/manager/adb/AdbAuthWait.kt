@@ -64,6 +64,11 @@ object AdbAuthWait {
 
     private const val PREF_UNANSWERED_AT = "adb_auth_unanswered_at"
 
+    // The wall clock the marker and start requests are stamped with; tests replace it to order
+    // stamps deterministically.
+    @Volatile
+    internal var clockMs: () -> Long = System::currentTimeMillis
+
     // The PREF_UNANSWERED_AT value whose notice the user dismissed. Durable, so a notice swiped
     // away (or cancelled) stays away across process restarts until a new dialog goes unanswered.
     private const val PREF_UNANSWERED_DISMISSED = "adb_auth_unanswered_dismissed"
@@ -91,7 +96,7 @@ object AdbAuthWait {
     @Synchronized
     fun markUnanswered(): Boolean {
         val written =
-            runCatching { ShizukuSettings.getPreferences().edit().putLong(PREF_UNANSWERED_AT, System.currentTimeMillis()).commit() }
+            runCatching { ShizukuSettings.getPreferences().edit().putLong(PREF_UNANSWERED_AT, clockMs()).commit() }
                 .getOrDefault(false)
         ShizukuReceiverStarter.refreshNotification()
         return written
@@ -113,6 +118,13 @@ object AdbAuthWait {
                 .apply()
         }
         ShizukuReceiverStarter.refreshNotification()
+    }
+
+    /** Tests only: the in-memory state a process death loses (the durable marker stays). */
+    internal fun resetForTesting() {
+        waiting.set(0)
+        heldPrompt = null
+        starts.resetForTesting()
     }
 
     /** The user dismissed the "not answered" notice; the marker itself, and its start guard, stay. */

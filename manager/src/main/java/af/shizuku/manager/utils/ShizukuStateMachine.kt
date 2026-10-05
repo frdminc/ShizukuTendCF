@@ -36,6 +36,12 @@ object ShizukuStateMachine {
             .AtomicLong(0L)
     private const val STARTING_TIMEOUT_MS = 90_000L
 
+    /** Tests only: what a new process would start from (the persisted settled state). */
+    internal fun resetForTesting() {
+        state.set(loadPersistedSettledState())
+        startingTimestamp.set(0L)
+    }
+
     private fun loadPersistedSettledState(): State =
         try {
             when (ShizukuSettings.getLastSettledState()) {

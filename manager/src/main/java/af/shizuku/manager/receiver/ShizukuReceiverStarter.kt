@@ -290,6 +290,22 @@ object ShizukuReceiverStarter {
     // Which unanswered marker the rendered notice names; a newer marker needs a new delete intent.
     private var renderedStamp = 0L
 
+    /** Tests only: the in-memory notification state a process death loses. */
+    internal fun resetForTesting() {
+        serial.submit {
+            rendered = null
+            renderedStamp = 0L
+        }.get()
+        refreshQueued.set(false)
+        awaitingUnlock.set(false)
+        observing.set(false)
+        knownContext = null
+    }
+
+    /** Tests only: waits until every render and enqueue decision queued so far has run. */
+    internal fun awaitIdleForTesting(timeoutMs: Long): Boolean =
+        runCatching { serial.submit {}.get(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) }.isSuccess
+
     private fun appContext(context: Context?): Context? =
         context?.applicationContext?.also { knownContext = it }
             ?: knownContext

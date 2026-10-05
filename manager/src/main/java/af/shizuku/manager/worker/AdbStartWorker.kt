@@ -487,7 +487,7 @@ class AdbStartWorker(
             val request =
                 OneTimeWorkRequestBuilder<AdbStartWorker>()
                     .setConstraints(cb.build())
-                    .setInputData(workDataOf(KEY_EXPLICIT to explicit, KEY_REQUESTED_AT to System.currentTimeMillis()))
+                    .setInputData(workDataOf(KEY_EXPLICIT to explicit, KEY_REQUESTED_AT to AdbAuthWait.clockMs()))
                     .build()
             ShizukuReceiverStarter.enqueueStart(context, request, explicit)
         }

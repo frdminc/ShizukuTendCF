@@ -41,6 +41,9 @@ class StartsInFlight {
             _state.value = Snapshot(s.running - 1, s.generation + 1)
         }
 
+    /** Tests only: a new process starts with nothing in flight. */
+    internal fun resetForTesting() = synchronized(lock) { _state.value = Snapshot(0, 0) }
+
     inline fun <T> track(block: () -> T): T {
         begin()
         try {
