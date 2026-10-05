@@ -84,7 +84,9 @@ object AdbAuthWait {
      * dismissed, no wait held and no server running, it is also the shared start notification's
      * "not answered" notice.
      */
-    fun isUnanswered(): Boolean = runCatching { ShizukuSettings.getPreferences().contains(PREF_UNANSWERED_AT) }.getOrDefault(false)
+    // Storage that cannot be read counts as a marker, like unansweredStamp(): every guard then
+    // stands down rather than offering the key unrecorded.
+    fun isUnanswered(): Boolean = runCatching { ShizukuSettings.getPreferences().contains(PREF_UNANSWERED_AT) }.getOrDefault(true)
 
     internal fun isUnansweredNoticeDue(): Boolean =
         runCatching {
@@ -115,7 +117,9 @@ object AdbAuthWait {
                 .edit()
                 .remove(PREF_UNANSWERED_AT)
                 .remove(PREF_UNANSWERED_DISMISSED)
-                .apply()
+                // As durable as the set in markUnanswered: an apply() lost to a process death
+                // would leave a marker for a key adbd had already accepted.
+                .commit()
         }
         ShizukuReceiverStarter.refreshNotification()
     }

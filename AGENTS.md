@@ -27,6 +27,13 @@ Claude file is the most fleshed-out — start there if your guide is sparse.
    Inspect it before assuming how a build works.
 5. **Use `scripts/dev/*`** for common commands instead of re-deriving from
    `build.gradle` each session.
+6. **Changes to the one-prompt marker or start ordering add a scenario first**
+   (`AdbAuthWait`, `AdbClient`'s key offer, `AdbStartWorker`'s guards, the boot,
+   headless, tile and "Attempt now" paths). Write the failing scenario in
+   `manager/src/test/java/af/shizuku/manager/harness/` (catalogue: site-private
+   `memory/handoffs/ShizukuTendCF/reports-2026-10-05/a2-scenario-catalogue-zcode.md`),
+   then the fix. Ten review rounds on 2026-10-04 found ordering bugs the tests
+   could have.
 
 ## Project quick-ref
 
