@@ -46,5 +46,8 @@ jobs:
       - name: Run Lint
         run: ./gradlew :manager:lint
 
+      - name: Run Unit Tests
+        run: ./gradlew --continue :manager:testShizukuplusDebugUnitTest :server:testDebugUnitTest :database:testDebugUnitTest
+
       - name: Build Debug APK
         run: ./gradlew :manager:assembleDebug
