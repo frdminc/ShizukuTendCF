@@ -1,6 +1,7 @@
 package af.shizuku.manager.harness
 
 import af.shizuku.manager.receiver.HeadlessStartStopReceiver
+import android.app.Application
 import androidx.work.ListenableWorker
 import androidx.work.WorkInfo
 import org.junit.After
@@ -10,7 +11,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -22,18 +22,21 @@ import org.robolectric.annotation.Config
  * receivers, the shared starter, WorkManager, AdbStartWorker, AdbStarter and AdbClient all run for
  * real against [FakeWorld]'s adbd. Test names are the scenario catalogue's ids (A2 §3).
  */
-// Robolectric cannot start in :manager yet: a build transform (likely dev.rikka.tools.refine)
-// rewrites signed dependency jars (conscrypt, BouncyCastle) and keeps their signatures, so class
-// loading fails with "SHA-256 digest error". OnePromptCoreScenariosTest covers the core paths.
-@Ignore("Robolectric blocked in :manager by signed-jar digest errors after the refine transform")
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+// A plain Application: ShizukuApplication's onCreate (Sentry, Koin) is not part
+// of the start path and cannot run twice in one JVM. FakeWorld.install() sets up what the path needs.
+@Config(sdk = [35], application = Application::class)
 class OnePromptScenariosTest {
     private lateinit var world: FakeWorld
 
     @Before
     fun setUp() {
         world = FakeWorld(RuntimeEnvironment.getApplication()).also { it.install() }
+        // tcp_mode defaults to true, which makes AdbStarter treat the saved port as a
+        // wireless-debugging port: it answers an accepted dialog with "tcpip:<tcp_port>"
+        // (5555 by default) and reconnects there, where FakeAdbd listens on nothing.
+        // Plain saved-port mode is the path FakeAdbd models.
+        world.prefs.edit().putBoolean("tcp_mode", false).commit()
     }
 
     @After
