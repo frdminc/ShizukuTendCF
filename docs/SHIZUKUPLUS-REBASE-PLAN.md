@@ -264,9 +264,10 @@ Deliberate exceptions. Anything that says "Shizuku" and is not covered here was 
 5. The Shizuku API and the "Shizuku permission" that client apps request stay ("apps that don't support
    Shizuku", "Shizuku API calls", "Grant Shizuku permission").
 6. Log tags, Sentry tags, User-Agent strings, file names and anything else not shown to a user stay.
-7. Undecided, so unchanged for now: the labels Android shows for the API permission
-   (`permission_group_label`, `permission_label`, `permission_description` and their `_plus` forms) and
-   `dialog_requesting_legacy_message`, which uses "Shizuku" for both the legacy API and this app.
+7. The labels Android shows for the API permission (`permission_group_label`, `permission_label`,
+   `permission_description` and their `_plus` forms) and `dialog_requesting_legacy_message` keep
+   "Shizuku" (decided 2026-10-05): they name the API other apps were built against, which users and
+   apps recognise, and which the Drop-In build exists to present.
 
 Exceptions 4, 5 and 7 are string names in `tendcfBareKeptStrings`, so they hold in every locale; a new
 upstream string is renamed unless it is added there.

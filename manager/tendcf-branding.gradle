@@ -54,8 +54,8 @@ def tendcfBareKeptStrings = [
     "settings_lp_toggle_permission",
     "accessibility_action_grant_permission",
     "accessibility_action_revoke_permission",
-    // Undecided, so unchanged: permission labels the system shows for the API permission, and a
-    // dialog that means both the legacy API and this app.
+    // The API permission's system labels and the legacy-request dialog name the API other apps
+    // target, so they keep "Shizuku" (decided 2026-10-05).
     "permission_group_label",
     "permission_label",
     "permission_description",
