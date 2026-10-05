@@ -31,6 +31,8 @@ dependencies {
     testImplementation "org.jetbrains.kotlin:kotlin-test:2.2.20"
     testImplementation "io.mockk:mockk:1.13.13"
     testImplementation "junit:junit:4.13.2"
+    // Hidden framework classes (IContentProvider, ...) the tests mock; compileOnly does not reach the test classpath.
+    testImplementation libs.hidden.stub
     testRuntimeOnly libs.junit.vintage.engine
 }
 android {

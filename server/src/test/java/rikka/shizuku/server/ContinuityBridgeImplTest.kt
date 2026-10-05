@@ -1,10 +1,13 @@
 package rikka.shizuku.server
 
+import android.content.IContentProvider
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.RemoteException
 import android.util.Log
+import rikka.hidden.compat.ActivityManagerApis
+import rikka.shizuku.server.api.IContentProviderUtils
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -144,8 +147,8 @@ class ContinuityBridgeImplTest {
     @Test
     fun `listEligibleDevices returns empty list when fallback fails`() {
         setSdkInt(34) // Forcing fallback
-        mockkStatic(Runtime::class)
-        every { Runtime.getRuntime().exec(any<Array<String>>()) } throws RuntimeException("Fallback failed")
+        mockkStatic(ActivityManagerApis::class)
+        every { ActivityManagerApis.getContentProviderExternal(any(), any(), any(), any()) } throws RuntimeException("Fallback failed")
 
         val bridge = ContinuityBridgeImpl()
         val devices = bridge.listEligibleDevices()
@@ -155,14 +158,13 @@ class ContinuityBridgeImplTest {
     }
 
     @Test
-    fun `listEligibleDevices uses fallback and returns empty list when stream returns empty`() {
+    fun `listEligibleDevices uses fallback and returns empty list when no devices found`() {
         setSdkInt(34) // Forcing fallback
-        mockkStatic(Runtime::class)
-        val process = mockk<Process>(relaxed = true)
-        val inputStream = java.io.ByteArrayInputStream(ByteArray(0))
-        every { process.inputStream } returns inputStream
-        every { process.waitFor() } returns 0
-        every { Runtime.getRuntime().exec(any<Array<String>>()) } returns process
+        mockkStatic(ActivityManagerApis::class)
+        mockkStatic(IContentProviderUtils::class)
+        val provider = mockk<IContentProvider>(relaxed = true)
+        every { ActivityManagerApis.getContentProviderExternal(any(), any(), any(), any()) } returns provider
+        every { IContentProviderUtils.callCompat(any(), any(), any(), any(), any(), any()) } returns null
 
         val bridge = ContinuityBridgeImpl()
         val devices = bridge.listEligibleDevices()
@@ -174,13 +176,13 @@ class ContinuityBridgeImplTest {
     @Test
     fun `listEligibleDevices parses fallback output correctly`() {
         setSdkInt(34) // Forcing fallback
-        mockkStatic(Runtime::class)
-        val process = mockk<Process>(relaxed = true)
-        val outputStr = "device1,device2,device3"
-        val inputStream = java.io.ByteArrayInputStream(outputStr.toByteArray())
-        every { process.inputStream } returns inputStream
-        every { process.waitFor() } returns 0
-        every { Runtime.getRuntime().exec(any<Array<String>>()) } returns process
+        mockkStatic(ActivityManagerApis::class)
+        mockkStatic(IContentProviderUtils::class)
+        val provider = mockk<IContentProvider>(relaxed = true)
+        val output = mockk<Bundle>(relaxed = true)
+        every { ActivityManagerApis.getContentProviderExternal(any(), any(), any(), any()) } returns provider
+        every { output.getString("value") } returns "device1,device2,device3"
+        every { IContentProviderUtils.callCompat(any(), any(), any(), any(), any(), any()) } returns output
 
         val bridge = ContinuityBridgeImpl()
         val devices = bridge.listEligibleDevices()
