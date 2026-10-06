@@ -81,8 +81,9 @@ class Scenario(
         return Headless(receiver.resultCode, receiver.resultData, receiver.getResultExtras(false))
     }
 
-    // adbd's dialog. Rejection and a timed-out dialog both reach the manager as adbd closing the
-    // connection (no deadline seam), which AdbClient reports as the same AdbAuthTimeoutException.
+    // adbd's dialog. As on a device, a rejection and a dialog nobody answers look the same to the
+    // manager: adbd sends nothing and keeps the connection open, so both end at AdbClient's
+    // deadline (shortened by FakeWorld) with the same AdbAuthTimeoutException.
 
     fun keyOffered() = world.awaitOffer()
 
@@ -96,7 +97,10 @@ class Scenario(
         awaitStartWork()
     }
 
-    fun dialogTimedOut() = dialogRejected()
+    fun dialogTimedOut() {
+        adbd.silent()
+        awaitStartWork()
+    }
 
     fun awaitStartWork(): WorkInfo.State? = world.awaitStartWork().also { lastWork = it }
 

@@ -16,6 +16,7 @@ import java.io.DataInputStream
 import java.io.EOFException
 import java.io.IOException
 import java.io.OutputStream
+import java.io.PushbackInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -29,10 +30,13 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * A loopback adbd speaking the plain (non-TLS) AUTH handshake. Each connection that offers the key
- * while it is not yet authorised counts as one dialog ([offers]) and then waits, as adbd does, for
- * the user's answer: [accept], [reject] (adbd closes the connection) or nothing at all. Connections
- * that close before saying anything (the starter's port probes) are ignored.
+ * A loopback adbd speaking the plain (non-TLS) AUTH handshake. Each key offer made while the key
+ * is not yet authorised counts as one dialog ([offers]) and then waits, as adbd does, for the
+ * user's answer. [accept] completes the handshake. [reject] and [silent] look the same on the
+ * wire, as on a real device: adbd sends nothing for a denied dialog and keeps the connection open
+ * and unauthorised (AOSP adbd_auth.cpp, DenyUsbDevice), so the client only gives up at its own
+ * deadline; a key offered again on that connection raises a new dialog. Connections that close
+ * before saying anything (the starter's port probes) are ignored.
  */
 class FakeAdbd(
     private val onShell: (String) -> Unit = {},
@@ -110,7 +114,8 @@ class FakeAdbd(
 
     private fun serve(s: Socket) {
         try {
-            val input = DataInputStream(s.getInputStream())
+            val stream = PushbackInputStream(s.getInputStream())
+            val input = DataInputStream(stream)
             val output = s.getOutputStream()
             val hello = read(input) ?: return
             if (hello.command != A_CNXN) return
@@ -120,18 +125,20 @@ class FakeAdbd(
             check(signature.command == A_AUTH && signature.arg0 == ADB_AUTH_SIGNATURE) { "expected the token signature" }
             if (!authorized) {
                 write(output, AdbMessage(A_AUTH, ADB_AUTH_TOKEN, 0, ByteArray(20)))
-                val key = read(input) ?: return
-                check(key.command == A_AUTH && key.arg0 == ADB_AUTH_RSAPUBLICKEY) { "expected the public key" }
-                offerCount.incrementAndGet()
-                offered.release()
-                when (awaitAnswer(s)) {
-                    Answer.ACCEPT -> authorized = true
-                    Answer.REJECT, null -> return
-                    Answer.SILENT -> {
-                        while (read(input) != null) Unit
-                        return
+                while (true) {
+                    val key = read(input) ?: return
+                    check(key.command == A_AUTH && key.arg0 == ADB_AUTH_RSAPUBLICKEY) { "expected the public key" }
+                    offerCount.incrementAndGet()
+                    offered.release()
+                    when (awaitAnswer(s, stream)) {
+                        Answer.ACCEPT -> break
+                        // Nothing is sent: the connection stays open until the client closes it
+                        // or offers the key again.
+                        Answer.REJECT, Answer.SILENT -> continue
+                        null -> return
                     }
                 }
+                authorized = true
             }
             write(output, AdbMessage(A_CNXN, A_VERSION, A_MAXDATA, "device::"))
             while (true) {
@@ -150,14 +157,26 @@ class FakeAdbd(
     }
 
     // Polls rather than blocking on the queue so that a connection the client has already closed
-    // gives up and cannot consume an answer meant for a later one. Null: the peer went away.
-    private fun awaitAnswer(s: Socket): Answer? {
+    // gives up and cannot consume an answer meant for a later one. Null: the peer went away. A byte
+    // the client sends meanwhile (a key offered again) is pushed back for the next read.
+    private fun awaitAnswer(
+        s: Socket,
+        stream: PushbackInputStream,
+    ): Answer? {
         s.soTimeout = 100
         try {
+            var pending = false
             while (true) {
                 answers.poll()?.let { return it }
+                if (pending) {
+                    Thread.sleep(10)
+                    continue
+                }
                 try {
-                    if (s.getInputStream().read() == -1) return null
+                    val b = stream.read()
+                    if (b == -1) return null
+                    stream.unread(b)
+                    pending = true
                 } catch (_: SocketTimeoutException) {
                 }
             }

@@ -46,6 +46,8 @@ class OnePromptCoreScenariosTest {
     fun setUp() {
         ShizukuSettings.setPreferencesForTesting(prefs)
         AdbAuthWait.clockMs = { clock.get() }
+        // A denied dialog ends only at AdbClient's deadline (real seconds).
+        AdbAuthWait.timeoutMs = 3_000
         AdbAuthWait.resetForTesting()
         ShizukuReceiverStarter.resetForTesting()
     }
@@ -56,6 +58,7 @@ class OnePromptCoreScenariosTest {
         clients.shutdownNow()
         AdbAuthWait.resetForTesting()
         AdbAuthWait.clockMs = System::currentTimeMillis
+        AdbAuthWait.timeoutMs = AdbAuthWait.TIMEOUT_MS
         unmockkAll()
     }
 

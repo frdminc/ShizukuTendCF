@@ -68,6 +68,7 @@ class FakeWorld(
         Starter.initialize(app)
         ShizukuSettings.setPreferencesForTesting(prefs)
         AdbAuthWait.clockMs = { clock.get() }
+        AdbAuthWait.timeoutMs = AUTH_TIMEOUT_MS
         serverDown()
         // Robolectric reuses one sandbox (and so every app singleton) across the tests of a class.
         ShizukuReceiverStarter.resetForTesting()
@@ -189,11 +190,15 @@ class FakeWorld(
         runCatching { settle() }
         workExecutor.shutdownNow()
         AdbAuthWait.clockMs = System::currentTimeMillis
+        AdbAuthWait.timeoutMs = AdbAuthWait.TIMEOUT_MS
         serverDown()
     }
 
     private companion object {
         const val START_MS = 1_800_000_000_000L
+
+        // Real seconds: a denied or unanswered dialog ends only at AdbClient's deadline.
+        const val AUTH_TIMEOUT_MS = 3_000
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
     }
 }

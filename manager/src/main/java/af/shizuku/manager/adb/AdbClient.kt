@@ -114,12 +114,14 @@ class AdbClient(
     }
 
     /**
-     * adbd answers an offered public key only once the user has accepted or rejected its dialog,
-     * and raises one dialog per connection that offers an unknown key. Reconnecting after the
+     * adbd answers an offered public key only when the user accepts its dialog: a denied dialog
+     * gets no reply at all and leaves the connection open and unauthorised (AOSP adbd_auth.cpp,
+     * DenyUsbDevice), so a rejection and an unanswered dialog look the same here. adbd raises one
+     * dialog per key offer and queues the rest behind the one showing. Reconnecting after the
      * normal read timeout would therefore stack dialogs, so this holds the one connection open
-     * for [AdbAuthWait.TIMEOUT_MS]. Anything that goes wrong once the key has been offered (a
-     * timeout, a rejection, a dropped connection, a malformed reply) surfaces as
-     * [AdbAuthTimeoutException], which callers do not retry.
+     * for [AdbAuthWait.TIMEOUT_MS]. Anything that goes wrong once the key has been offered (the
+     * deadline, a dropped connection, a malformed reply) surfaces as [AdbAuthTimeoutException],
+     * which callers do not retry.
      */
     private fun offerKeyAndAwaitAuthorization(s: Socket): AdbMessage {
         // Claim the wait slot before the key goes out: the claim is a single compare-and-set, so
@@ -132,8 +134,9 @@ class AdbClient(
             throw AdbAuthPendingException("another start is already waiting for the adbd authorisation dialog")
         }
         var deadline: Timer? = null
+        val timeoutMs = AdbAuthWait.timeoutMs
         try {
-            Timber.tag(TAG).i("Waiting up to %d ms for the user to accept the adbd authorisation dialog", AdbAuthWait.TIMEOUT_MS)
+            Timber.tag(TAG).i("Waiting up to %d ms for the user to accept the adbd authorisation dialog", timeoutMs)
             // soTimeout bounds each read call, not the whole wait, so a peer trickling bytes could
             // hold the connection (and the process-wide gate) open. Close the socket at a deadline.
             deadline = Timer("adb-auth-deadline", true)
@@ -145,7 +148,7 @@ class AdbClient(
             check(AdbAuthWait.markUnanswered()) { "the pending authorisation could not be recorded" }
             write(A_AUTH, ADB_AUTH_RSAPUBLICKEY, 0, key.adbPublicKey)
             runCatching { onAuthorizationPending?.invoke() }
-            s.soTimeout = AdbAuthWait.TIMEOUT_MS
+            s.soTimeout = timeoutMs
             deadline.schedule(
                 object : TimerTask() {
                     override fun run() {
@@ -153,7 +156,7 @@ class AdbClient(
                         runCatching { s.close() }
                     }
                 },
-                AdbAuthWait.TIMEOUT_MS.toLong(),
+                timeoutMs.toLong(),
             )
             val message = read()
             if (message.command != A_CNXN) error("not A_CNXN")
@@ -161,7 +164,7 @@ class AdbClient(
             return message
         } catch (e: Exception) {
             throw if (deadlineHit.get() || e is java.net.SocketTimeoutException) {
-                AdbAuthTimeoutException("adbd authorisation dialog was not answered within ${AdbAuthWait.TIMEOUT_MS / 1000}s")
+                AdbAuthTimeoutException("adbd authorisation dialog was not answered within ${timeoutMs / 1000}s")
             } else {
                 AdbAuthTimeoutException("adbd did not accept the key: ${e.message}")
             }

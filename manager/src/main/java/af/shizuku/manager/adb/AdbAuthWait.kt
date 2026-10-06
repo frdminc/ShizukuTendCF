@@ -22,6 +22,12 @@ object AdbAuthWait {
     /** How long a single connection waits for the dialog to be answered. */
     const val TIMEOUT_MS = 150_000
 
+    // The wait AdbClient uses. adbd never tells the client that a dialog was denied (it only moves
+    // on to its next prompt and leaves the connection open), so a rejection, like an unanswered
+    // dialog, ends only at this deadline. Tests shorten it.
+    @Volatile
+    internal var timeoutMs: Int = TIMEOUT_MS
+
     private val waiting = AtomicInteger(0)
 
     fun isWaiting(): Boolean = waiting.get() > 0
