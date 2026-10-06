@@ -69,6 +69,9 @@ class TcpRestoreScenariosTest {
         assertNull("no restore notice left", restoreNoticeTitle)
     }
 
+    /** WorkManager ran start [n] (a start queued by a broadcast or another worker is asynchronous). */
+    private fun Scenario.awaitStarts(n: Int) = world.waitUntil({ "start $n to run (ran $startsRun)" }) { startsRun >= n }
+
     @Test
     fun `tcp-port-closed-restores-in-the-same-attempt`() =
         scenario {
@@ -674,6 +677,209 @@ class TcpRestoreScenariosTest {
                 assertEquals("wireless debugging untouched", 0, adbWifiEnabled)
                 assertLogHas("StartWorker: tcp fast path: port $tcpPort open", "StartWorker: SUCCESS via tcp fast path")
                 assertLogLacks("turning wireless debugging on", "mDNS")
+            }
+        }
+
+    // s24, 2026-10-06 03:01: locked, on a mesh node whose BSSID was never allowed. One UI refused
+    // the write with no prompt (no WifiDebuggingActivity), so nobody could answer it, yet it was
+    // counted as this boot's prompt and nothing tried again for three hours.
+    @Test
+    fun `samsung-locked-untrusted-refusal-is-silent-and-the-unlock-asks-once`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals("One UI showed nothing", 0, trustPrompts)
+                assertEquals(1, silentRefusals)
+                assertLogHas("this phone shows no prompt while locked; not this boot's network prompt")
+                assertTrue("watching for wireless debugging to come on", watchingWirelessDebugging)
+                assertTrue("a quiet retry is queued", quietRetryQueued)
+            }
+
+            // The unlock: one more write, which the system shows now. It is this boot's prompt.
+            unlockScreen()
+            startAsksToAllowNetwork()
+            assertFalse("no quiet retry once unlocked", quietRetryQueued)
+            userAllowsThisNetwork()
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(2, startsRun)
+                assertEquals("one visible prompt", 1, trustPrompts)
+                assertEquals(1, silentRefusals)
+                assertFalse(watchingWirelessDebugging)
+                assertFalse(quietRetryQueued)
+            }
+        }
+
+    @Test
+    fun `samsung-locked-untrusted-unlock-during-the-wait-asks-once`() =
+        scenario {
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitLog("this phone shows no prompt while locked")
+            unlockScreen()
+            startAsksToAllowNetwork()
+            userAllowsThisNetwork()
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals("one run", 1, startsRun)
+                assertEquals(1, trustPrompts)
+                assertEquals(1, silentRefusals)
+            }
+        }
+
+    // After the visible prompt the one-prompt rule holds again: no write on later unlocks, no
+    // quiet retries.
+    @Test
+    fun `samsung-unlock-prompt-unanswered-is-this-boots-one`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            unlockScreen()
+            awaitStarts(2)
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals(1, trustPrompts)
+                assertFalse(quietRetryQueued)
+            }
+            val writes = turnOns
+            lockScreen()
+            backgroundStart()
+            awaitStartWork()
+            unlockScreen()
+            awaitStartWork()
+            check {
+                assertEquals("no write after this boot's prompt", writes, turnOns)
+                assertEquals(1, trustPrompts)
+                assertEquals(1, silentRefusals)
+                assertFalse(quietRetryQueued)
+            }
+        }
+
+    // A mesh: the phone roams back to an access point that is allowed while still locked.
+    @Test
+    fun `samsung-locked-quiet-retry-heals-on-an-allowed-access-point`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            // Still on the same access point: refused silently again, and queued again.
+            quietRetryDue()
+            awaitStarts(2)
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals(0, trustPrompts)
+                assertEquals(2, silentRefusals)
+                assertTrue(quietRetryQueued)
+            }
+            roamsTo(trusted = true)
+            quietRetryDue()
+            awaitStarts(3)
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(0, trustPrompts)
+                assertEquals("off again, as the start found it", 0, adbWifiEnabled)
+                assertFalse("no quiet retry after a success", quietRetryQueued)
+                assertFalse(watchingWirelessDebugging)
+            }
+        }
+
+    @Test
+    fun `samsung-quiet-retry-stops-at-reboot`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            assertTrue(quietRetryQueued)
+            // The last boot's quiet retry comes due before BOOT_COMPLETED: it writes nothing.
+            reboot()
+            val writes = turnOns
+            quietRetryDue()
+            check {
+                assertEquals(writes, turnOns)
+                assertFalse(quietRetryQueued)
+            }
+            roamsTo(trusted = true)
+            boot()
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertFalse(quietRetryQueued)
+                assertFalse(watchingWirelessDebugging)
+            }
+        }
+
+    // AOSP queues its dialog for the unlock, so the locked refusal stays this boot's prompt: the
+    // unlock writes nothing, and the user's "Allow" turning wireless debugging on continues.
+    @Test
+    fun `locked-refusal-unlock-writes-nothing-and-a-later-allow-continues`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            assertEquals(1, trustPrompts)
+            unlockScreen()
+            awaitStartWork()
+            check {
+                assertEquals("no write on unlock", 1, turnOns)
+                assertEquals(1, startsRun)
+                assertFalse(quietRetryQueued)
+            }
+            userAllowsThisNetwork()
+            awaitStarts(2)
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(1, trustPrompts)
+            }
+        }
+
+    // s24, 2026-10-06 06:20: wireless debugging was turned on by hand after the stop (still locked,
+    // on an allowed access point) and nothing noticed until a later HEADLESS_START.
+    @Test
+    fun `wireless-debugging-turned-on-after-a-stop-continues`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            assertEquals(WorkInfo.State.FAILED, lastWork)
+            roamsTo(trusted = true)
+            wirelessDebuggingTurnedOn()
+            awaitStarts(2)
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(0, trustPrompts)
+                assertFalse(quietRetryQueued)
+                assertFalse(watchingWirelessDebugging)
+                assertLogHas("wireless debugging was turned on; continuing the ADB restore")
             }
         }
 }

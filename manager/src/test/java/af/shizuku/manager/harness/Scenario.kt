@@ -117,6 +117,18 @@ class Scenario(
         world.settle()
     }
 
+    /** Wireless debugging is turned on from outside the app (the user, or `settings put` from a shell). */
+    fun wirelessDebuggingTurnedOn() {
+        world.wirelessDebuggingOn()
+        world.settle()
+    }
+
+    /** The phone moves to another access point of the same Wi-Fi network (see [FakeWorld.roamTo]). */
+    fun roamsTo(trusted: Boolean) = world.roamTo(trusted)
+
+    /** The restore's quiet retry comes due (see [FakeWorld.quietRetryDue]). */
+    fun quietRetryDue() = world.quietRetryDue()
+
     fun lockScreen() = world.lockScreen()
 
     fun unlockScreen() = world.unlockScreen()
@@ -260,6 +272,16 @@ class Scenario(
     val trustPrompts: Int get() = world.trustPrompts
 
     val tcpPortOpen: Boolean get() = world.tcpAdbd != null
+
+    /** Writes of adb_wifi_enabled=1 the system refused without a prompt (One UI, locked). */
+    val silentRefusals: Int get() = world.silentRefusals
+
+    /** Times adb_wifi_enabled became 1, whoever wrote it. */
+    val turnOns: Int get() = world.turnOns
+
+    val watchingWirelessDebugging: Boolean get() = world.watchingWirelessDebugging
+
+    val quietRetryQueued: Boolean get() = world.quietRetryQueued
 
     /** Key offers on every adbd (classic, wireless and TCP): each would be a dialog. */
     val allOffers: Int get() = adbd.offers + world.wirelessAdbd.offers + (world.tcpAdbd?.offers ?: 0)

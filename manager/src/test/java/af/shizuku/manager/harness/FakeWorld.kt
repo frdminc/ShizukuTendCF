@@ -32,9 +32,11 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
+import androidx.work.testing.WorkManagerTestInitHelper.getTestDriver
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowBuild
 import org.robolectric.shadows.ShadowNetwork
 import org.robolectric.shadows.ShadowNetworkCapabilities
 import org.robolectric.shadows.ShadowNetworkInfo
@@ -101,6 +103,21 @@ class FakeWorld(
     var staleWirelessDebugging = false
 
     private val trustPromptCount = AtomicInteger()
+    private val silentRefusalCount = AtomicInteger()
+    private val turnOnCount = AtomicInteger()
+    private val originalManufacturer: String = android.os.Build.MANUFACTURER
+
+    /**
+     * The phone is a Samsung (One UI): an untrusted network's write made while the keyguard is
+     * locked is refused with no prompt at all (AdbDebuggingManager logs
+     * "startConfirmationForNetwork: isLockScreenMode" and starts no WifiDebuggingActivity), where
+     * AOSP queues its dialog for the unlock.
+     */
+    fun samsung() = ShadowBuild.setManufacturer("samsung")
+
+    private val isSamsung: Boolean get() =
+        android.os.Build.MANUFACTURER
+            .equals("samsung", ignoreCase = true)
 
     /** mDNS discoveries still to hear nothing. */
     val silentDiscoveries = AtomicInteger()
@@ -119,6 +136,12 @@ class FakeWorld(
     @Volatile
     private var wifiConnectedAtNs = 0L
     val trustPrompts: Int get() = trustPromptCount.get()
+
+    /** Writes of 1 refused with no prompt (One UI, locked, a network not trusted). */
+    val silentRefusals: Int get() = silentRefusalCount.get()
+
+    /** Every time adb_wifi_enabled became 1, whoever wrote it. */
+    val turnOns: Int get() = turnOnCount.get()
     private val discoveries = CopyOnWriteArrayList<(Int) -> Unit>()
     private var nextNetId = 100
     private var wifiCaps: NetworkCapabilities? = null
@@ -244,16 +267,40 @@ class FakeWorld(
 
     private fun setAdbWifi(value: Int) = Settings.Global.putInt(app.contentResolver, ADB_WIFI, value)
 
+    private val observerDepth = AtomicInteger()
+
     private val adbWifiObserver =
         object : ContentObserver(null) {
-            override fun onChange(selfChange: Boolean) = systemReactsToAdbWifi()
+            override fun onChange(selfChange: Boolean) {
+                observerDepth.incrementAndGet()
+                try {
+                    systemReactsToAdbWifi()
+                } finally {
+                    // The system's own write back to 0 notifies again inside this one: JobScheduler
+                    // sees the setting once it has settled.
+                    if (observerDepth.decrementAndGet() == 0) fireContentTriggers()
+                }
+            }
         }
+
+    // JobScheduler's ContentObserverController: a job with a content-URI trigger on
+    // adb_wifi_enabled runs once after the setting changes. Only the restore's watch has one.
+    private fun fireContentTriggers() {
+        runCatching {
+            workManager
+                .getWorkInfosForUniqueWork(WATCH_WORK)
+                .get()
+                .filter { it.state == WorkInfo.State.ENQUEUED }
+                .forEach { getTestDriver(app)?.setAllConstraintsMet(it.id) }
+        }
+    }
 
     private fun systemReactsToAdbWifi() {
         if (adbWifiEnabled != 1) {
             staleWirelessDebugging = false
             return
         }
+        turnOnCount.incrementAndGet()
         // Wi-Fi moves to another network just as the manager writes: the system checks that one.
         switchOnNextWrite?.let { trusted ->
             switchOnNextWrite = null
@@ -265,6 +312,11 @@ class FakeWorld(
             // WifiManager has no BSSID for the new network yet: off again, with no prompt.
             w != null && System.nanoTime() - wifiConnectedAtNs < bssidLagMs * 1_000_000 -> setAdbWifi(0)
             w == null -> setAdbWifi(0)
+            // One UI, locked: refused, and no prompt to answer later.
+            !w.trusted && isSamsung && keyguard.isKeyguardLocked -> {
+                silentRefusalCount.incrementAndGet()
+                setAdbWifi(0)
+            }
             !w.trusted -> {
                 trustPromptCount.incrementAndGet()
                 setAdbWifi(0)
@@ -341,6 +393,44 @@ class FakeWorld(
     }
 
     fun wirelessDebuggingOn() = setAdbWifi(1)
+
+    /**
+     * The phone moves to another access point of the same Wi-Fi (a mesh node): the same network,
+     * so no callback, but wireless debugging trust is per BSSID and may differ.
+     */
+    fun roamTo(trusted: Boolean) {
+        val w = checkNotNull(wifi) { "no Wi-Fi to roam on" }
+        wifi = Wifi(w.network, trusted)
+    }
+
+    private fun pendingWork(name: String): List<WorkInfo> = workManager.getWorkInfosForUniqueWork(name).get().filterNot { it.state.isFinished }
+
+    /** The restore is watching adb_wifi_enabled (its content-trigger work is queued). */
+    val watchingWirelessDebugging: Boolean get() = pendingWork(WATCH_WORK).isNotEmpty()
+
+    /** A quiet retry is queued. */
+    val quietRetryQueued: Boolean get() = pendingWork(QUIET_WORK).isNotEmpty()
+
+    /** The quiet retry's delay has passed: it runs, and so does any start it queues. */
+    fun quietRetryDue() {
+        settle()
+        var work: WorkInfo? = null
+        // A retry queued behind the last one is BLOCKED until that one has finished.
+        waitUntil({ "a quiet retry to be queued" }) {
+            work = workManager.getWorkInfosForUniqueWork(QUIET_WORK).get().firstOrNull { it.state == WorkInfo.State.ENQUEUED }
+            work != null
+        }
+        val id = checkNotNull(work).id
+        checkNotNull(getTestDriver(app)).setInitialDelayMet(id)
+        waitUntil({ "the quiet retry to run" }) {
+            workManager
+                .getWorkInfoById(id)
+                .get()
+                ?.state
+                ?.isFinished != false
+        }
+        settle()
+    }
 
     /** Wireless debugging is on but its mDNS announcement has gone stale. */
     fun staleWirelessDebuggingOn() {
@@ -497,6 +587,7 @@ class FakeWorld(
         runCatching { settle() }
         workExecutor.shutdownNow()
         app.contentResolver.unregisterContentObserver(adbWifiObserver)
+        ShadowBuild.setManufacturer(originalManufacturer)
         WirelessDebugging.resetForTesting()
         AdbAuthWait.clockMs = System::currentTimeMillis
         AdbAuthWait.elapsedMs = { android.os.SystemClock.elapsedRealtime() }
@@ -513,6 +604,10 @@ class FakeWorld(
         const val AUTH_TIMEOUT_MS = 3_000
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
         const val ADB_WIFI = "adb_wifi_enabled"
+
+        // The restore's unique works (WirelessDebugging): its watch on adb_wifi_enabled, and the quiet retry.
+        const val WATCH_WORK = "wadb_restore_watch"
+        const val QUIET_WORK = "wadb_restore_quiet_retry"
 
         // A system API constant (NetworkCapabilities.NET_CAPABILITY_NOT_VCN_MANAGED) that requests carry by default.
         const val NET_CAPABILITY_NOT_VCN_MANAGED = 28
