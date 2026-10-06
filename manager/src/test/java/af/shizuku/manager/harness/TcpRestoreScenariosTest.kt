@@ -3,6 +3,7 @@ package af.shizuku.manager.harness
 import af.shizuku.manager.R
 import af.shizuku.manager.adb.WirelessDebugging
 import af.shizuku.manager.utils.HeadlessLogger
+import af.shizuku.manager.utils.ShizukuStateMachine
 import android.app.Application
 import androidx.work.ListenableWorker
 import androidx.work.WorkInfo
@@ -702,6 +703,8 @@ class TcpRestoreScenariosTest {
             }
 
             // The unlock: one more write, which the system shows now. It is this boot's prompt.
+            // Real seconds, read at each wait: the user needs longer than the first wait had.
+            WirelessDebugging.userWaitMs = 10_000
             unlockScreen()
             startAsksToAllowNetwork()
             assertFalse("no quiet retry once unlocked", quietRetryQueued)
@@ -880,6 +883,219 @@ class TcpRestoreScenariosTest {
                 assertFalse(quietRetryQueued)
                 assertFalse(watchingWirelessDebugging)
                 assertLogHas("wireless debugging was turned on; continuing the ADB restore")
+            }
+        }
+
+    // The write is made unlocked (the system shows its prompt) and the screen locks before the
+    // run sees the 0: still this boot's prompt, and the next unlock writes nothing.
+    @Test
+    fun `samsung-unlock-write-refused-after-locking-again-is-the-prompt`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            WirelessDebugging.userWaitMs = 3_000
+            world.holdRefusals = true
+            unlockScreen()
+            world.awaitHeldRefusal()
+            lockScreen()
+            world.releaseRefusal()
+            awaitLog("this boot's one network prompt")
+            unlockScreen()
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals("one visible prompt", 1, trustPrompts)
+                assertEquals(1, silentRefusals)
+                assertFalse(quietRetryQueued)
+            }
+        }
+
+    // The inverse: written locked (refused in silence), unlocked before the run sees the 0. No
+    // prompt was shown, so it is not this boot's: the run writes once more, now visibly.
+    @Test
+    fun `samsung-locked-write-seen-after-the-unlock-is-not-the-prompt`() =
+        scenario {
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            world.holdRefusals = true
+            boot()
+            world.awaitHeldRefusal()
+            unlockScreen()
+            world.releaseRefusal()
+            world.waitUntil({ "the system's prompt (raised $trustPrompts)" }) { trustPrompts == 1 }
+            userAllowsThisNetwork()
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(1, trustPrompts)
+                assertEquals(1, silentRefusals)
+            }
+        }
+
+    // A run (the quiet retry's, say) wrote while locked on One UI and died before it saw the 0:
+    // that write showed nothing, so it is no prompt.
+    @Test
+    fun `samsung-locked-write-of-a-dead-run-is-not-the-prompt`() =
+        scenario {
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            world.prefs
+                .edit()
+                .putInt("wadb_restore_write_pending_boot", 1)
+                .putBoolean("wadb_restore_write_pending_locked", true)
+                .commit()
+            backgroundStart()
+            world.waitUntil({ "a silent refusal (saw $silentRefusals)" }) { silentRefusals == 1 }
+            unlockScreen()
+            world.waitUntil({ "the system's prompt (raised $trustPrompts)" }) { trustPrompts == 1 }
+            userAllowsThisNetwork()
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(1, trustPrompts)
+            }
+        }
+
+    @Test
+    fun `samsung-quiet-retry-keeps-the-unlock-notice`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            assertEquals(string(R.string.wadb_restore_locked_title), restoreNoticeTitle)
+            quietRetryDue()
+            awaitStarts(2)
+            awaitStartWork()
+            check {
+                assertEquals(2, silentRefusals)
+                assertEquals("the unlock is still what helps", string(R.string.wadb_restore_locked_title), restoreNoticeTitle)
+            }
+        }
+
+    // The unlock's start was turned away (a start still marked STARTING): the quiet retry stays
+    // queued, and coming due unlocked it makes the unlock's one write.
+    @Test
+    fun `samsung-unlock-start-turned-away-keeps-the-quiet-retry`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
+            unlockScreen()
+            awaitLog("start skipped: state=STARTING")
+            assertTrue("the quiet retry is still queued", quietRetryQueued)
+            ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
+            WirelessDebugging.userWaitMs = 10_000
+            quietRetryDue()
+            world.waitUntil({ "the system's prompt (raised $trustPrompts)" }) { trustPrompts == 1 }
+            userAllowsThisNetwork()
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(1, trustPrompts)
+            }
+        }
+
+    // A quiet retry's request that runs unlocked (WorkManager's retry, or late) is an ordinary
+    // start: no Wi-Fi is a no-Wi-Fi stop, resumed when Wi-Fi connects.
+    @Test
+    fun `quiet-request-run-unlocked-is-an-ordinary-start`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            WirelessDebugging.wifiWaitMs = 1_000
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            quietRetryDue()
+            awaitStarts(2)
+            awaitStartWork()
+            val quietRequest = world.startInputs.last()
+            ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
+            unlockScreen()
+            awaitLog("start skipped: state=STARTING")
+            ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
+            wifiDrops()
+            world.workerRerun(quietRequest)
+            check {
+                assertEquals(string(R.string.wadb_restore_no_wifi_title), restoreNoticeTitle)
+                assertLogHas("StartWorker: no Wi-Fi after")
+            }
+            WirelessDebugging.userWaitMs = 10_000
+            wifiConnects(trusted = false)
+            world.waitUntil({ "the system's prompt (raised $trustPrompts)" }) { trustPrompts == 1 }
+            userAllowsThisNetwork()
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(1, trustPrompts)
+                assertEquals(2, silentRefusals)
+            }
+        }
+
+    // The silent refusal is evidenced on One UI 8.5 only: an older (or unknown) One UI takes the
+    // stock path, where the locked refusal is this boot's prompt and the unlock writes nothing.
+    @Test
+    fun `samsung-older-one-ui-locked-refusal-is-the-prompt`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.samsung(oneUi = 80000)
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertLogHas("this boot's one network prompt")
+                assertFalse(quietRetryQueued)
+            }
+            unlockScreen()
+            awaitStartWork()
+            check {
+                assertEquals("no write on unlock", 1, turnOns)
+                assertEquals(1, startsRun)
+            }
+        }
+
+    // Overnight the quiet retry runs three times an hour: it posts no start notification at all,
+    // and the unlock notice stays.
+    @Test
+    fun `samsung-quiet-retry-posts-no-start-notification`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            world.holdRefusals = true
+            quietRetryDue()
+            world.awaitHeldRefusal()
+            world.settle()
+            check {
+                assertNull("no start notification while the quiet retry runs", startNotification)
+                assertEquals(string(R.string.wadb_restore_locked_title), restoreNoticeTitle)
+            }
+            world.releaseRefusal()
+            awaitStarts(2)
+            awaitStartWork()
+            check {
+                assertNull("none after it either", startNotification)
+                assertEquals(2, silentRefusals)
+                assertEquals(string(R.string.wadb_restore_locked_title), restoreNoticeTitle)
             }
         }
 }

@@ -40,6 +40,7 @@ import org.robolectric.shadows.ShadowBuild
 import org.robolectric.shadows.ShadowNetwork
 import org.robolectric.shadows.ShadowNetworkCapabilities
 import org.robolectric.shadows.ShadowNetworkInfo
+import org.robolectric.shadows.ShadowSystemProperties
 import rikka.shizuku.Shizuku
 import java.io.Closeable
 import java.io.InputStream
@@ -113,7 +114,10 @@ class FakeWorld(
      * "startConfirmationForNetwork: isLockScreenMode" and starts no WifiDebuggingActivity), where
      * AOSP queues its dialog for the unlock.
      */
-    fun samsung() = ShadowBuild.setManufacturer("samsung")
+    fun samsung(oneUi: Int = ONE_UI_8_5) {
+        ShadowBuild.setManufacturer("samsung")
+        ShadowSystemProperties.override("ro.build.version.oneui", oneUi.toString())
+    }
 
     private val isSamsung: Boolean get() =
         android.os.Build.MANUFACTURER
@@ -315,14 +319,38 @@ class FakeWorld(
             // One UI, locked: refused, and no prompt to answer later.
             !w.trusted && isSamsung && keyguard.isKeyguardLocked -> {
                 silentRefusalCount.incrementAndGet()
-                setAdbWifi(0)
+                refuse()
             }
             !w.trusted -> {
                 trustPromptCount.incrementAndGet()
-                setAdbWifi(0)
+                refuse()
             }
             else -> announce()
         }
+    }
+
+    /**
+     * The system still decides at the write (prompt or not, by the lock state then) but writes 0
+     * back only at [releaseRefusal]: the lock state can change before the manager sees the 0.
+     */
+    @Volatile
+    var holdRefusals = false
+
+    @Volatile
+    private var refusalHeld = false
+
+    private fun refuse() {
+        if (holdRefusals) refusalHeld = true else setAdbWifi(0)
+    }
+
+    /** A refusal is being held (see [holdRefusals]). */
+    fun awaitHeldRefusal() = waitUntil({ "a write of adb_wifi_enabled=1 to be refused" }) { refusalHeld }
+
+    fun releaseRefusal() {
+        check(refusalHeld) { "no refusal held" }
+        holdRefusals = false
+        refusalHeld = false
+        setAdbWifi(0)
     }
 
     private fun announce() {
@@ -588,6 +616,7 @@ class FakeWorld(
         workExecutor.shutdownNow()
         app.contentResolver.unregisterContentObserver(adbWifiObserver)
         ShadowBuild.setManufacturer(originalManufacturer)
+        ShadowSystemProperties.reset()
         WirelessDebugging.resetForTesting()
         AdbAuthWait.clockMs = System::currentTimeMillis
         AdbAuthWait.elapsedMs = { android.os.SystemClock.elapsedRealtime() }
@@ -604,6 +633,9 @@ class FakeWorld(
         const val AUTH_TIMEOUT_MS = 3_000
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
         const val ADB_WIFI = "adb_wifi_enabled"
+
+        // ro.build.version.oneui on the s24 whose silent locked refusal is the evidence.
+        const val ONE_UI_8_5 = 80500
 
         // The restore's unique works (WirelessDebugging): its watch on adb_wifi_enabled, and the quiet retry.
         const val WATCH_WORK = "wadb_restore_watch"
