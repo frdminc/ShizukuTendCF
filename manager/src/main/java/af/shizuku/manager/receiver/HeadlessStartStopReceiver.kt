@@ -100,21 +100,11 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                     if (launchMode != LaunchMethod.ADB) {
                         ShizukuSettings.setLastLaunchMode(LaunchMethod.ADB)
                     }
-                    // Say so, rather than queueing a start that would only stand down.
-                    if (!force &&
-                        ShizukuSettings.getTcpMode() &&
-                        WirelessDebugging.blocked(context) == WirelessDebugging.Blocked.UNTRUSTED_NETWORK &&
-                        !af.shizuku.manager.adb.AdbPortProber
-                            .isPortOpen(ShizukuSettings.getTcpPort(), 300)
-                    ) {
-                        HeadlessLogger.w(
-                            "Start",
-                            "Withheld: TCP port ${ShizukuSettings.getTcpPort()} closed, wireless debugging is off, and this boot's automatic network prompt has been used; " +
-                                "send --ez $EXTRA_FORCE true or tap Attempt now",
-                        )
-                        setResult(RESULT_WIRELESS_UNTRUSTED, "WIRELESS_UNTRUSTED", null)
-                        return
-                    }
+                    // No port probe here: this receiver runs on the main thread, where a release
+                    // build's socket throws NetworkOnMainThreadException (caught, so the port always
+                    // looked closed and every start after this boot's network prompt was refused).
+                    // The worker probes the TCP port first and only then stands down for an
+                    // untrusted network, logging why.
                     HeadlessLogger.i("Start", "Starting via ADB (TCP port ${ShizukuSettings.getTcpPort()})")
                 }
                 ShizukuReceiverStarter.start(context)
@@ -209,12 +199,6 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
 
         /** Result code of a start withheld because an authorisation dialog went unanswered. */
         const val RESULT_AUTH_UNANSWERED = 4
-
-        /**
-         * Result code of a TCP-mode start withheld because its port is closed and this boot's one
-         * automatic "Allow wireless debugging on this network?" prompt was not answered.
-         */
-        const val RESULT_WIRELESS_UNTRUSTED = 5
 
         /** HEADLESS_LOG: how many of the newest log lines to return (capped; see [HeadlessLogger.tail]). */
         const val EXTRA_LINES = "lines"

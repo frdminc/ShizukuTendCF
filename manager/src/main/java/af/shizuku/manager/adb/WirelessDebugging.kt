@@ -605,13 +605,17 @@ object WirelessDebugging {
             // prompt, however the run ended (an mDNS timeout, the budget, Cancel, a stop).
             if (setting(context) == 1) setWritePending(context, false)
             if (!restoresState || initial == null) return
-            if (initial == 0 && setting(context) == 1) {
+            // Read before the write below: after writing 0 the value always reads 0, which made a
+            // successful restore look like a prompt still waiting for an answer and kept the marker,
+            // so a later start turned off wireless debugging the user had switched on.
+            val onAtEnd = setting(context) == 1
+            if (initial == 0 && onAtEnd) {
                 put(context, 0)
                 note("wireless debugging was off before this start; turned it off again (adb_wifi_enabled=${setting(context)})")
             }
             // This boot's prompt may still be on screen: a late "Allow" turns wireless debugging
             // on, and whichever start comes next must know that a restore turned it on.
-            val promptMayStillBeAnswered = initial == 0 && promptedAt(context) != null && setting(context) != 1
+            val promptMayStillBeAnswered = initial == 0 && promptedAt(context) != null && !onAtEnd
             if (!promptMayStillBeAnswered) runCatching { prefs().edit().remove(KEY_TURNED_ON).commit() }
         }
 

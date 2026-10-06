@@ -2,7 +2,6 @@ package af.shizuku.manager.harness
 
 import af.shizuku.manager.R
 import af.shizuku.manager.adb.WirelessDebugging
-import af.shizuku.manager.receiver.HeadlessStartStopReceiver
 import af.shizuku.manager.utils.HeadlessLogger
 import android.app.Application
 import androidx.work.ListenableWorker
@@ -190,6 +189,24 @@ class TcpRestoreScenariosTest {
             }
         }
 
+    // A successful restore after "Allow" must not keep the "turned on by restore" marker: a later
+    // start would then turn off wireless debugging that the user switched on.
+    @Test
+    fun `allowed-restore-then-user-turns-wireless-debugging-on-stays-on`() =
+        scenario {
+            wifiConnects(trusted = false)
+            boot()
+            startAsksToAllowNetwork()
+            userAllowsThisNetwork()
+            awaitStartWork()
+            check { assertRestored() }
+            android.provider.Settings.Global
+                .putInt(world.app.contentResolver, "adb_wifi_enabled", 1)
+            backgroundStart()
+            awaitStartWork()
+            check { assertEquals("the user's wireless debugging is left on", 1, adbWifiEnabled) }
+        }
+
     // Without location permission no network has a stable identity (a reconnect gets a new handle),
     // so a refused network allows one automatic prompt per boot; after that only a start by hand,
     // the user turning wireless debugging on, or the next boot tries again.
@@ -302,7 +319,9 @@ class TcpRestoreScenariosTest {
             val again = headlessStart()
             awaitStartWork()
             check {
-                assertEquals(HeadlessStartStopReceiver.RESULT_WIRELESS_UNTRUSTED, again.code)
+                // Queued, not refused in the receiver (no main-thread port probe there); the worker
+                // probes the port, stands down for the untrusted network, and nothing prompts.
+                assertEquals(0, again.code)
                 assertEquals(WorkInfo.State.FAILED, lastWork)
                 assertEquals(1, trustPrompts)
             }
