@@ -33,6 +33,8 @@ the same rules. Jules has its own setup notes in [`JULES.md`](JULES.md).
 
 ## Project quick-ref
 
+- **Release-signed build without CI:** `scripts/dev/build-release-local.sh [dropin|shizukuplus]`
+  (signing secrets from the 1Password Service vault into a temp dir; installs over the fleet's app)
 - **Entry activity:** `MainActivity` (NOT `HomeActivity` — that's abstract)
 - **Settings keys:** `manager/src/main/java/af/shizuku/manager/ShizukuSettings.java` inner class `Keys`
 - **Preference XML:** `manager/src/main/res/xml/settings_*.xml`

@@ -1,4 +1,8 @@
-def ksFile = rootProject.file("signing.properties")
+// CI writes signing.properties at the root. A local release build
+// (scripts/dev/build-release-local.sh) points SIGNING_PROPERTIES at a temporary copy outside
+// the tree instead, so no signing material is ever written into the checkout.
+def ksPath = System.getenv("SIGNING_PROPERTIES")
+def ksFile = ksPath ? new File(ksPath) : rootProject.file("signing.properties")
 def props = new Properties()
 if (ksFile.canRead()) {
     props.load(new FileInputStream(ksFile))
