@@ -32,5 +32,7 @@ op read "op://$VAULT/$ITEM/KEYSTORE" | base64 --decode > "$tmp/key.jks"
 unset OP_SERVICE_ACCOUNT_TOKEN
 
 task=":manager:assemble${flavor^}Release"
-SIGNING_PROPERTIES="$tmp/signing.properties" bash gradlew "$task" "${@:2}"
+# Capped: a release build (R8) otherwise takes every core and pushed this machine's load past
+# 100 on 2026-10-05. Override with GRADLE_MAX_WORKERS.
+SIGNING_PROPERTIES="$tmp/signing.properties" bash gradlew --max-workers="${GRADLE_MAX_WORKERS:-2}" "$task" "${@:2}"
 find "manager/build/outputs/apk/$flavor/release" -name '*.apk' -print

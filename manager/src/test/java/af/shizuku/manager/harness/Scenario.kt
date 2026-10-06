@@ -6,12 +6,15 @@ import af.shizuku.manager.receiver.HeadlessStartStopReceiver
 import af.shizuku.manager.receiver.NotifAttemptReceiver
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.worker.AdbStartWorker
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.work.ListenableWorker
 import androidx.work.WorkInfo
 import org.junit.Assert.assertEquals
+import org.robolectric.shadows.ShadowToast
 import rikka.shizuku.Shizuku
 
 /**
@@ -87,6 +90,12 @@ class Scenario(
 
     fun keyOffered() = world.awaitOffer()
 
+    /** The connection holding the dialog is ready to offer its key again ("Ask again"). */
+    fun waitHeld() {
+        world.waitUntil({ "the held wait to accept a re-offer" }) { AdbAuthWait.reofferHeld() }
+        world.settle()
+    }
+
     fun dialogAccepted() {
         adbd.accept()
         awaitStartWork()
@@ -121,6 +130,11 @@ class Scenario(
 
     fun advanceTime(ms: Long) = world.advanceTime(ms)
 
+    /** AdbClient's deadline, in real milliseconds, for the waits this scenario starts. */
+    fun authTimeout(ms: Int) {
+        AdbAuthWait.timeoutMs = ms
+    }
+
     // Observations.
 
     val now: Long get() = world.now
@@ -135,6 +149,23 @@ class Scenario(
 
     /** Start requests WorkManager actually ran. */
     val startsRun: Int get() = world.startInputs.size
+
+    /** The text of the last toast shown (null: none). */
+    val lastToast: String? get() = ShadowToast.getTextOfLatestToast()
+
+    /** The label of the start notification's first action ("Attempt now" or "Ask again"). */
+    val attemptAction: String?
+        get() =
+            (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .activeNotifications
+                .firstOrNull { it.id == ShizukuReceiverStarter.NOTIFICATION_ID }
+                ?.notification
+                ?.actions
+                ?.firstOrNull()
+                ?.title
+                ?.toString()
+
+    fun string(id: Int): String = app.getString(id)
 
     fun expectOffers(n: Int) = assertEquals("key offers (adbd dialogs raised)", n, adbd.offers)
 

@@ -68,6 +68,7 @@ class FakeWorld(
         Starter.initialize(app)
         ShizukuSettings.setPreferencesForTesting(prefs)
         AdbAuthWait.clockMs = { clock.get() }
+        AdbAuthWait.elapsedMs = { clock.get() }
         AdbAuthWait.timeoutMs = AUTH_TIMEOUT_MS
         serverDown()
         // Robolectric reuses one sandbox (and so every app singleton) across the tests of a class.
@@ -190,6 +191,7 @@ class FakeWorld(
         runCatching { settle() }
         workExecutor.shutdownNow()
         AdbAuthWait.clockMs = System::currentTimeMillis
+        AdbAuthWait.elapsedMs = { android.os.SystemClock.elapsedRealtime() }
         AdbAuthWait.timeoutMs = AdbAuthWait.TIMEOUT_MS
         serverDown()
     }

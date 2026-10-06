@@ -1,5 +1,7 @@
 package af.shizuku.manager.harness
 
+import af.shizuku.manager.R
+import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.receiver.HeadlessStartStopReceiver
 import android.app.Application
 import androidx.work.ListenableWorker
@@ -194,4 +196,139 @@ class OnePromptScenariosTest {
                 )
             }
         }
+
+    // adbd never reports a denied dialog: the connection that offered the key stays open and
+    // unauthorised. Once the user has had time to see and deny it, "Ask again" offers the key again
+    // on the same connection (one new dialog) instead of waiting out the deadline, and accepting
+    // it completes the original start.
+    @Test
+    fun `attempt-now-reoffers-after-deny`() =
+        scenario {
+            authTimeout(REOFFER_AUTH_TIMEOUT_MS)
+            boot()
+            keyOffered()
+            waitHeld()
+            adbd.reject()
+            advanceTime(AdbAuthWait.REOFFER_MIN_AGE_MS + 1L)
+            attemptNow()
+            keyOffered()
+            dialogAccepted()
+            check {
+                expectOffers(2)
+                assertEquals("the key was offered again on the held connection", 1, adbd.connections)
+                assertEquals(WorkInfo.State.SUCCEEDED, lastWork)
+                assertNull("marker after acceptance", marker)
+                assertTrue("server up", serverRunning)
+            }
+        }
+
+    // While a wait is held the start notification's button asks for the dialog again; it is
+    // "Attempt now" everywhere else.
+    @Test
+    fun `ask-again-label-while-held`() =
+        scenario {
+            authTimeout(REOFFER_AUTH_TIMEOUT_MS)
+            boot()
+            keyOffered()
+            waitHeld()
+            check { assertEquals(string(R.string.wadb_notification_ask_again), attemptAction) }
+            dialogAccepted()
+            check { assertEquals(WorkInfo.State.SUCCEEDED, lastWork) }
+        }
+
+    // A tap right after the offer: the user cannot have answered yet, and a re-offer would only
+    // queue a second dialog behind the first. The tap says the dialog is awaited instead.
+    @Test
+    fun `ask-again-too-soon-toasts`() =
+        scenario {
+            authTimeout(REOFFER_AUTH_TIMEOUT_MS)
+            boot()
+            keyOffered()
+            waitHeld()
+            attemptNow()
+            check { assertEquals(string(R.string.wadb_notification_awaiting_auth), lastToast) }
+            dialogTimedOut()
+            world.settle()
+            check {
+                expectOffers(1)
+                assertEquals(1, adbd.connections)
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals("the notice offers a fresh start", string(R.string.wadb_notification_attempt_now), attemptAction)
+            }
+        }
+
+    // At most one re-offer per held wait, however long it lasts: a second tap, even after another
+    // full guard period, says the dialog is awaited.
+    @Test
+    fun `ask-again-once-per-wait`() =
+        scenario {
+            authTimeout(REOFFER_AUTH_TIMEOUT_MS)
+            boot()
+            keyOffered()
+            waitHeld()
+            adbd.reject()
+            advanceTime(AdbAuthWait.REOFFER_MIN_AGE_MS + 1L)
+            attemptNow()
+            keyOffered()
+            advanceTime(AdbAuthWait.REOFFER_MIN_AGE_MS + 1L)
+            attemptNow()
+            check { assertEquals(string(R.string.wadb_notification_awaiting_auth), lastToast) }
+            dialogAccepted()
+            check {
+                expectOffers(2)
+                assertEquals(1, adbd.connections)
+                assertEquals(WorkInfo.State.SUCCEEDED, lastWork)
+            }
+        }
+
+    // adbd queues a prompt per offer and shows it even after the key was accepted, so a tap while
+    // the first dialog is still up must not offer again: accepting that dialog would bring up
+    // another for a key that is already allowed.
+    @Test
+    fun `ask-again-while-pending-then-accept`() =
+        scenario {
+            authTimeout(REOFFER_AUTH_TIMEOUT_MS)
+            boot()
+            keyOffered()
+            waitHeld()
+            attemptNow()
+            dialogAccepted()
+            // Long enough for a re-offer written on another thread to reach adbd.
+            Thread.sleep(300)
+            check {
+                expectOffers(1)
+                assertEquals(WorkInfo.State.SUCCEEDED, lastWork)
+                assertTrue("server up", serverRunning)
+            }
+        }
+
+    // A re-offer restarts the deadline; the renewed wait still ends there, released and marked.
+    @Test
+    fun `ask-again-deadline-still-fires`() =
+        scenario {
+            authTimeout(REOFFER_AUTH_TIMEOUT_MS)
+            boot()
+            keyOffered()
+            waitHeld()
+            adbd.reject()
+            advanceTime(AdbAuthWait.REOFFER_MIN_AGE_MS + 1L)
+            attemptNow()
+            keyOffered()
+            dialogTimedOut()
+            check {
+                expectOffers(2)
+                assertEquals(1, adbd.connections)
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertFalse("wait released", AdbAuthWait.isWaiting())
+                assertNotNull("marker after an unanswered re-offer", marker)
+                assertEquals(HeadlessStartStopReceiver.RESULT_AUTH_UNANSWERED, headlessStart(force = false).code)
+                expectOffers(2)
+            }
+        }
+
+    private companion object {
+        // Real milliseconds: long enough that the deadline cannot fire between a scenario's taps on
+        // a loaded machine.
+        const val REOFFER_AUTH_TIMEOUT_MS = 8_000
+    }
 }

@@ -35,8 +35,11 @@ import java.util.concurrent.atomic.AtomicInteger
  * user's answer. [accept] completes the handshake. [reject] and [silent] look the same on the
  * wire, as on a real device: adbd sends nothing for a denied dialog and keeps the connection open
  * and unauthorised (AOSP adbd_auth.cpp, DenyUsbDevice), so the client only gives up at its own
- * deadline; a key offered again on that connection raises a new dialog. Connections that close
- * before saying anything (the starter's port probes) are ignored.
+ * deadline; a key offered again on that connection raises a new dialog. A key offered while a
+ * dialog is still up is queued behind it and raises its own dialog once that one is answered, even
+ * when the answer was Allow: adbd prompts for every offer, on an authorised connection too, so
+ * offers after acceptance count as well. Connections that close before saying anything (the
+ * starter's port probes) are ignored.
  */
 class FakeAdbd(
     private val onShell: (String) -> Unit = {},
@@ -48,6 +51,11 @@ class FakeAdbd(
 
     private val offerCount = AtomicInteger(0)
     val offers: Int get() = offerCount.get()
+
+    private val helloCount = AtomicInteger(0)
+
+    /** Connections that said hello (port probes that close first are not counted). */
+    val connections: Int get() = helloCount.get()
     private val offered = Semaphore(0)
     private val answers = LinkedBlockingQueue<Answer>()
     private val open = CopyOnWriteArrayList<Socket>()
@@ -119,6 +127,7 @@ class FakeAdbd(
             val output = s.getOutputStream()
             val hello = read(input) ?: return
             if (hello.command != A_CNXN) return
+            helloCount.incrementAndGet()
             onHello()
             write(output, AdbMessage(A_AUTH, ADB_AUTH_TOKEN, 0, ByteArray(20)))
             val signature = read(input) ?: return
@@ -143,6 +152,8 @@ class FakeAdbd(
             write(output, AdbMessage(A_CNXN, A_VERSION, A_MAXDATA, "device::"))
             while (true) {
                 val message = read(input) ?: return
+                // A queued or late offer: adbd shows its dialog even though this key is accepted.
+                if (message.command == A_AUTH && message.arg0 == ADB_AUTH_RSAPUBLICKEY) offerCount.incrementAndGet()
                 if (message.command != A_OPEN) continue
                 val command = message.data?.let { String(it).trimEnd('\u0000') }.orEmpty()
                 if (command.startsWith("shell:")) onShell(command)
