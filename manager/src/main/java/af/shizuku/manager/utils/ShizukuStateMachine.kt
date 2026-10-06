@@ -6,6 +6,7 @@ import af.shizuku.manager.ShizukuSettings
 import android.Manifest.permission.WRITE_SECURE_SETTINGS
 import android.content.pm.PackageManager
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
 import io.sentry.Breadcrumb
@@ -55,10 +56,18 @@ object ShizukuStateMachine {
             .AtomicLong(0L)
     private const val STARTING_TIMEOUT_MS = 90_000L
 
+    /** A start of ours that has not yet produced a new server; [binder] is the one present when it began. */
+    private class PendingStart(
+        val binder: IBinder?,
+    )
+
+    private val pendingStart = AtomicReference<PendingStart?>(null)
+
     /** Tests only: what a new process would start from (the persisted settled state). */
     internal fun resetForTesting() {
         state.set(loadPersistedSettledState())
         startingTimestamp.set(0L)
+        pendingStart.set(null)
     }
 
     private fun loadPersistedSettledState(): State =
@@ -87,6 +96,7 @@ object ShizukuStateMachine {
                 // the start notification follows this state machine's flow, so it comes back
                 // when the server stops.
                 set(State.RUNNING)
+                recordIfNewServer()
             },
         )
         Shizuku.addBinderDeadListener(
@@ -117,18 +127,18 @@ object ShizukuStateMachine {
             deliver(newState)
             Timber.tag("ShizukuStateMachine").d(newState.toString())
 
-            // Record which app build is starting this server instance. All deliberate start paths
-            // (AdbStarter, ShizukuReceiverStarter, tile, StarterActivity) funnel through STARTING,
-            // so this captures every fresh start centrally and lets isServerVersionSkewed() later
-            // detect a running server left behind by a pre-update build.
+            // Which app build started the running server is recorded when a start succeeds, not
+            // when it begins. All deliberate start paths (AdbStarter, ShizukuReceiverStarter, tile,
+            // StarterActivity) funnel through STARTING, which notes the server binder present then;
+            // the build is recorded once RUNNING is reached with a different binder, that is, a new
+            // server. Recording at STARTING marked a server left over from a pre-update build as
+            // current when the restart failed and update() settled back onto it, so
+            // isServerVersionSkewed() never fired in exactly the case it exists for.
             if (newState == State.STARTING) {
                 startingTimestamp.set(System.currentTimeMillis())
-                try {
-                    ShizukuSettings.setServerStartedBuild(BuildConfig.VERSION_CODE)
-                } catch (e: Exception) {
-                    Timber.tag("ShizukuStateMachine").w(e, "Failed to record server start build")
-                }
+                pendingStart.set(PendingStart(currentBinder()))
             }
+            if (newState == State.RUNNING) recordIfNewServer()
 
             if (newState == State.RUNNING || newState == State.STOPPED || newState == State.CRASHED) {
                 try {
@@ -288,6 +298,27 @@ object ShizukuStateMachine {
         if (!isRunning()) return false
         val startedBuild = ShizukuSettings.getServerStartedBuild()
         return startedBuild in 1 until BuildConfig.VERSION_CODE
+    }
+
+    private fun currentBinder(): IBinder? = runCatching { Shizuku.getBinder() }.getOrNull()
+
+    /**
+     * Records this build as the running server's starter when a start of ours is pending and the
+     * server now answering is a new one (its binder differs from the one present when the start
+     * began). A restart that failed over a live older server leaves the binder unchanged, so the
+     * older build stays recorded and the skew stays visible. The pending start is kept until a new
+     * server arrives, so a start that timed out to STOPPED is still recorded when it comes up late.
+     */
+    private fun recordIfNewServer() {
+        val start = pendingStart.get() ?: return
+        val binder = currentBinder() ?: return
+        if (binder === start.binder) return
+        if (!pendingStart.compareAndSet(start, null)) return
+        try {
+            ShizukuSettings.setServerStartedBuild(BuildConfig.VERSION_CODE)
+        } catch (e: Exception) {
+            Timber.tag("ShizukuStateMachine").w(e, "Failed to record server start build")
+        }
     }
 
     fun isDead(): Boolean = (get() == State.STOPPED || get() == State.CRASHED)
