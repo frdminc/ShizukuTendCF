@@ -12,6 +12,7 @@ import af.shizuku.manager.adb.StartNotificationState.AskAgain
 import af.shizuku.manager.adb.StartNotificationState.Display
 import af.shizuku.manager.adb.StartNotificationState.PendingReason
 import af.shizuku.manager.starter.Starter
+import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.SettingsPage
 import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.worker.AdbStartWorker
@@ -51,6 +52,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 object ShizukuReceiverStarter {
     private const val TAG = "AdbStartNotification"
+
+    // HeadlessLogger component.
+    private const val LOG = "Starter"
+
     const val NOTIFICATION_ID = 1447
 
     // The start worker's foreground notification. WorkManager posts it and removes it again on its
@@ -81,13 +86,21 @@ object ShizukuReceiverStarter {
                     ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING
             )
         ) {
+            // Running is the common case (the watchdog asks often); only a start that was turned
+            // away for another reason is worth a line.
+            if (!ShizukuStateMachine.isRunning()) {
+                HeadlessLogger.init(context)
+                HeadlessLogger.i(LOG, "start skipped: state=${ShizukuStateMachine.get()} user=${UserHandleCompat.myUserId()}")
+            }
             return
         }
+        HeadlessLogger.init(context)
 
         // A connection is already holding adbd's "Allow USB debugging?" dialog open; any new
         // connection would queue another dialog (and enqueue() would cancel the waiting worker).
         if (ShizukuSettings.getLastLaunchMode() != LaunchMethod.ROOT && AdbAuthWait.isWaiting()) {
             Timber.tag(AppConstants.TAG).i("Start skipped: waiting for the adbd authorisation dialog to be answered")
+            HeadlessLogger.i(LOG, "start skipped: another start is waiting for the adbd authorisation dialog")
             return
         }
 
@@ -98,20 +111,25 @@ object ShizukuReceiverStarter {
         // the notification's "Attempt now").
         if (!forceStart && ShizukuSettings.getLastLaunchMode() != LaunchMethod.ROOT && AdbAuthWait.isUnanswered()) {
             Timber.tag(AppConstants.TAG).i("Start skipped: adbd authorisation dialog went unanswered; waiting for an explicit start")
+            HeadlessLogger.i(LOG, "start skipped: the adbd authorisation dialog went unanswered; waiting for an explicit start")
             refreshNotification(context)
             return
         }
 
         if (ShizukuSettings.getLastLaunchMode() == LaunchMethod.ROOT) {
+            HeadlessLogger.i(LOG, "start: root")
             rootStart(context)
         } else if (ShizukuSettings.getLastLaunchMode() == LaunchMethod.ADB) {
             if (context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
+                HeadlessLogger.i(LOG, "start: adb, queueing the start worker (explicit=$forceStart)")
                 AdbStartWorker.enqueue(context, explicit = forceStart)
             } else {
+                HeadlessLogger.w(LOG, "start: adb, but WRITE_SECURE_SETTINGS is not granted")
                 showPermissionErrorNotification(context)
             }
         } else {
             Timber.tag(AppConstants.TAG).w("Background start not supported")
+            HeadlessLogger.w(LOG, "start: launch mode ${ShizukuSettings.getLastLaunchMode()} cannot start in the background")
         }
     }
 

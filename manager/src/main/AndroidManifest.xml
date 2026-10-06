@@ -472,6 +472,7 @@
                 <action android:name="${applicationId}.HEADLESS_START" />
                 <action android:name="${applicationId}.HEADLESS_STOP" />
                 <action android:name="${applicationId}.HEADLESS_STATUS" />
+                <action android:name="${applicationId}.HEADLESS_LOG" />
             </intent-filter>
         </receiver>
 

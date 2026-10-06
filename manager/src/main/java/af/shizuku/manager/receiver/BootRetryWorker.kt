@@ -2,6 +2,7 @@ package af.shizuku.manager.receiver
 
 import af.shizuku.common.util.UserHandleCompat
 import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.ShizukuStateMachine
 import android.content.Context
 import androidx.work.BackoffPolicy
@@ -88,8 +89,10 @@ class BootRetryWorker(
         // without this check it would keep calling ShizukuReceiverStarter.start() forever despite
         // the human's explicit "stop trying" signal, which is exactly the kind of not-respecting-
         // human-intent bug removing the attempt cap must not introduce.
+        HeadlessLogger.init(applicationContext)
         if (!ShizukuSettings.getStartOnBoot(applicationContext)) {
             Timber.tag(TAG).i("start-on-boot disabled, stopping retry")
+            HeadlessLogger.i(TAG, "attempt $runAttemptCount: start-on-boot off; stopping")
             return Result.success()
         }
 
@@ -101,26 +104,31 @@ class BootRetryWorker(
                 .isUnanswered()
         ) {
             Timber.tag(TAG).i("adbd authorisation was not accepted, stopping retry until the next explicit start")
+            HeadlessLogger.i(TAG, "attempt $runAttemptCount: adbd authorisation went unanswered; stopping until an explicit start")
             return Result.success()
         }
 
         ShizukuStateMachine.update()
         if (ShizukuStateMachine.isRunning()) {
             Timber.tag(TAG).i("Shizuku already running (attempt $runAttemptCount)")
+            HeadlessLogger.i(TAG, "attempt $runAttemptCount: already running; done")
             return Result.success()
         }
 
         Timber.tag(TAG).i("Retrying Shizuku start (attempt $runAttemptCount)")
+        HeadlessLogger.i(TAG, "attempt $runAttemptCount: not running; starting")
         ShizukuReceiverStarter.start(applicationContext)
 
         delay(VERIFY_DELAY_MS)
         ShizukuStateMachine.update()
         if (ShizukuStateMachine.isRunning()) {
             Timber.tag(TAG).i("Start succeeded (attempt $runAttemptCount)")
+            HeadlessLogger.i(TAG, "attempt $runAttemptCount: running; done")
             return Result.success()
         }
 
         Timber.tag(TAG).w("Start not yet running, will retry (attempt $runAttemptCount)")
+        HeadlessLogger.i(TAG, "attempt $runAttemptCount: not running ${VERIFY_DELAY_MS / 1000} s later (state=${ShizukuStateMachine.get()}); retry")
         return Result.retry()
     }
 }

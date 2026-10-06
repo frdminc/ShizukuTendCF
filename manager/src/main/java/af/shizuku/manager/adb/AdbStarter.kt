@@ -4,6 +4,7 @@ import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.starter.Starter
 import af.shizuku.manager.utils.EnvironmentUtils
+import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.ManagerActivityLog
 import af.shizuku.manager.utils.SettingsPage
 import af.shizuku.manager.utils.ShizukuStateMachine
@@ -36,6 +37,9 @@ import javax.net.ssl.SSLException
 object AdbStarter {
     private const val TAG = "AdbStarter"
 
+    // HeadlessLogger component: what a release build can still report about a start.
+    private const val LOG = "AdbStarter"
+
     private fun Context.getActivity(): Activity? {
         var context = this
         while (context is ContextWrapper) {
@@ -67,8 +71,10 @@ object AdbStarter {
         log: ((String) -> Unit)? = null,
         attempt: Long = AdbAuthWait.NO_ATTEMPT,
     ) {
+        HeadlessLogger.init(context)
         if (port !in 1..65535) {
             Timber.tag(TAG).w("startAdb called with invalid port $port — skipping")
+            HeadlessLogger.w(LOG, "invalid port $port; not starting")
             return
         }
 
@@ -78,6 +84,7 @@ object AdbStarter {
         // start was still legitimately waiting its 300 s.
         if (AdbAuthWait.isWaiting()) {
             Timber.tag(TAG).i("startAdb stood down: waiting for the adbd authorisation dialog")
+            HeadlessLogger.i(LOG, "stood down on port $port: another start holds the adbd authorisation dialog")
             log?.invoke(context.getString(R.string.wadb_notification_awaiting_auth) + "\n")
             throw AdbAuthPendingException("another start is waiting for the adbd authorisation dialog to be answered")
         }
@@ -115,6 +122,7 @@ object AdbStarter {
                 // interactive start reports through its log instead and must not leave one behind.
                 val fingerprint = runCatching { context.getString(R.string.wadb_auth_fingerprint, key.fingerprint()) }.getOrNull()
                 val onPending = {
+                    HeadlessLogger.i(LOG, "key not yet authorised; adbd is asking (${fingerprint ?: "fingerprint unavailable"})")
                     if (log != null) {
                         log.invoke(listOfNotNull(context.getString(R.string.wadb_notification_awaiting_auth), fingerprint).joinToString(". ") + "\n")
                     } else {
@@ -125,9 +133,11 @@ object AdbStarter {
                 var activePort = port
                 val tcpMode = ShizukuSettings.getTcpMode()
                 val tcpPort = ShizukuSettings.getTcpPort()
+                HeadlessLogger.i(LOG, "start on port $port (tcp_mode=$tcpMode tcp_port=$tcpPort interactive=${log != null})")
                 if (tcpMode && activePort != tcpPort) {
                     if (tcpPort !in 1..65535) {
                         Timber.tag(TAG).w("TCP mode enabled but stored TCP port is invalid ($tcpPort) — skipping TCP redirect")
+                        HeadlessLogger.w(LOG, "tcp mode on but tcp port $tcpPort is invalid; not switching")
                     } else {
                         Timber.tag(TAG).d("Switching ADB from port %d to TCP port %d", activePort, tcpPort)
                         log?.invoke("Connecting on port $activePort...")
@@ -139,6 +149,7 @@ object AdbStarter {
                             log?.invoke("\nRestarting in TCP mode port: $tcpPort")
 
                             activePort = tcpPort
+                            HeadlessLogger.i(LOG, "connected on $port; switching adbd to tcp port $tcpPort (tcpip)")
                             runCatching {
                                 client.command("tcpip:$activePort")
                             }.onFailure { if (it !is EOFException && it !is SocketException) throw it } // Expected when ADB restarts in TCP mode
@@ -152,6 +163,7 @@ object AdbStarter {
                 AdbClient("127.0.0.1", activePort, key, onPending).use { client ->
                     connectWithRetry(client, activePort)
                     Timber.tag(TAG).i("Connected to ADB at 127.0.0.1:%d; deploying starter command", activePort)
+                    HeadlessLogger.i(LOG, "connected on $activePort; running the starter")
                     log?.invoke("Successfully connected on port $activePort...\n")
                     client.runCommand("shell:${Starter.internalCommand}")
                     runCatching {
@@ -163,11 +175,13 @@ object AdbStarter {
                     ManagerActivityLog.log(context, "Service started via ADB on port $activePort")
                     ShizukuStateMachine.update()
                     Timber.tag(TAG).i("Shizuku service started successfully via ADB on port %d", activePort)
+                    HeadlessLogger.i(LOG, "starter ran on port $activePort")
                 }
             }
         } catch (e: Exception) {
             if (e is AdbAuthPendingException) stoodDown = true
             Timber.tag(TAG).e(e, "startAdb failed on port %d: %s", port, e.message)
+            HeadlessLogger.w(LOG, "failed on port $port: ${HeadlessLogger.brief(e)}")
             if (e is SSLException && (e.message?.contains("protocol version") == true || e is javax.net.ssl.SSLProtocolException)) {
                 withContext(Dispatchers.Main) {
                     val activity = context.getActivity()
@@ -194,6 +208,7 @@ object AdbStarter {
             AdbAuthWait.starts.end()
             if (!stoodDown && ShizukuSettings.getAutoDisableUsbDebugging() && context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
                 Settings.Global.putInt(context.contentResolver, "adb_wifi_enabled", 0)
+                HeadlessLogger.i(LOG, "auto-disable: turned wireless debugging off")
             }
         }
     }
@@ -225,6 +240,7 @@ object AdbStarter {
             }
         result.onFailure {
             if (it is CancellationException) throw it
+            HeadlessLogger.w(LOG, "leaving tcp mode on port $port failed: ${HeadlessLogger.brief(it)}")
             if (it !is CancellationException && !it.isExpectedAdbError(includeIllegalState = true)) {
                 Sentry.captureException(it)
             }
@@ -279,6 +295,7 @@ object AdbStarter {
                     // here as an I/O failure; report it as the cancellation it is.
                     ensureActive()
                     Timber.tag(TAG).w(e, "Connection attempt %d/%d failed: %s", attempt, maxAttempts, e.message)
+                    HeadlessLogger.w(LOG, "connect $attempt/$maxAttempts to port $port failed: ${HeadlessLogger.brief(e)}")
                     if (
                         attempt == maxAttempts ||
                         e is CancellationException ||

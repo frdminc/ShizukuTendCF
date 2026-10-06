@@ -24,6 +24,10 @@ import rikka.shizuku.Shizuku
  * client Shizuku has already authorised, since it can run `am` as shell). Results are returned
  * through ordered-broadcast result codes/data/extras. Since API 26 the broadcast must name the
  * package or it is dropped: `adb shell am broadcast -p <pkg> -a <pkg>.HEADLESS_STATUS`.
+ *
+ * HEADLESS_LOG returns the tail of [HeadlessLogger]'s file (the start path's decisions) as the
+ * result data, since a release build logs nothing else and its private storage is closed to
+ * `adb shell`: `adb shell am broadcast -p <pkg> -a <pkg>.HEADLESS_LOG --ei lines 100`.
  */
 class HeadlessStartStopReceiver : BroadcastReceiver() {
     override fun onReceive(
@@ -149,6 +153,21 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                 HeadlessLogger.i("Status", summary)
                 setResult(state.ordinal, summary, extras)
             }
+            ACTION_HEADLESS_LOG -> {
+                // Not logged itself: reading the log should not add to it.
+                val tail = HeadlessLogger.readTail(intent.getIntExtra(EXTRA_LINES, HeadlessLogger.DEFAULT_TAIL_LINES))
+                val extras =
+                    Bundle().apply {
+                        putString("log_path", HeadlessLogger.getLogPath() ?: "unavailable")
+                        putInt(EXTRA_LINES, tail?.lines ?: 0)
+                        putBoolean("truncated", tail?.truncated ?: false)
+                    }
+                if (tail == null) {
+                    setResult(RESULT_NO_LOG, "NO_LOG", extras)
+                } else {
+                    setResult(0, tail.text, extras)
+                }
+            }
         }
     }
 
@@ -178,6 +197,7 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
         val ACTION_HEADLESS_START = "${BuildConfig.APPLICATION_ID}.HEADLESS_START"
         val ACTION_HEADLESS_STOP = "${BuildConfig.APPLICATION_ID}.HEADLESS_STOP"
         val ACTION_HEADLESS_STATUS = "${BuildConfig.APPLICATION_ID}.HEADLESS_STATUS"
+        val ACTION_HEADLESS_LOG = "${BuildConfig.APPLICATION_ID}.HEADLESS_LOG"
         const val EXTRA_ENABLE_WIRELESS_ADB = "enable_wireless_adb"
 
         /** Clears an unanswered authorisation dialog's marker, so this start may raise a new one. */
@@ -185,5 +205,11 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
 
         /** Result code of a start withheld because an authorisation dialog went unanswered. */
         const val RESULT_AUTH_UNANSWERED = 4
+
+        /** HEADLESS_LOG: how many of the newest log lines to return (capped; see [HeadlessLogger.tail]). */
+        const val EXTRA_LINES = "lines"
+
+        /** HEADLESS_LOG result code when there is no log to read. */
+        const val RESULT_NO_LOG = 2
     }
 }

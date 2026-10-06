@@ -14,6 +14,7 @@ import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.settings.BugReportDialogActivity
 import af.shizuku.manager.starter.Starter
 import af.shizuku.manager.utils.EnvironmentUtils
+import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.ManagerActivityLog
 import af.shizuku.manager.utils.ShizukuStateMachine
 import android.app.KeyguardManager
@@ -48,7 +49,16 @@ class AdbStartWorker(
     // still making (mDNS discovery, waiting for an unlock, the binder wait).
     override suspend fun doWork(): Result = AdbAuthWait.starts.track { attemptStart() }
 
+    // The start path's decisions also go to HeadlessLogger: a release build logs nothing through
+    // Timber, and HEADLESS_LOG is then the only way to see why a start keeps failing.
+    private fun note(message: String) = HeadlessLogger.i(LOG, message)
+
+    private fun warn(message: String) = HeadlessLogger.w(LOG, message)
+
+    private fun wifiSetting(cr: android.content.ContentResolver) = runCatching { Settings.Global.getInt(cr, "adb_wifi_enabled", 0) }.getOrDefault(-1)
+
     private suspend fun attemptStart(): Result {
+        HeadlessLogger.init(applicationContext)
         try {
             // Decide before publishing progress, so a start that stands down never shows itself
             // over the start that holds the dialog.
@@ -74,6 +84,12 @@ class AdbStartWorker(
                 EnvironmentUtils.isAdbEnabled(),
                 ShizukuSettings.getTcpMode(),
             )
+            note(
+                "run attempt=$runAttemptCount explicit=${inputData.getBoolean(KEY_EXPLICIT, false)} " +
+                    "adb_enabled=${EnvironmentUtils.isAdbEnabled()} tcp_mode=${ShizukuSettings.getTcpMode()} " +
+                    "tcp_port=${ShizukuSettings.getTcpPort()} sys_tcp_port=${EnvironmentUtils.getAdbTcpPort()} " +
+                    "last_port=${ShizukuSettings.getLastPort()} adb_wifi_enabled=${wifiSetting(applicationContext.contentResolver)}",
+            )
             // Progress travels with this request's WorkInfo, which the shared notification is
             // rendered from; the refresh makes sure this process (perhaps started just for this run)
             // is rendering it.
@@ -96,6 +112,7 @@ class AdbStartWorker(
                         } else {
                             1500L
                         }
+                    note("adb off after boot; settling ${baseDelay}ms before enabling it")
                     delay(baseDelay)
                 }
             }
@@ -108,20 +125,26 @@ class AdbStartWorker(
             if (ShizukuSettings.getTcpMode()) {
                 val desiredPort = ShizukuSettings.getTcpPort()
                 if (desiredPort in 1..65535) {
-                    if (AdbPortProber.isPortOpen(desiredPort, 600)) {
+                    val open = AdbPortProber.isPortOpen(desiredPort, 600)
+                    note("tcp fast path: port $desiredPort ${if (open) "open" else "closed"}")
+                    if (open) {
                         AdbStarter.startAdb(applicationContext, desiredPort)
                         Starter.waitForBinder()
                         ManagerActivityLog.log(
                             applicationContext,
                             "Service started via direct TCP port $desiredPort (no Wi-Fi required)",
                         )
+                        note("SUCCESS via tcp fast path on port $desiredPort (attempt=$runAttemptCount)")
                         return Result.success()
                     }
+                } else {
+                    warn("tcp mode on but tcp port $desiredPort is invalid; skipping the fast path")
                 }
             }
 
             val tcpPort = EnvironmentUtils.getAdbTcpPort()
             if (tcpPort > 0 && !ShizukuSettings.getTcpMode()) {
+                note("tcp mode off but adbd listens on $tcpPort; switching adbd back to usb")
                 if (!AdbStarter.stopTcp(applicationContext, tcpPort)) {
                     // Connecting again for the start would raise the dialog a second time.
                     throw AdbAuthTimeoutException("adbd authorisation was not accepted while leaving TCP mode")
@@ -137,26 +160,33 @@ class AdbStartWorker(
             // session, we connect directly without going through mDNS discovery.
             if (ShizukuSettings.isForceStartWadbEnabled() && tcpPort <= 0 && savedPort <= 0) {
                 val probePort = ShizukuSettings.getTcpPort().takeIf { it in 1..65535 } ?: 5555
-                if (AdbPortProber.isPortOpen(probePort, 400)) {
+                val open = AdbPortProber.isPortOpen(probePort, 400)
+                note("force_start_wadb probe: port $probePort ${if (open) "open" else "closed"}")
+                if (open) {
                     AdbStarter.startAdb(applicationContext, probePort)
                     Starter.waitForBinder()
                     ManagerActivityLog.log(
                         applicationContext,
                         "Service started via force_start_wadb TCP probe on port $probePort",
                     )
+                    note("SUCCESS via force_start_wadb probe on port $probePort (attempt=$runAttemptCount)")
                     return Result.success()
                 }
             }
 
             val port =
                 when {
-                    tcpPort > 0 && isWifiOk -> tcpPort
-                    savedPort > 0 && isWifiOk && runAttemptCount == 0 -> savedPort
+                    tcpPort > 0 && isWifiOk -> tcpPort.also { note("using adbd's tcp port $it") }
+                    savedPort > 0 && isWifiOk && runAttemptCount == 0 -> savedPort.also { note("using the saved port $it (first attempt)") }
                     else ->
                         callbackFlow {
+                            note("discovering the wireless debugging port by mDNS (sys_tcp_port=$tcpPort saved_port=$savedPort wifi_ok=$isWifiOk)")
                             val adbMdns =
                                 AdbMdns(applicationContext, AdbMdns.TLS_CONNECT) { p ->
-                                    if (p > 0) trySend(p)
+                                    if (p > 0) {
+                                        note("mDNS found port $p")
+                                        trySend(p)
+                                    }
                                 }
 
                             var awaitingAuth = false
@@ -182,6 +212,7 @@ class AdbStartWorker(
                                 timeoutJob =
                                     launch {
                                         delay(15_000)
+                                        warn("mDNS discovery timed out after 15 s (adb_wifi_enabled=${wifiSetting(cr)})")
                                         close(TimeoutException("Timed out during mDNS port discovery"))
                                     }
                             }
@@ -189,6 +220,7 @@ class AdbStartWorker(
                             fun handleAuth() {
                                 val km = applicationContext.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
                                 if (km.isKeyguardLocked) {
+                                    note("wireless debugging went off while locked; waiting for an unlock to turn it on again")
                                     val notification = ShizukuReceiverStarter.buildForegroundNotification(applicationContext)
                                     // On Android 14+ (API 34), ForegroundInfo must declare a foreground
                                     // service type (one the manifest lists for SystemForegroundService) or
@@ -219,6 +251,7 @@ class AdbStartWorker(
                                             timber.log.Timber
                                                 .tag("AdbStartWorker")
                                                 .w(e, "doWork: foreground promotion failed")
+                                            warn("foreground promotion failed: ${HeadlessLogger.brief(e)}")
                                         }
                                     }
 
@@ -233,6 +266,7 @@ class AdbStartWorker(
                                                     context.unregisterReceiver(this)
                                                     unlockReceiver = null
                                                     Settings.Global.putInt(cr, "adb_wifi_enabled", 1)
+                                                    note("unlocked; turned wireless debugging on (adb_wifi_enabled=${wifiSetting(cr)})")
                                                 }
                                             }
                                         }
@@ -243,6 +277,7 @@ class AdbStartWorker(
                                         ContextCompat.RECEIVER_NOT_EXPORTED,
                                     )
                                 } else {
+                                    note("wireless debugging went off while unlocked; waiting for the network to be authorised")
                                     awaitingAuth = true
                                 }
                                 timeoutJob?.cancel()
@@ -255,25 +290,33 @@ class AdbStartWorker(
                                         when (Settings.Global.getInt(cr, "adb_wifi_enabled", 0)) {
                                             0 ->
                                                 if (awaitingAuth) {
+                                                    warn("adb_wifi_enabled is 0 again: network not authorised for wireless debugging")
                                                     close(SecurityException("Network is not authorized for wireless debugging"))
                                                 } else if (samsungResetCount < maxSamsungResets) {
                                                     // Samsung firmware reset detected — re-enable wireless
                                                     // debugging with brief exponential backoff rather than
                                                     // falling through to handleAuth() (which stops discovery).
                                                     samsungResetCount++
+                                                    warn("adb_wifi_enabled reset to 0; turning it on again ($samsungResetCount/$maxSamsungResets)")
                                                     launch {
                                                         delay(300L * samsungResetCount)
                                                         Settings.Global.putInt(cr, "adb_wifi_enabled", 1)
                                                     }
                                                 } else {
+                                                    warn("adb_wifi_enabled went to 0")
                                                     handleAuth()
                                                 }
-                                            1 -> startDiscoveryWithTimeout()
+                                            1 -> {
+                                                note("adb_wifi_enabled is 1; discovering")
+                                                startDiscoveryWithTimeout()
+                                            }
                                         }
                                     }
                                 }
 
+                            val wifiBefore = wifiSetting(cr)
                             Settings.Global.putInt(cr, "adb_wifi_enabled", 1)
+                            note("turning wireless debugging on: adb_wifi_enabled $wifiBefore -> ${wifiSetting(cr)}")
                             cr.registerContentObserver(Settings.Global.getUriFor("adb_wifi_enabled"), false, observer)
                             startDiscoveryWithTimeout()
 
@@ -289,9 +332,11 @@ class AdbStartWorker(
             timber.log.Timber
                 .tag("AdbStartWorker")
                 .i("doWork: resolved port %d, starting ADB client", port)
+            note("starting adb on port $port")
             AdbStarter.startAdb(applicationContext, port)
             Starter.waitForBinder()
             ManagerActivityLog.log(applicationContext, "Service started via background ADB worker on port $port")
+            note("SUCCESS on port $port (attempt=$runAttemptCount)")
             timber.log.Timber
                 .tag("AdbStartWorker")
                 .i("doWork: Shizuku service successfully started and binder ready on port %d", port)
@@ -304,6 +349,7 @@ class AdbStartWorker(
             timber.log.Timber
                 .tag("AdbStartWorker")
                 .w("doWork: job cancelled (stopReason=%d)", reason)
+            warn("cancelled (stop_reason=$reason, attempt=$runAttemptCount)")
             throw e
         } catch (e: AdbAuthPendingException) {
             // Another start holds the one authorisation dialog. It owns the state machine and the
@@ -312,6 +358,7 @@ class AdbStartWorker(
             timber.log.Timber
                 .tag("AdbStartWorker")
                 .i("doWork: stood down: %s", e.message)
+            note("FAILURE stood down (attempt=$runAttemptCount): ${e.message}")
             return Result.failure()
         } catch (e: AdbAuthTimeoutException) {
             // Retrying (WorkManager backoff) would open a new connection and raise a new dialog.
@@ -319,6 +366,7 @@ class AdbStartWorker(
             timber.log.Timber
                 .tag("AdbStartWorker")
                 .w(e, "doWork: authorisation dialog not answered, not retrying")
+            warn("FAILURE authorisation dialog not accepted, not retrying (attempt=$runAttemptCount): ${HeadlessLogger.brief(e)}")
             if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
                 ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
             }
@@ -357,8 +405,13 @@ class AdbStartWorker(
                 // A server is up despite the exception (e.g. the connection dropped after the
                 // starter command ran). That does not show the key was accepted, so the
                 // unanswered marker is left to AdbClient, which clears it on acceptance.
+                warn("SUCCESS (attempt=$runAttemptCount): the server is running despite ${HeadlessLogger.brief(e)}")
                 return Result.success()
             } else {
+                warn(
+                    "RETRY (attempt=$runAttemptCount): ${HeadlessLogger.brief(e)} " +
+                        "adb_wifi_enabled=${wifiSetting(applicationContext.contentResolver)}",
+                )
                 // After repeated mDNS timeouts, suggest TCP Mode — the device may be
                 // blocking multicast (common on Vivo/FunTouchOS and some corporate Wi-Fi).
                 if (e is TimeoutException && runAttemptCount >= 2) {
@@ -511,6 +564,9 @@ class AdbStartWorker(
         ) = ShizukuReceiverStarter.cancelStarts(context, then)
 
         const val UNIQUE_WORK_NAME = "adb_start_worker"
+
+        // HeadlessLogger component.
+        private const val LOG = "StartWorker"
 
         // The progress key a running worker publishes its StartNotificationState.Step under.
         internal const val KEY_STEP = "step"

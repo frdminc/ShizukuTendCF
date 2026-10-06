@@ -6,6 +6,7 @@ import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.receiver.BootRetryWorker
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.starter.Starter
+import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.worker.AdbStartWorker
 import android.Manifest
@@ -88,6 +89,9 @@ class FakeWorld(
         ShizukuReceiverStarter.resetForTesting()
         AdbAuthWait.resetForTesting()
         ShizukuStateMachine.resetForTesting()
+        // The log lives in this test's files dir; a previous test's dir is gone.
+        HeadlessLogger.resetForTesting()
+        HeadlessLogger.init(app)
 
         shadowOf(app).grantPermissions(Manifest.permission.WRITE_SECURE_SETTINGS)
         // Skips the worker's post-boot settling delay.

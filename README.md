@@ -2,7 +2,8 @@
 > [thejaustin/ShizukuPlus](https://github.com/thejaustin/ShizukuPlus) maintained for the
 > [stayturgid](https://github.com/djbclark/stayturgid) Android fleet. It tracks ShizukuPlus and adds
 > unattended-fleet features on top: permission-gated **headless start/stop/status broadcasts**
-> (`HEADLESS_START` / `HEADLESS_STOP` / `HEADLESS_STATUS`) with an on-disk diagnostics log, **JSON fleet
+> (`HEADLESS_START` / `HEADLESS_STOP` / `HEADLESS_STATUS`) with an on-disk diagnostics log of the start path that
+> `HEADLESS_LOG` returns (`--ei lines N`, default 200), readable on a release build, **JSON fleet
 > profiles** (`APPLY_FLEET_PROFILE`) and **auth-token provisioning** (`PROVISION_AUTH`), **indefinite
 > start-on-boot retry**, a **trusted-signer allowlist** that keeps the fleet agent's grant from being lost
 > (see [`docs/trusted-signer-allowlist.md`](docs/trusted-signer-allowlist.md)), a status card that shows

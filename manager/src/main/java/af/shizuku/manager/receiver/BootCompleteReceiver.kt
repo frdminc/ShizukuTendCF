@@ -3,6 +3,7 @@ package af.shizuku.manager.receiver
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.database.RootCompatHelper
 import af.shizuku.manager.service.WatchdogService
+import af.shizuku.manager.utils.HeadlessLogger
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -30,6 +31,8 @@ class BootCompleteReceiver : BroadcastReceiver() {
         if (!handled) return
 
         Timber.tag("BootCompleteReceiver").i("Triggered by: $action")
+        HeadlessLogger.init(context)
+        HeadlessLogger.i("Boot", "received ${action.substringAfterLast('.')}")
         // LOCKED_BOOT_COMPLETED fires before credential-encrypted storage is unlocked, so prefs
         // (launch mode, shell commands, etc.) are unavailable. Attempting to start here would either
         // crash or spawn a server using stale defaults, and BOOT_COMPLETED fires seconds later once
@@ -45,6 +48,7 @@ class BootCompleteReceiver : BroadcastReceiver() {
                 ShizukuReceiverStarter.start(context)
             } catch (e: Exception) {
                 Timber.tag("BootCompleteReceiver").w(e, "Auto-start skipped (service not ready, e.g. direct boot)")
+                HeadlessLogger.w("Boot", "auto-start skipped: ${HeadlessLogger.brief(e)}")
             }
             // The direct start above is one shot; on slow or unattended devices (FBE unlock,
             // network authorization, pairing) it fails and nothing retries until the next
@@ -54,6 +58,7 @@ class BootCompleteReceiver : BroadcastReceiver() {
             // unprotected and any app could use them to re-arm a retry loop.
             if (action == Intent.ACTION_BOOT_COMPLETED) {
                 BootRetryWorker.schedule(context)
+                HeadlessLogger.i("Boot", "boot retry scheduled")
             }
         } else {
             Timber.tag("BootCompleteReceiver").d("LOCKED_BOOT_COMPLETED — deferring start to BOOT_COMPLETED")

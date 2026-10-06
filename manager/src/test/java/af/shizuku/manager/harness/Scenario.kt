@@ -77,6 +77,14 @@ class Scenario(
 
     fun headlessStatus(): Headless = headless(Intent(HeadlessStartStopReceiver.ACTION_HEADLESS_STATUS))
 
+    /** HEADLESS_LOG, as `am broadcast ... --ei lines N` (null: the receiver's default). */
+    fun headlessLog(lines: Int? = null): Headless =
+        headless(
+            Intent(HeadlessStartStopReceiver.ACTION_HEADLESS_LOG).apply {
+                if (lines != null) putExtra(HeadlessStartStopReceiver.EXTRA_LINES, lines)
+            },
+        )
+
     // Results travel through an ordered broadcast's PendingResult, which only the framework creates.
     private fun headless(intent: Intent): Headless {
         val receiver = HeadlessStartStopReceiver()
