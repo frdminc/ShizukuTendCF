@@ -25,6 +25,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -150,9 +151,14 @@ public class ShizukuConfigManager extends ConfigManager {
 
         Map<Integer, List<String>> packagesByUid = new HashMap<>();
         List<PackageInfo> allPackages = new ArrayList<>();
+        // Users whose installed list was read. A real user always has packages, so an empty list is
+        // a read that failed (the no-throw call answers a failure with an empty list).
+        Set<Integer> readUsers = new HashSet<>();
 
         for (int userId : UserManagerApis.getUserIdsNoThrow()) {
-            for (PackageInfo pi : InstalledPackagesCompat.getInstalledPackagesNoThrow(PackageManager.GET_PERMISSIONS, userId)) {
+            List<PackageInfo> installed = InstalledPackagesCompat.getInstalledPackagesNoThrow(PackageManager.GET_PERMISSIONS, userId);
+            if (!installed.isEmpty()) readUsers.add(userId);
+            for (PackageInfo pi : installed) {
                 if (pi == null || pi.applicationInfo == null) continue;
                 allPackages.add(pi);
 
@@ -175,19 +181,28 @@ public class ShizukuConfigManager extends ConfigManager {
                 entry.packages = new ArrayList<>();
             }
 
-            List<String> packages = packagesByUid.get(entry.uid);
-            if (packages == null || packages.isEmpty()) {
-                List<String> livePackages = rikka.hidden.compat.PackageManagerApis.getPackagesForUidNoThrow(entry.uid);
-                if (livePackages != null && !livePackages.isEmpty()) {
-                    packages = livePackages;
-                    packagesByUid.put(entry.uid, livePackages);
-                } else {
-                    LOGGER.i("remove config for uid %d since it has gone", entry.uid);
-                    config.packages.remove(entry);
-                    changed = true;
-                    continue;
-                }
+            // Removing the entry revokes the UID's grant, so it is removed as gone only on a positive
+            // answer: its user's installed list was read and does not name it, and the throwing
+            // packages-for-UID lookup answered without throwing and named nothing. A read that failed
+            // (early in boot, a package manager not answering) is "unknown" and keeps the entry; the
+            // no-throw lookup used here before answered a failure with an empty list, which was read
+            // as "uninstalled" and deleted grants.
+            final int uid = entry.uid;
+            List<String> namedByUserList = readUsers.contains(UserHandleCompat.getUserId(uid))
+                    ? packagesByUid.getOrDefault(uid, Collections.emptyList())
+                    : null;
+            List<String> packages = UidPackages.of(namedByUserList, () -> PackageManagerApis.getPackagesForUid(uid));
+            if (packages == null) {
+                LOGGER.w("cannot tell whether uid %d still has packages; keeping its config", uid);
+                continue;
             }
+            if (packages.isEmpty()) {
+                LOGGER.i("remove config for uid %d since it has gone", uid);
+                config.packages.remove(entry);
+                changed = true;
+                continue;
+            }
+            packagesByUid.put(uid, packages);
 
             if (entry.packages.isEmpty()) {
                 // Entries created via the plain toggle path (updateFlagsForUid) used to be
