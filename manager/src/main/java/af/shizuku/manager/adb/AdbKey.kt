@@ -325,8 +325,6 @@ class AdbKey(
             CertificateFactory
                 .getInstance("X.509")
                 .generateCertificate(ByteArrayInputStream(x509Certificate.encoded)) as X509Certificate
-
-        Timber.tag(TAG).d(privateKey.toString())
     }
 
     /** MD5 of the public key blob as colon-separated hex, the form adbd's dialog displays. */
