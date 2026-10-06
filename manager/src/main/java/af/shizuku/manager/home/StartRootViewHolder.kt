@@ -69,7 +69,8 @@ class StartRootViewHolder(
                 .isRooted()
         val isSystem =
             af.shizuku.manager.ShizukuSettings
-                .isSamsungSystemUidEscalationEnabled() && !isRooted
+                .isSamsungSystemUidEscalationEnabled() &&
+                !isRooted
         val intent =
             Intent(activity, StarterActivity::class.java).apply {
                 if (isSystem) {
