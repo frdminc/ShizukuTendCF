@@ -596,6 +596,9 @@ object ShizukuReceiverStarter {
                 .getInstance(app)
                 .getWorkInfosForUniqueWork(AdbStartWorker.UNIQUE_WORK_NAME)
                 .get(WORK_TIMEOUT_S, TimeUnit.SECONDS)
+                // A quiet retry (WirelessDebugging) shows nothing unless it runs as an ordinary
+                // start, which publishes its step.
+                .filterNot { AdbStartWorker.QUIET_TAG in it.tags && it.progress.getString(AdbStartWorker.KEY_STEP) == null }
                 .map { it.toWork() }
         }.onFailure { Timber.tag(TAG).w(it, "could not read the start work's state") }
             .getOrNull()

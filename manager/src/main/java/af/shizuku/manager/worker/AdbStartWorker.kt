@@ -46,6 +46,9 @@ class AdbStartWorker(
 
     private fun warn(message: String) = HeadlessLogger.w(LOG, message)
 
+    // Queued as a quiet retry, and it still applies (One UI, locked, after a silent refusal).
+    private fun quietRun(): Boolean = inputData.getBoolean(KEY_QUIET, false) && WirelessDebugging.quietAllowed(applicationContext)
+
     private fun wifiSetting(cr: android.content.ContentResolver) = runCatching { Settings.Global.getInt(cr, "adb_wifi_enabled", 0) }.getOrDefault(-1)
 
     private suspend fun attemptStart(): Result {
@@ -83,9 +86,12 @@ class AdbStartWorker(
             )
             // Progress travels with this request's WorkInfo, which the shared notification is
             // rendered from; the refresh makes sure this process (perhaps started just for this run)
-            // is rendering it.
-            setProgress(workDataOf(KEY_STEP to StartNotificationState.Step.STARTING.name))
-            ShizukuReceiverStarter.refreshNotification(applicationContext)
+            // is rendering it. A quiet retry that still applies publishes nothing, so the
+            // notification ignores it (QUIET_TAG with no step): its notice is the unlock notice.
+            if (!quietRun()) {
+                setProgress(workDataOf(KEY_STEP to StartNotificationState.Step.STARTING.name))
+                ShizukuReceiverStarter.refreshNotification(applicationContext)
+            }
 
             val cr = applicationContext.contentResolver
 
@@ -166,6 +172,7 @@ class AdbStartWorker(
                         applicationContext,
                         "Service started via force_start_wadb TCP probe on port $probePort",
                     )
+                    WirelessDebugging.succeeded(applicationContext)
                     note("SUCCESS via force_start_wadb probe on port $probePort (attempt=$runAttemptCount)")
                     return Result.success()
                 }
@@ -354,7 +361,11 @@ class AdbStartWorker(
      */
     private fun wirelessSession(restoresState: Boolean = false): WirelessDebugging.Session {
         val explicit = inputData.getBoolean(KEY_EXPLICIT, false)
-        val quiet = inputData.getBoolean(KEY_QUIET, false)
+        // Quiet only while that still holds: a quiet request run later (WorkManager's retry, or
+        // after an unlock) is an ordinary start, which may wait for Wi-Fi and ask.
+        val queuedQuiet = inputData.getBoolean(KEY_QUIET, false)
+        val quiet = quietRun()
+        if (queuedQuiet && !quiet) note("queued as a quiet retry, but no longer locked after a silent refusal: an ordinary start")
         WirelessDebugging.standDownReason(applicationContext, explicit, inputData.getLong(KEY_REQUESTED_AT, 0L), quiet)?.let { (reason, why) ->
             throw WirelessDebuggingBlockedException(reason, why)
         }
@@ -364,7 +375,8 @@ class AdbStartWorker(
             note("a start by hand made after this boot's network prompt: it may ask once more")
             WirelessDebugging.clearPrompted(applicationContext)
         }
-        WirelessDebugging.clearNoWifi(applicationContext)
+        // The unlock notice stays while an unlock is what helps.
+        WirelessDebugging.clearNoWifi(applicationContext, keepNotice = quiet || WirelessDebugging.silentRefusalPending(applicationContext))
         return WirelessDebugging.Session(applicationContext, ::note, ::warn, ::promoteToForeground, restoresState, quiet)
     }
 
@@ -543,6 +555,7 @@ class AdbStartWorker(
                 OneTimeWorkRequestBuilder<AdbStartWorker>()
                     .setConstraints(cb.build())
                     .setInputData(workDataOf(KEY_EXPLICIT to explicit, KEY_REQUESTED_AT to AdbAuthWait.clockMs(), KEY_QUIET to quiet))
+                    .apply { if (quiet) addTag(QUIET_TAG) }
                     .build()
             ShizukuReceiverStarter.enqueueStart(context, request, explicit)
         }
@@ -554,6 +567,9 @@ class AdbStartWorker(
         ) = ShizukuReceiverStarter.cancelStarts(context, then)
 
         const val UNIQUE_WORK_NAME = "adb_start_worker"
+
+        /** On a quiet retry's request: the start notification shows it only once it publishes a step. */
+        const val QUIET_TAG = "adb_start_quiet"
 
         // HeadlessLogger component.
         private const val LOG = "StartWorker"

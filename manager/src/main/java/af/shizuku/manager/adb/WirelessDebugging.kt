@@ -93,6 +93,9 @@ object WirelessDebugging {
     // A write of 1 made this boot whose outcome no run saw (the run died): counts as the prompt.
     private const val KEY_WRITE_PENDING_BOOT = "wadb_restore_write_pending_boot"
 
+    // Whether that write was made with the keyguard locked (One UI then shows no prompt).
+    private const val KEY_WRITE_PENDING_LOCKED = "wadb_restore_write_pending_locked"
+
     // A restore stopped for want of Wi-Fi this boot (resumed when Wi-Fi connects).
     private const val KEY_NO_WIFI_BOOT = "wadb_restore_no_wifi_boot"
 
@@ -107,6 +110,10 @@ object WirelessDebugging {
     // A write refused while locked with no prompt shown (One UI) this boot: the next unlock may
     // write once more, and that write is this boot's prompt.
     private const val KEY_SILENT_BOOT = "wadb_restore_silent_refusal_boot"
+
+    // That write, made unlocked after a silent refusal, has happened this boot: from then on any
+    // refusal is this boot's prompt, whatever the lock state.
+    private const val KEY_UNLOCK_WRITE_BOOT = "wadb_restore_unlock_write_boot"
 
     // A restore stopped for an untrusted network this boot and is watching (see [watch]).
     private const val KEY_WATCH_BOOT = "wadb_restore_watch_boot"
@@ -233,12 +240,28 @@ object WirelessDebugging {
 
     fun locked(context: Context): Boolean = (context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.isKeyguardLocked == true
 
+    // The One UI that refuses an untrusted network's write in silence while locked, as
+    // ro.build.version.oneui. Evidence: s24 SM-S921U1, One UI 8.5 (80500), Android 16, build
+    // BP4A.251205.006.S921U1UES6DZH3, logcat 2026-10-06 03:01:57: "AdbDebuggingManager:
+    // startConfirmationForNetwork: isLockScreenMode", no WifiDebuggingActivity, adb_wifi_enabled
+    // back to 0 within ~90 ms. Older or unknown One UI is unproven and takes AOSP's path.
+    private const val ONE_UI_SILENT_WHEN_LOCKED = 80500
+
+    /** ro.build.version.oneui (80500 for One UI 8.5); 0 if absent or unreadable. */
+    fun oneUiVersion(): Int =
+        runCatching {
+            android.os.SystemProperties
+                .get("ro.build.version.oneui", "")
+                .toIntOrNull()
+        }.getOrNull() ?: 0
+
     /**
      * One UI refuses an untrusted network's write in silence while the keyguard is locked (no
      * WifiDebuggingActivity, so nothing to answer after the unlock either). AOSP shows its dialog
      * once the keyguard goes.
      */
-    fun silentWhenLocked(): Boolean = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+    fun silentWhenLocked(): Boolean =
+        Build.MANUFACTURER.equals("samsung", ignoreCase = true) && oneUiVersion() >= ONE_UI_SILENT_WHEN_LOCKED
 
     // Wi-Fi.
 
@@ -322,6 +345,7 @@ object WirelessDebugging {
                 .putInt(KEY_PROMPTED_BOOT, bootCount(context))
                 .putLong(KEY_PROMPTED_AT, AdbAuthWait.clockMs())
                 .remove(KEY_WRITE_PENDING_BOOT)
+                .remove(KEY_WRITE_PENDING_LOCKED)
                 .commit()
         }
     }
@@ -334,14 +358,23 @@ object WirelessDebugging {
                 .remove(KEY_PROMPTED_BOOT)
                 .remove(KEY_PROMPTED_AT)
                 .remove(KEY_WRITE_PENDING_BOOT)
+                .remove(KEY_WRITE_PENDING_LOCKED)
                 .remove(KEY_SILENT_BOOT)
+                .remove(KEY_UNLOCK_WRITE_BOOT)
                 .commit()
         }
         cancelNotice(context)
     }
 
-    /** This boot's writes were refused in silence while locked, and none has prompted since. */
-    fun silentRefusalPending(context: Context): Boolean = thisBoot(context, KEY_SILENT_BOOT) && promptedAt(context) == null
+    /**
+     * This boot's writes were refused in silence while locked, and no write has been made unlocked
+     * since (that one is the prompt).
+     */
+    fun silentRefusalPending(context: Context): Boolean =
+        thisBoot(context, KEY_SILENT_BOOT) && promptedAt(context) == null && !thisBoot(context, KEY_UNLOCK_WRITE_BOOT)
+
+    /** A quiet retry's start may write now: One UI, still locked, after a silent refusal. */
+    fun quietAllowed(context: Context): Boolean = silentWhenLocked() && locked(context) && silentRefusalPending(context)
 
     private fun markSilentRefusal(context: Context) {
         runCatching {
@@ -349,6 +382,7 @@ object WirelessDebugging {
                 .edit()
                 .putInt(KEY_SILENT_BOOT, bootCount(context))
                 .remove(KEY_WRITE_PENDING_BOOT)
+                .remove(KEY_WRITE_PENDING_LOCKED)
                 .commit()
         }
     }
@@ -356,10 +390,15 @@ object WirelessDebugging {
     private fun setWritePending(
         context: Context,
         pending: Boolean,
+        locked: Boolean = false,
     ) {
         runCatching {
             val edit = prefs().edit()
-            if (pending) edit.putInt(KEY_WRITE_PENDING_BOOT, bootCount(context)) else edit.remove(KEY_WRITE_PENDING_BOOT)
+            if (pending) {
+                edit.putInt(KEY_WRITE_PENDING_BOOT, bootCount(context)).putBoolean(KEY_WRITE_PENDING_LOCKED, locked)
+            } else {
+                edit.remove(KEY_WRITE_PENDING_BOOT).remove(KEY_WRITE_PENDING_LOCKED)
+            }
             edit.commit()
         }
     }
@@ -377,9 +416,12 @@ object WirelessDebugging {
 
     /**
      * A start succeeded, or one may go ahead: forgets the no-Wi-Fi stop, its Wi-Fi trigger and the
-     * restore's notice. This boot's prompt stays (see [clearPrompted]).
+     * restore's notice ([keepNotice]: not the notice). This boot's prompt stays (see [clearPrompted]).
      */
-    fun clearNoWifi(context: Context) {
+    fun clearNoWifi(
+        context: Context,
+        keepNotice: Boolean = false,
+    ) {
         if (runCatching { prefs().contains(KEY_NO_WIFI_BOOT) }.getOrDefault(false)) {
             runCatching {
                 prefs()
@@ -389,7 +431,7 @@ object WirelessDebugging {
             }
             disarmResume(context)
         }
-        cancelNotice(context)
+        if (!keepNotice) cancelNotice(context)
     }
 
     /** BOOT_COMPLETED: everything here is per boot. */
@@ -406,6 +448,8 @@ object WirelessDebugging {
                         KEY_WIFI_SEEN_AT,
                         KEY_WIFI_SEEN_BOOT,
                         KEY_SILENT_BOOT,
+                        KEY_UNLOCK_WRITE_BOOT,
+                        KEY_WRITE_PENDING_LOCKED,
                         KEY_WATCH_BOOT,
                     )
             ).forEach { edit.remove(it) }
@@ -505,6 +549,7 @@ object WirelessDebugging {
                 .edit()
                 .remove(KEY_WATCH_BOOT)
                 .remove(KEY_SILENT_BOOT)
+                .remove(KEY_UNLOCK_WRITE_BOOT)
                 .commit()
         }
         cancelWatch(context)
@@ -625,7 +670,8 @@ object WirelessDebugging {
         HeadlessLogger.init(context)
         if (!watching(context)) return
         if (silentRefusalPending(context)) {
-            cancelQuiet(context)
+            // The quiet retry stays until this start makes its write (Session.turnOn): if the
+            // start is turned away, the retry coming due unlocked makes it instead.
             HeadlessLogger.i(LOG, "unlocked after a silent refusal; trying once more: the system shows its prompt now, and it is this boot's one")
             ShizukuReceiverStarter.start(context)
         } else if (setting(context) == 1) {
@@ -804,6 +850,10 @@ object WirelessDebugging {
         // Set when this start first waits for the user: an unlock and the answer share the wait.
         private var userDeadline: Long? = null
 
+        // Whether this start's last write was made locked: the system decides then whether anyone
+        // sees its prompt, so a refusal is judged by this, not by the lock state when the 0 is seen.
+        private var lastWriteLocked = false
+
         // When this start saw Wi-Fi appear (it waited for it, or it differs from the last round's).
         private var wifiSeenAt: Long? = null
 
@@ -854,12 +904,21 @@ object WirelessDebugging {
             // A run that wrote 1 this boot and died before it saw the outcome may have raised the
             // prompt: count it as raised.
             if (thisBoot(context, KEY_WRITE_PENDING_BOOT)) {
-                if (setting(context) != 1) {
+                val wroteLocked = runCatching { prefs().getBoolean(KEY_WRITE_PENDING_LOCKED, false) }.getOrDefault(false)
+                if (setting(context) != 1 && silentWhenLocked() && wroteLocked && !thisBoot(context, KEY_UNLOCK_WRITE_BOOT)) {
+                    // Written locked on One UI: nobody was asked.
+                    warn(
+                        "an earlier start turned wireless debugging on while locked and stopped before it saw the outcome; " +
+                            "this phone shows no prompt while locked, so that was not this boot's network prompt",
+                    )
+                    markSilentRefusal(context)
+                } else if (setting(context) != 1) {
                     warn("an earlier start turned wireless debugging on and stopped before it saw the outcome; counting that as this boot's network prompt")
                     markPrompted(context)
                     throw untrustedStop("an earlier start may have raised this boot's network prompt")
+                } else {
+                    setWritePending(context, false)
                 }
-                setWritePending(context, false)
             }
             var network = requireWifi()
             repeat(MAX_ROUNDS) {
@@ -934,8 +993,17 @@ object WirelessDebugging {
         }
 
         private fun turnOn() {
+            val lockedNow = locked()
+            lastWriteLocked = lockedNow
+            if (!lockedNow && silentRefusalPending(context)) {
+                // After a silent refusal, the write the user sees: committed first, so any later
+                // refusal this boot is the prompt whatever the lock state, and no quiet retry
+                // follows it.
+                runCatching { prefs().edit().putInt(KEY_UNLOCK_WRITE_BOOT, bootCount(context)).commit() }
+                cancelQuiet(context)
+            }
             // Committed before the write: a run that dies right after it leaves the record.
-            setWritePending(context, true)
+            setWritePending(context, true, lockedNow)
             put(context, 1)
         }
 
@@ -990,9 +1058,15 @@ object WirelessDebugging {
                             }
                             return Round.NetworkChanged
                         }
-                        // The same, settled Wi-Fi: the system refused. Locked on One UI it asked
-                        // nobody: not this boot's prompt, and the unlock may write once more.
-                        if (wroteThisRound && promptedAt(context) == null && silentWhenLocked() && locked()) {
+                        // The same, settled Wi-Fi: the system refused. Written locked on One UI it
+                        // asked nobody (even if the screen is unlocked by now): not this boot's
+                        // prompt, and the unlock writes once more. Written unlocked, it asked.
+                        if (wroteThisRound &&
+                            promptedAt(context) == null &&
+                            silentWhenLocked() &&
+                            lastWriteLocked &&
+                            !thisBoot(context, KEY_UNLOCK_WRITE_BOOT)
+                        ) {
                             markSilentRefusal(context)
                             warn(
                                 "adb_wifi_enabled went back to 0 while locked: this network (or access point) is not allowed for wireless debugging, " +
