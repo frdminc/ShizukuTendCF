@@ -9,11 +9,9 @@ import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.adb.WirelessDebugging
 import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.ShizukuStateMachine
-import android.Manifest.permission.WRITE_SECURE_SETTINGS
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
 import rikka.shizuku.Shizuku
@@ -84,33 +82,38 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                 if (launchMode == LaunchMethod.ROOT) {
                     HeadlessLogger.i("Start", "Launch mode=ROOT, delegating to ShizukuReceiverStarter")
                 } else {
-                    // ADB, or UNKNOWN on a fresh install. Enabling wireless debugging exposes adbd
-                    // on the network, so it is on by default for the fleet case but can be opted
-                    // out with --ez enable_wireless_adb false. UNKNOWN is persisted as ADB because
-                    // the shared starter treats UNKNOWN as "background start not supported".
+                    // ADB, or UNKNOWN on a fresh install. UNKNOWN is persisted as ADB because the
+                    // shared starter treats UNKNOWN as "background start not supported".
                     HeadlessLogger.i("Start", "Launch mode=$launchMode, attempting ADB start")
                     val force = intent.getBooleanExtra(EXTRA_FORCE, false)
                     if (force && WirelessDebugging.blocked(context) != null) {
-                        HeadlessLogger.i("Start", "Forced: clearing what stopped the last wireless debugging restore")
-                        WirelessDebugging.clearBlock(context)
+                        HeadlessLogger.i("Start", "Forced: clearing this boot's wireless debugging stop (network prompt or no Wi-Fi)")
+                        WirelessDebugging.clearPrompted(context)
+                        WirelessDebugging.clearNoWifi(context)
                     }
-                    if (intent.getBooleanExtra(EXTRA_ENABLE_WIRELESS_ADB, true)) {
-                        when {
-                            // The start worker turns wireless debugging on only if the TCP port
-                            // needs it, and back off afterwards; turned on here, it would raise a
-                            // refused network's prompt again and stay on after every start.
-                            ShizukuSettings.getTcpMode() ->
-                                HeadlessLogger.i("Start", "TCP mode: leaving wireless debugging to the start worker")
-                            WirelessDebugging.blocked(context) != null ->
-                                HeadlessLogger.i(
-                                    "Start",
-                                    "Not turning wireless debugging on: ${WirelessDebugging.standDownReason(context) ?: "the last restore was stopped"}; send --ez $EXTRA_FORCE true to try anyway",
-                                )
-                            else -> tryEnsureWirelessAdb(context)
-                        }
-                    }
+                    // Wireless debugging is the start worker's: it turns it on only when the start
+                    // needs it, after Wi-Fi has settled, at most one network prompt per boot, and
+                    // (in TCP mode) back off afterwards. Turned on here it raised a refused
+                    // network's prompt on every pass of a repair loop. enable_wireless_adb is
+                    // still accepted and changes nothing.
+                    HeadlessLogger.i("Start", "Leaving wireless debugging to the start worker")
                     if (launchMode != LaunchMethod.ADB) {
                         ShizukuSettings.setLastLaunchMode(LaunchMethod.ADB)
+                    }
+                    // Say so, rather than queueing a start that would only stand down.
+                    if (!force &&
+                        ShizukuSettings.getTcpMode() &&
+                        WirelessDebugging.blocked(context) == WirelessDebugging.Blocked.UNTRUSTED_NETWORK &&
+                        !af.shizuku.manager.adb.AdbPortProber
+                            .isPortOpen(ShizukuSettings.getTcpPort(), 300)
+                    ) {
+                        HeadlessLogger.w(
+                            "Start",
+                            "Withheld: TCP port ${ShizukuSettings.getTcpPort()} closed and this boot's wireless debugging network prompt was not answered; " +
+                                "send --ez $EXTRA_FORCE true or tap Attempt now",
+                        )
+                        setResult(RESULT_WIRELESS_UNTRUSTED, "WIRELESS_UNTRUSTED", null)
+                        return
                     }
                     HeadlessLogger.i("Start", "Starting via ADB (TCP port ${ShizukuSettings.getTcpPort()})")
                 }
@@ -192,37 +195,13 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun tryEnsureWirelessAdb(context: Context) {
-        if (context.checkSelfPermission(WRITE_SECURE_SETTINGS) != PackageManager.PERMISSION_GRANTED) {
-            HeadlessLogger.w("Start", "WRITE_SECURE_SETTINGS not granted, cannot enable wireless ADB")
-            return
-        }
-        try {
-            val cr = context.contentResolver
-            // Deliberately the raw read, not ManagerEnvironmentUtils.isAdbEnabled(): on API 37+
-            // the raw value always reads 0, so this writes 1 every time, which is a no-op when
-            // USB debugging is already on and turns it on when it is not. The helper would
-            // report "on" there and skip the write.
-            if (Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 0) == 0) {
-                Settings.Global.putInt(cr, Settings.Global.ADB_ENABLED, 1)
-                HeadlessLogger.i("Start", "Enabled USB ADB")
-            }
-            if (Settings.Global.getInt(cr, "adb_wifi_enabled", 0) == 0) {
-                Settings.Global.putInt(cr, "adb_wifi_enabled", 1)
-                HeadlessLogger.i("Start", "Enabled wireless ADB")
-            }
-        } catch (e: SecurityException) {
-            HeadlessLogger.w("Start", "WRITE_SECURE_SETTINGS denied")
-        } catch (e: Exception) {
-            HeadlessLogger.e("Start", "Failed to enable wireless ADB", e)
-        }
-    }
-
     companion object {
         val ACTION_HEADLESS_START = "${BuildConfig.APPLICATION_ID}.HEADLESS_START"
         val ACTION_HEADLESS_STOP = "${BuildConfig.APPLICATION_ID}.HEADLESS_STOP"
         val ACTION_HEADLESS_STATUS = "${BuildConfig.APPLICATION_ID}.HEADLESS_STATUS"
         val ACTION_HEADLESS_LOG = "${BuildConfig.APPLICATION_ID}.HEADLESS_LOG"
+
+        /** Accepted for old callers; wireless debugging is the start worker's (see onReceive). */
         const val EXTRA_ENABLE_WIRELESS_ADB = "enable_wireless_adb"
 
         /** Clears an unanswered authorisation dialog's marker, so this start may raise a new one. */
@@ -230,6 +209,12 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
 
         /** Result code of a start withheld because an authorisation dialog went unanswered. */
         const val RESULT_AUTH_UNANSWERED = 4
+
+        /**
+         * Result code of a TCP-mode start withheld because its port is closed and this boot's one
+         * automatic "Allow wireless debugging on this network?" prompt was not answered.
+         */
+        const val RESULT_WIRELESS_UNTRUSTED = 5
 
         /** HEADLESS_LOG: how many of the newest log lines to return (capped; see [HeadlessLogger.tail]). */
         const val EXTRA_LINES = "lines"

@@ -52,8 +52,11 @@ class WirelessDebuggingBlockedException(
  * AdbDebuggingManager). A paired or "Always allow" key in adb_keys authorises the TLS connection
  * after a reboot, so nothing needs pairing again.
  *
- * Without location permission no Wi-Fi network has a stable identity (each connection gets a new
- * handle, and handles restart with every boot), so a refused network is remembered per boot.
+ * At most one automatic prompt per boot: the moment a write of 1 comes back 0 on the same Wi-Fi
+ * the prompt is recorded (durably, with the boot count), and from then on only a start by hand
+ * made after it, HEADLESS_START with force, the user turning wireless debugging on, or the next
+ * boot write 1 again. Without location permission no Wi-Fi network has a stable identity (each
+ * connection gets a new handle, and handles restart with every boot), so the record is per boot.
  */
 object WirelessDebugging {
     private const val LOG = "WirelessDebugging"
@@ -64,15 +67,26 @@ object WirelessDebugging {
     const val NOTICE_ID = 1453
     private const val CHANNEL_ID = "AdbStartWorker"
 
-    private const val KEY_BLOCKED = "wadb_restore_blocked"
-    private const val KEY_BLOCKED_BOOT = "wadb_restore_blocked_boot"
+    // This boot's prompt: the boot count, and when (wall clock, AdbAuthWait.clockMs) it was raised.
+    private const val KEY_PROMPTED_BOOT = "wadb_restore_prompted_boot"
+    private const val KEY_PROMPTED_AT = "wadb_restore_prompted_at"
+
+    // A write of 1 made this boot whose outcome no run saw (the run died): counts as the prompt.
+    private const val KEY_WRITE_PENDING_BOOT = "wadb_restore_write_pending_boot"
+
+    // A restore stopped for want of Wi-Fi this boot (resumed when Wi-Fi connects).
+    private const val KEY_NO_WIFI_BOOT = "wadb_restore_no_wifi_boot"
 
     // Set (committed) before a start that found wireless debugging off turns it on, cleared when it
     // is put back: a run that dies in between leaves it, and the next one then knows it was off.
     private const val KEY_TURNED_ON = "wadb_restore_turned_on"
 
-    // When a Wi-Fi network last appeared (elapsedMs), as WifiRestoreReceiver saw it.
+    // When WifiRestoreReceiver resumed a restore on Wi-Fi that had just connected (elapsedMs).
     private const val KEY_WIFI_SEEN_AT = "wadb_restore_wifi_seen_at"
+    private const val KEY_WIFI_SEEN_BOOT = "wadb_restore_wifi_seen_boot"
+
+    // Earlier builds' keys, forgotten at boot.
+    private val OLD_KEYS = listOf("wadb_restore_blocked", "wadb_restore_blocked_boot", "wadb_restore_blocked_network")
 
     // Rounds of "Wi-Fi, turn it on, discover", each started again when Wi-Fi changes under it.
     private const val MAX_ROUNDS = 3
@@ -110,28 +124,27 @@ object WirelessDebugging {
     @Volatile
     internal var userWaitMs = 300_000L
 
-    /**
-     * Everything one start may wait, below WorkManager's 10-minute limit even when the run could
-     * not become a foreground worker: a stopped run is re-run, and would write the setting again.
-     */
+    // Everything one start may wait before it connects. WorkManager stops a background job at 10
+    // minutes, and the connection after this may wait AdbAuthWait.TIMEOUT_MS (5 minutes) for
+    // adbd's dialog, so a run that is not a foreground worker keeps to 10 - 5 - 1 minutes; a
+    // stopped run is re-run, and would wait again. A foreground run has no such limit.
     @Volatile
-    internal var sessionBudgetMs = 480_000L
+    internal var backgroundBudgetMs = 240_000L
+
+    @Volatile
+    internal var foregroundBudgetMs = 480_000L
 
     /** How long mDNS may take to find the port once wireless debugging is on. */
     @Volatile
     internal var discoveryMs = 15_000L
 
-    /** How old a Wi-Fi network must be before wireless debugging is turned on. */
+    /**
+     * How old a Wi-Fi network must be before wireless debugging is turned on. Turned on before
+     * WifiManager knows the BSSID, the system turns it off again with no prompt, which would look
+     * like a refusal; after this, a 0 counts as one.
+     */
     @Volatile
-    internal var wifiSettleMs = 2_000L
-
-    /** A 0 this soon after Wi-Fi appeared may be the BSSID not known yet, not a refusal. */
-    @Volatile
-    internal var freshWifiMs = 30_000L
-
-    /** The pause before turning it on once more after such an early 0. */
-    @Volatile
-    internal var earlyResetRetryMs = 3_000L
+    internal var wifiSettleMs = 5_000L
 
     @Volatile
     internal var pollMs = 250L
@@ -150,11 +163,10 @@ object WirelessDebugging {
         discovery = PortDiscovery(::startMdns)
         wifiWaitMs = 120_000L
         userWaitMs = 300_000L
-        sessionBudgetMs = 480_000L
+        backgroundBudgetMs = 240_000L
+        foregroundBudgetMs = 480_000L
         discoveryMs = 15_000L
-        wifiSettleMs = 2_000L
-        freshWifiMs = 30_000L
-        earlyResetRetryMs = 3_000L
+        wifiSettleMs = 5_000L
         pollMs = 250L
         toggleGapMs = 500L
         elapsedMs = { SystemClock.elapsedRealtime() }
@@ -179,6 +191,13 @@ object WirelessDebugging {
     }
 
     private fun bootCount(context: Context): Int = runCatching { Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, 0) }.getOrDefault(0)
+
+    private fun prefs() = ShizukuSettings.getPreferences()
+
+    private fun thisBoot(
+        context: Context,
+        key: String,
+    ): Boolean = runCatching { prefs().getInt(key, -1) == bootCount(context) }.getOrDefault(false)
 
     // Wi-Fi.
 
@@ -232,69 +251,140 @@ object WirelessDebugging {
         }
     }
 
-    // What stopped the last restore, durable so that the watchdog, the boot retry and WorkManager's
-    // re-runs stand down at once instead of waiting (or prompting) again. Only for this boot.
+    // This boot's prompt and the no-Wi-Fi stop, durable so that the watchdog, the boot retry,
+    // HEADLESS_START and WorkManager's re-runs stand down at once instead of waiting or prompting.
 
-    private fun prefs() = ShizukuSettings.getPreferences()
+    /** When this boot's automatic network prompt was raised (AdbAuthWait.clockMs), or null. */
+    fun promptedAt(context: Context): Long? =
+        if (thisBoot(context, KEY_PROMPTED_BOOT)) runCatching { prefs().getLong(KEY_PROMPTED_AT, 0L) }.getOrNull() else null
 
-    fun blocked(context: Context): Blocked? =
+    private fun markPrompted(context: Context) {
         runCatching {
-            val reason = prefs().getString(KEY_BLOCKED, null)?.let { name -> Blocked.values().firstOrNull { it.name == name } }
-            if (reason != null && prefs().getInt(KEY_BLOCKED_BOOT, -1) != bootCount(context)) {
-                // From an earlier boot: forgotten (BootCompleteReceiver also clears it).
-                prefs()
-                    .edit()
-                    .remove(KEY_BLOCKED)
-                    .remove(KEY_BLOCKED_BOOT)
-                    .apply()
-                null
-            } else {
-                reason
-            }
-        }.getOrNull()
-
-    internal fun block(
-        context: Context,
-        reason: Blocked,
-    ) {
-        prefs()
-            .edit()
-            .putString(KEY_BLOCKED, reason.name)
-            .putInt(KEY_BLOCKED_BOOT, bootCount(context))
-            .apply()
-    }
-
-    /** The restore may go ahead: forgets the block, its notice and its Wi-Fi trigger. */
-    fun clearBlock(context: Context) {
-        if (runCatching { prefs().contains(KEY_BLOCKED) }.getOrDefault(false)) {
             prefs()
                 .edit()
-                .remove(KEY_BLOCKED)
-                .remove(KEY_BLOCKED_BOOT)
-                .apply()
-            disarmResume(context)
+                .putInt(KEY_PROMPTED_BOOT, bootCount(context))
+                .putLong(KEY_PROMPTED_AT, AdbAuthWait.clockMs())
+                .remove(KEY_WRITE_PENDING_BOOT)
+                .commit()
+        }
+    }
+
+    /** A start by hand made after the prompt, or HEADLESS_START with force: it may ask again. */
+    fun clearPrompted(context: Context) {
+        runCatching {
+            prefs()
+                .edit()
+                .remove(KEY_PROMPTED_BOOT)
+                .remove(KEY_PROMPTED_AT)
+                .remove(KEY_WRITE_PENDING_BOOT)
+                .commit()
         }
         cancelNotice(context)
     }
 
-    /**
-     * Why a start nobody made by hand should not try wireless debugging now, or null if it should:
-     * still no Wi-Fi; or this boot's one automatic prompt for a network went unanswered and
-     * wireless debugging is still off (the user turning it on, "Always allow" included, ends that).
-     */
-    fun standDownReason(context: Context): String? =
-        when (blocked(context)) {
-            null -> null
-            Blocked.NO_WIFI ->
-                if (wifiNetwork(context) == null) "still no Wi-Fi; waiting for Wi-Fi to connect before turning wireless debugging on" else null
-            Blocked.UNTRUSTED_NETWORK ->
-                if (setting(context) != 1) {
-                    "this Wi-Fi network is still not trusted for wireless debugging (one automatic prompt per boot); " +
-                        "waiting for a start by hand, wireless debugging turned on, or the next boot"
-                } else {
-                    null
-                }
+    private fun setWritePending(
+        context: Context,
+        pending: Boolean,
+    ) {
+        runCatching {
+            val edit = prefs().edit()
+            if (pending) edit.putInt(KEY_WRITE_PENDING_BOOT, bootCount(context)) else edit.remove(KEY_WRITE_PENDING_BOOT)
+            edit.commit()
         }
+    }
+
+    private fun noWifiThisBoot(context: Context): Boolean = thisBoot(context, KEY_NO_WIFI_BOOT)
+
+    private fun markNoWifi(context: Context) {
+        runCatching {
+            prefs()
+                .edit()
+                .putInt(KEY_NO_WIFI_BOOT, bootCount(context))
+                .apply()
+        }
+    }
+
+    /**
+     * A start succeeded, or Wi-Fi is back: forgets the no-Wi-Fi stop, its notice and its Wi-Fi
+     * trigger. This boot's prompt stays (see [clearPrompted]).
+     */
+    fun clearNoWifi(context: Context) {
+        if (runCatching { prefs().contains(KEY_NO_WIFI_BOOT) }.getOrDefault(false)) {
+            runCatching {
+                prefs()
+                    .edit()
+                    .remove(KEY_NO_WIFI_BOOT)
+                    .apply()
+            }
+            disarmResume(context)
+        }
+        if (promptedAt(context) == null) cancelNotice(context)
+    }
+
+    /** BOOT_COMPLETED: everything here is per boot. */
+    fun onBoot(context: Context) {
+        runCatching {
+            val edit = prefs().edit()
+            (OLD_KEYS + listOf(KEY_PROMPTED_BOOT, KEY_PROMPTED_AT, KEY_WRITE_PENDING_BOOT, KEY_NO_WIFI_BOOT, KEY_WIFI_SEEN_AT, KEY_WIFI_SEEN_BOOT))
+                .forEach { edit.remove(it) }
+            edit.apply()
+        }
+        disarmResume(context)
+        cancelNotice(context)
+    }
+
+    /** What stops a start that has not been allowed to ask (see [standDownReason]); null: nothing. */
+    fun blocked(context: Context): Blocked? =
+        when {
+            promptedAt(context) != null && setting(context) != 1 -> Blocked.UNTRUSTED_NETWORK
+            noWifiThisBoot(context) -> Blocked.NO_WIFI
+            else -> null
+        }
+
+    /**
+     * Why a start should not try wireless debugging now, or null if it should. Unattended starts
+     * ([explicit] false) stand down after this boot's prompt while wireless debugging is still off,
+     * and while there is still no Wi-Fi after a no-Wi-Fi stop. A start by hand may ask again,
+     * unless it is a WorkManager re-run of a request made before the prompt ([requestedAt]).
+     */
+    fun standDownReason(
+        context: Context,
+        explicit: Boolean,
+        requestedAt: Long,
+    ): Pair<Blocked, String>? {
+        val prompted = promptedAt(context)
+        if (prompted != null && setting(context) != 1) {
+            if (!explicit) {
+                return Blocked.UNTRUSTED_NETWORK to
+                    "this Wi-Fi network is still not trusted for wireless debugging (one automatic prompt per boot); " +
+                    "waiting for a start by hand, wireless debugging turned on, or the next boot"
+            }
+            if (requestedAt <= prompted) {
+                return Blocked.UNTRUSTED_NETWORK to
+                    "this start by hand was requested before this boot's network prompt and has asked already; waiting for a new start by hand"
+            }
+        }
+        if (!explicit && noWifiThisBoot(context) && wifiNetwork(context) == null) {
+            return Blocked.NO_WIFI to "still no Wi-Fi; waiting for Wi-Fi to connect before turning wireless debugging on"
+        }
+        return null
+    }
+
+    /**
+     * A TCP-mode start succeeded without this start touching wireless debugging: if an earlier run
+     * turned it on and died before turning it off, turn it off now.
+     */
+    fun afterTcpStart(
+        context: Context,
+        note: (String) -> Unit,
+    ) {
+        if (!runCatching { prefs().getBoolean(KEY_TURNED_ON, false) }.getOrDefault(false)) return
+        if (setting(context) == 1) {
+            put(context, 0)
+            note("an earlier start turned wireless debugging on and did not turn it off; turned it off (adb_wifi_enabled=${setting(context)})")
+        }
+        runCatching { prefs().edit().remove(KEY_TURNED_ON).commit() }
+    }
 
     // The resume trigger: a network callback with a PendingIntent outlives this process, so Wi-Fi
     // connecting restarts a restore that had none even if nothing else is running.
@@ -309,7 +399,9 @@ object WirelessDebugging {
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0),
         )
 
+    /** Only for a no-Wi-Fi stop with no prompt this boot (a prompted boot never resumes by itself). */
     fun armResume(context: Context) {
+        if (!noWifiThisBoot(context) || promptedAt(context) != null) return
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return
         runCatching { cm.registerNetworkCallback(wifiRequest(), resumeIntent(context)) }
             .onSuccess { HeadlessLogger.i(LOG, "will resume when Wi-Fi connects") }
@@ -323,17 +415,22 @@ object WirelessDebugging {
 
     /**
      * A Wi-Fi event reached [WifiRestoreReceiver]. True if the restore should start again: it
-     * stopped for want of Wi-Fi, and there is Wi-Fi now. The callback also fires for a network
-     * already connected when it is armed.
+     * stopped for want of Wi-Fi, nothing has prompted this boot, and there is Wi-Fi now.
      */
     fun onWifiEvent(context: Context): Boolean {
-        runCatching { prefs().edit().putLong(KEY_WIFI_SEEN_AT, elapsedMs()).apply() }
-        val reason = blocked(context)
-        if (reason != Blocked.NO_WIFI) {
+        if (!noWifiThisBoot(context) || promptedAt(context) != null) {
             disarmResume(context)
             return false
         }
         if (wifiNetwork(context) == null) return false
+        // This Wi-Fi has only just connected: the restore lets it settle before turning anything on.
+        runCatching {
+            prefs()
+                .edit()
+                .putLong(KEY_WIFI_SEEN_AT, elapsedMs())
+                .putInt(KEY_WIFI_SEEN_BOOT, bootCount(context))
+                .apply()
+        }
         HeadlessLogger.i(LOG, "Wi-Fi connected; resuming the ADB restore")
         disarmResume(context)
         return true
@@ -406,21 +503,23 @@ object WirelessDebugging {
     }
 
     /**
-     * One background start's use of wireless debugging. [foreground] keeps the worker alive while
-     * it waits for Wi-Fi or the user. With [restoresState], [restore] puts adb_wifi_enabled back as
-     * this start found it (TCP mode); without, wireless debugging is the transport and stays on.
+     * One background start's use of wireless debugging. [foreground] tries to make the worker a
+     * foreground one while it waits for Wi-Fi or the user, and says whether it is. With
+     * [restoresState], [restore] puts adb_wifi_enabled back as this start found it (TCP mode);
+     * without, wireless debugging is the transport and stays on.
      */
     class Session(
         private val context: Context,
         private val note: (String) -> Unit,
         private val warn: (String) -> Unit,
-        private val foreground: suspend () -> Unit,
+        private val foreground: suspend () -> Boolean,
         private val restoresState: Boolean = false,
     ) {
         // adb_wifi_enabled before this start (or a run of it that died) first touched it.
         private var initial: Int? = null
 
-        private val sessionDeadline = elapsedMs() + sessionBudgetMs
+        private val startedAt = elapsedMs()
+        private var isForeground = false
 
         // Set when this start first waits for the user: an unlock and the answer share the wait.
         private var userDeadline: Long? = null
@@ -436,17 +535,28 @@ object WirelessDebugging {
             object NetworkChanged : Round
         }
 
-        private fun remaining(): Long = sessionDeadline - elapsedMs()
+        private fun sessionDeadline(): Long = startedAt + if (isForeground) foregroundBudgetMs else backgroundBudgetMs
+
+        private fun remaining(): Long = sessionDeadline() - elapsedMs()
+
+        private suspend fun goForeground() {
+            if (!isForeground && foreground()) isForeground = true
+        }
 
         private fun userRemaining(): Long {
             val deadline = userDeadline ?: (elapsedMs() + userWaitMs).also { userDeadline = it }
-            return minOf(deadline, sessionDeadline) - elapsedMs()
+            return minOf(deadline, sessionDeadline()) - elapsedMs()
         }
 
         /** How long ago Wi-Fi appeared, as far as anything here can tell; boot is the upper bound. */
         private fun wifiAgeMs(): Long {
             val now = elapsedMs()
-            val seenByReceiver = runCatching { prefs().getLong(KEY_WIFI_SEEN_AT, Long.MIN_VALUE) }.getOrDefault(Long.MIN_VALUE)
+            val seenByReceiver =
+                if (thisBoot(context, KEY_WIFI_SEEN_BOOT)) {
+                    runCatching { prefs().getLong(KEY_WIFI_SEEN_AT, Long.MIN_VALUE) }.getOrDefault(Long.MIN_VALUE)
+                } else {
+                    Long.MIN_VALUE
+                }
             return listOfNotNull(
                 uptimeMs(),
                 wifiSeenAt?.let { now - it },
@@ -454,17 +564,35 @@ object WirelessDebugging {
             ).min()
         }
 
+        private fun untrustedStop(why: String): WirelessDebuggingBlockedException = WirelessDebuggingBlockedException(Blocked.UNTRUSTED_NETWORK, why)
+
         /** The wireless debugging TLS port, or a [WirelessDebuggingBlockedException] / [TimeoutException]. */
         suspend fun findPort(): Int {
+            // A run that wrote 1 this boot and died before it saw the outcome may have raised the
+            // prompt: count it as raised.
+            if (thisBoot(context, KEY_WRITE_PENDING_BOOT)) {
+                if (setting(context) != 1) {
+                    warn("an earlier start turned wireless debugging on and stopped before it saw the outcome; counting that as this boot's network prompt")
+                    markPrompted(context)
+                    throw untrustedStop("an earlier start may have raised this boot's network prompt")
+                }
+                setWritePending(context, false)
+            }
             var network = requireWifi()
             repeat(MAX_ROUNDS) {
                 when (val round = round(network)) {
                     is Round.Found -> return round.port
-                    Round.NetworkChanged -> network = requireWifi()
+                    Round.NetworkChanged -> {
+                        if (promptedAt(context) != null && setting(context) != 1) {
+                            warn("Wi-Fi changed after this boot's network prompt; not turning wireless debugging on again")
+                            throw untrustedStop("Wi-Fi changed after this boot's network prompt")
+                        }
+                        network = requireWifi()
+                    }
                 }
             }
             warn("Wi-Fi kept changing while wireless debugging was turned on ($MAX_ROUNDS rounds); waiting for Wi-Fi to connect again")
-            block(context, Blocked.NO_WIFI)
+            markNoWifi(context)
             throw WirelessDebuggingBlockedException(Blocked.NO_WIFI, "Wi-Fi kept changing while wireless debugging was turned on")
         }
 
@@ -483,11 +611,11 @@ object WirelessDebugging {
                 wifiNetwork(context) ?: run {
                     val waitMs = minOf(wifiWaitMs, remaining())
                     note("no Wi-Fi; waiting up to ${waitMs / 1000} s for Wi-Fi (metered or without internet is fine)")
-                    foreground()
+                    goForeground()
                     val connected = awaitWifi(context, waitMs)
                     if (connected == null) {
                         warn("no Wi-Fi after ${waitMs / 1000} s; wireless debugging cannot come up without it")
-                        block(context, Blocked.NO_WIFI)
+                        markNoWifi(context)
                         notifyNoWifi(context)
                         throw WirelessDebuggingBlockedException(Blocked.NO_WIFI, "no Wi-Fi to turn wireless debugging on")
                     }
@@ -496,14 +624,18 @@ object WirelessDebugging {
                     cancelNotice(context)
                     connected
                 }
-            // The system's wireless debugging checks the BSSID through WifiManager, which can lag
-            // the network callback; turned on before it knows the BSSID, it turns itself off again.
             val age = wifiAgeMs()
             if (age < wifiSettleMs) {
                 note("Wi-Fi appeared $age ms ago; settling ${wifiSettleMs - age} ms before turning wireless debugging on")
                 delay(wifiSettleMs - age)
             }
             return network
+        }
+
+        private fun turnOn() {
+            // Committed before the write: a run that dies right after it leaves the record.
+            setWritePending(context, true)
+            put(context, 1)
         }
 
         private suspend fun round(network: Network): Round {
@@ -514,15 +646,15 @@ object WirelessDebugging {
                 initial = if (leftOn) 0 else before
             }
             if (before != 1) {
+                if (promptedAt(context) != null) throw untrustedStop("this boot's network prompt has been raised already")
                 if (restoresState && initial == 0) runCatching { prefs().edit().putBoolean(KEY_TURNED_ON, true).commit() }
-                put(context, 1)
+                turnOn()
                 note("turning wireless debugging on: adb_wifi_enabled $before -> ${setting(context)}")
             } else {
                 note("wireless debugging is already on; discovering its port")
             }
             // Already on but announcing nothing: turn it off and on once for a fresh announcement.
             var mayToggle = before == 1
-            var earlyRetryUsed = false
             val found = AtomicInteger(0)
             val stop = discovery.start(context) { p -> found.compareAndSet(0, p) }
             try {
@@ -530,37 +662,28 @@ object WirelessDebugging {
                 while (true) {
                     val port = found.get()
                     if (port > 0) {
+                        setWritePending(context, false)
                         note("mDNS found port $port")
                         return Round.Found(port)
                     }
                     if (setting(context) == 0) {
                         val wifi = wifiNetwork(context)
-                        val age = wifiAgeMs()
-                        when {
-                            wifi != network -> {
-                                warn("adb_wifi_enabled went to 0: Wi-Fi ${if (wifi == null) "disconnected" else "changed to network $wifi"}")
-                                return Round.NetworkChanged
-                            }
-                            !earlyRetryUsed && age < freshWifiMs -> {
-                                // WifiManager may not know the BSSID yet: no prompt, just off.
-                                earlyRetryUsed = true
-                                warn("adb_wifi_enabled went back to 0 $age ms after Wi-Fi appeared; turning it on once more in $earlyResetRetryMs ms")
-                                delay(earlyResetRetryMs)
-                                put(context, 1)
-                                deadline = elapsedMs() + discoveryMs
-                            }
-                            locked() -> {
-                                awaitUnlock()
-                                untrusted(network)
-                                deadline = elapsedMs() + discoveryMs
-                            }
-                            else -> {
-                                untrusted(network)
-                                deadline = elapsedMs() + discoveryMs
-                            }
+                        if (wifi != network) {
+                            setWritePending(context, false)
+                            warn("adb_wifi_enabled went to 0: Wi-Fi ${if (wifi == null) "disconnected" else "changed to network $wifi"}")
+                            return Round.NetworkChanged
                         }
-                    } else if (elapsedMs() >= minOf(deadline, sessionDeadline)) {
-                        if (!mayToggle || elapsedMs() >= sessionDeadline) {
+                        // The same, settled Wi-Fi: the system refused (and asked, if the user can
+                        // see it). Recorded before anything else, so no run asks again this boot.
+                        if (promptedAt(context) == null) {
+                            markPrompted(context)
+                            warn("adb_wifi_enabled went back to 0 with Wi-Fi connected: this network is not trusted for wireless debugging; this boot's one network prompt")
+                        }
+                        if (locked()) awaitUnlock()
+                        untrusted(network)
+                        deadline = elapsedMs() + discoveryMs
+                    } else if (elapsedMs() >= minOf(deadline, sessionDeadline())) {
+                        if (!mayToggle || elapsedMs() >= sessionDeadline()) {
                             warn("mDNS discovery timed out after ${discoveryMs / 1000} s (adb_wifi_enabled=${setting(context)})")
                             throw TimeoutException("Timed out during mDNS port discovery")
                         }
@@ -568,7 +691,7 @@ object WirelessDebugging {
                         note("mDNS found nothing in ${discoveryMs / 1000} s although wireless debugging is on; turning it off and on once")
                         put(context, 0)
                         delay(toggleGapMs)
-                        put(context, 1)
+                        turnOn()
                         note("wireless debugging toggled: adb_wifi_enabled=${setting(context)}")
                         deadline = elapsedMs() + discoveryMs
                     }
@@ -579,30 +702,26 @@ object WirelessDebugging {
             }
         }
 
-        // Off while locked, whether or not the network is trusted: the system's prompt (if any)
-        // waits for the user, who cannot answer it locked. Nothing is written again: that would
-        // queue a second prompt. No unlock in time: this boot's prompt has been raised, so stop.
+        // Off while locked: the system's prompt waits for the user, who cannot answer it locked.
+        // Nothing is written again (that would queue a second prompt).
         private suspend fun awaitUnlock() {
             val waitMs = userRemaining()
             note("wireless debugging went off while locked; waiting up to ${waitMs / 1000} s for an unlock")
             notifyUntrusted(context)
-            foreground()
+            goForeground()
             if (!awaitUnlock(waitMs)) {
                 warn("not unlocked within ${waitMs / 1000} s; not trying again this boot until a start by hand or wireless debugging is turned on")
-                block(context, Blocked.UNTRUSTED_NETWORK)
-                throw WirelessDebuggingBlockedException(Blocked.UNTRUSTED_NETWORK, "locked while the system asked to allow wireless debugging on this network")
+                throw untrustedStop("locked while the system asked to allow wireless debugging on this network")
             }
             note("unlocked; waiting for the system's prompt to be answered")
         }
 
-        // adb_wifi_enabled went back to 0 while the same Wi-Fi stays connected: the network is not
-        // trusted for wireless debugging. Writing 1 again would only raise the system's prompt
-        // again, so ask the user once and wait for them; returns once wireless debugging is on, or
-        // the network changed (the round's next check starts a new round on it).
+        // Waits for the user to allow wireless debugging on this network (the prompt was raised by
+        // the write). Returns once it is on, or the network changed (the round's next check sees
+        // that).
         private suspend fun untrusted(network: Network) {
-            warn("adb_wifi_enabled went back to 0 with Wi-Fi connected: this network is not trusted for wireless debugging")
             notifyUntrusted(context)
-            foreground()
+            goForeground()
             val waitMs = userRemaining()
             note("asked the user to allow wireless debugging on this network; waiting up to ${waitMs / 1000} s")
             val deadline = elapsedMs() + waitMs
@@ -614,14 +733,12 @@ object WirelessDebugging {
                 }
                 if (wifiNetwork(context) != network) {
                     note("the Wi-Fi network changed while waiting for the user")
-                    cancelNotice(context)
                     return
                 }
                 delay(pollMs)
             }
             warn("the network was not allowed within ${waitMs / 1000} s; not trying again this boot until a start by hand or wireless debugging is turned on")
-            block(context, Blocked.UNTRUSTED_NETWORK)
-            throw WirelessDebuggingBlockedException(Blocked.UNTRUSTED_NETWORK, "this Wi-Fi network is not trusted for wireless debugging")
+            throw untrustedStop("this Wi-Fi network is not trusted for wireless debugging")
         }
 
         private fun locked(): Boolean = (context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.isKeyguardLocked == true

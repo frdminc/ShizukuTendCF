@@ -2,8 +2,10 @@ package af.shizuku.manager.harness
 
 import af.shizuku.manager.R
 import af.shizuku.manager.adb.WirelessDebugging
+import af.shizuku.manager.receiver.HeadlessStartStopReceiver
 import af.shizuku.manager.utils.HeadlessLogger
 import android.app.Application
+import androidx.work.ListenableWorker
 import androidx.work.WorkInfo
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -163,6 +165,7 @@ class TcpRestoreScenariosTest {
             }
 
             // The user starts by hand: that tries again, prompting once more.
+            advanceTime(1_000)
             tileTap()
             awaitStartWork()
             check {
@@ -206,6 +209,7 @@ class TcpRestoreScenariosTest {
             awaitStartWork()
             assertEquals(WorkInfo.State.FAILED, lastWork)
 
+            advanceTime(1_000)
             tileTap()
             awaitStartWork()
             check {
@@ -294,10 +298,11 @@ class TcpRestoreScenariosTest {
             headlessStart()
             awaitStartWork()
             assertEquals(1, trustPrompts)
-            // An unattended repair loop sends it again.
-            headlessStart()
+            // An unattended repair loop sends it again: told why, nothing prompts.
+            val again = headlessStart()
             awaitStartWork()
             check {
+                assertEquals(HeadlessStartStopReceiver.RESULT_WIRELESS_UNTRUSTED, again.code)
                 assertEquals(WorkInfo.State.FAILED, lastWork)
                 assertEquals(1, trustPrompts)
             }
@@ -314,19 +319,184 @@ class TcpRestoreScenariosTest {
             }
         }
 
+    // A write before WifiManager knows the new network's BSSID is undone without a prompt, and
+    // would look like a refusal: the first write waits until Wi-Fi has settled.
     @Test
-    fun `wifi-just-connected-transient-reset-is-not-untrusted`() =
+    fun `wifi-just-connected-waits-for-the-bssid-before-turning-on`() =
         scenario {
-            WirelessDebugging.userWaitMs = 1_500
-            // Twenty seconds after boot: WifiManager has no BSSID yet when 1 is first written.
-            WirelessDebugging.uptimeMs = { 20_000 }
-            world.bssidLagWrites.set(1)
+            WirelessDebugging.wifiSettleMs = 600
+            world.bssidLagMs = 300
+            wifiDrops()
             boot()
+            startWaitsForWifi()
+            wifiConnects()
             awaitStartWork()
             check {
                 assertRestored()
                 assertEquals(0, trustPrompts)
-                assertLogHas("turning it on once more")
+            }
+        }
+
+    @Test
+    fun `untrusted-new-wifi-prompts-once`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            wifiDrops()
+            boot()
+            startWaitsForWifi()
+            wifiConnects(trusted = false)
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals(1, trustPrompts)
+            }
+        }
+
+    @Test
+    fun `locked-untrusted-new-wifi-prompts-once`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            wifiDrops()
+            lockScreen()
+            boot()
+            startWaitsForWifi()
+            wifiConnects(trusted = false)
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals(1, trustPrompts)
+            }
+        }
+
+    @Test
+    fun `untrusted-network-wifi-reconnects-during-the-wait-prompts-once`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 3_000
+            wifiConnects(trusted = false)
+            boot()
+            startAsksToAllowNetwork()
+            // A new connection (new handle) to the same refused network.
+            wifiConnects(trusted = false)
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals(1, startsRun)
+                assertEquals(1, trustPrompts)
+            }
+        }
+
+    @Test
+    fun `untrusted-network-wifi-gone-during-the-wait-prompts-once`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 3_000
+            WirelessDebugging.wifiWaitMs = 1_000
+            wifiConnects(trusted = false)
+            boot()
+            startAsksToAllowNetwork()
+            wifiDrops()
+            awaitStartWork()
+            assertEquals(WorkInfo.State.FAILED, lastWork)
+            // Back on the same refused network: nothing resumes, nothing prompts.
+            wifiConnects(trusted = false)
+            awaitStartWork()
+            check {
+                assertEquals(1, startsRun)
+                assertEquals(1, trustPrompts)
+                assertEquals(string(R.string.wadb_restore_untrusted_title), restoreNoticeTitle)
+            }
+        }
+
+    @Test
+    fun `untrusted-network-rerun-during-the-wait-stands-down`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 3_000
+            wifiConnects(trusted = false)
+            boot()
+            startAsksToAllowNetwork()
+            // The system stopped the run (or the process died) and WorkManager runs it again.
+            assertEquals(ListenableWorker.Result.failure(), workerRerun())
+            assertEquals(1, trustPrompts)
+            awaitStartWork()
+            assertEquals(1, trustPrompts)
+        }
+
+    @Test
+    fun `explicit-request-rerun-older-than-the-prompt-stands-down`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 3_000
+            wifiConnects(trusted = false)
+            tileTap()
+            startAsksToAllowNetwork()
+            // WorkManager re-running the same request made by hand: it asked already.
+            assertEquals(ListenableWorker.Result.failure(), workerRerun())
+            awaitStartWork()
+            assertEquals(1, trustPrompts)
+            // A new start by hand may ask once more.
+            advanceTime(1_000)
+            tileTap()
+            awaitStartWork()
+            check {
+                assertEquals(2, trustPrompts)
+            }
+        }
+
+    @Test
+    fun `untrusted-network-prompt-outlives-a-start-that-needed-no-wireless-debugging`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            wifiConnects(trusted = false)
+            boot()
+            awaitStartWork()
+            assertEquals(1, trustPrompts)
+            // Something else opens the TCP port (adb tcpip 5555 from a computer); a start uses it.
+            world.openTcpPort(tcpPort)
+            backgroundStart()
+            awaitStartWork()
+            assertEquals(WorkInfo.State.SUCCEEDED, lastWork)
+            // The port is lost again the same boot: the watchdog does not prompt again.
+            world.closeTcpPort()
+            backgroundStart()
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals(1, trustPrompts)
+            }
+        }
+
+    @Test
+    fun `headless-start-wireless-mode-untrusted-network-prompts-once`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            // Wireless debugging is the transport; no Wi-Fi constraint, no saved port to dial.
+            world.prefs
+                .edit()
+                .putBoolean("tcp_mode", false)
+                .putBoolean("force_start_wadb", true)
+                .putInt("last_adb_port", 0)
+                .commit()
+            wifiConnects(trusted = false)
+            headlessStart()
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals(1, trustPrompts)
+            }
+        }
+
+    @Test
+    fun `tcp-port-open-turns-off-wireless-debugging-a-dead-run-left-on`() =
+        scenario {
+            world.prefs
+                .edit()
+                .putBoolean("wadb_restore_turned_on", true)
+                .commit()
+            world.wirelessDebuggingOn()
+            world.openTcpPort(tcpPort)
+            boot()
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(0, adbWifiEnabled)
             }
         }
 

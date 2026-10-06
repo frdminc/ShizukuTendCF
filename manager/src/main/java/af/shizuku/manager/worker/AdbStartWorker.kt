@@ -127,7 +127,8 @@ class AdbStartWorker(
                             applicationContext,
                             "Service started via direct TCP port $desiredPort (no Wi-Fi required)",
                         )
-                        WirelessDebugging.clearBlock(applicationContext)
+                        WirelessDebugging.clearNoWifi(applicationContext)
+                        WirelessDebugging.afterTcpStart(applicationContext, ::note)
                         note("SUCCESS via tcp fast path on port $desiredPort (attempt=$runAttemptCount)")
                         return Result.success()
                     }
@@ -187,7 +188,7 @@ class AdbStartWorker(
             AdbStarter.startAdb(applicationContext, port)
             Starter.waitForBinder()
             ManagerActivityLog.log(applicationContext, "Service started via background ADB worker on port $port")
-            WirelessDebugging.clearBlock(applicationContext)
+            WirelessDebugging.clearNoWifi(applicationContext)
             note("SUCCESS on port $port (attempt=$runAttemptCount)")
             timber.log.Timber
                 .tag("AdbStartWorker")
@@ -219,6 +220,7 @@ class AdbStartWorker(
             when (e.reason) {
                 WirelessDebugging.Blocked.NO_WIFI -> {
                     warn("FAILURE (attempt=$runAttemptCount): ${e.message}; not retrying until Wi-Fi connects or a start by hand")
+                    // Not after this boot's prompt: that one never resumes by itself.
                     WirelessDebugging.armResume(applicationContext)
                 }
                 WirelessDebugging.Blocked.UNTRUSTED_NETWORK ->
@@ -300,7 +302,7 @@ class AdbStartWorker(
         val sysPort = EnvironmentUtils.getAdbTcpPort()
         if (sysPort in 1..65535 && sysPort != desiredPort && AdbPortProber.isPortOpen(sysPort, 600)) {
             note("adbd listens on tcp port $sysPort; moving it to $desiredPort")
-            return startOn(sysPort)
+            return startOn(sysPort).also { WirelessDebugging.afterTcpStart(applicationContext, ::note) }
         }
         if (!WirelessDebugging.available()) {
             // Before Android 11, or without TLS adb, only USB or root can reopen it; something
@@ -329,30 +331,34 @@ class AdbStartWorker(
         AdbStarter.startAdb(applicationContext, port)
         Starter.waitForBinder()
         ManagerActivityLog.log(applicationContext, "Service started via background ADB worker on port $port")
-        WirelessDebugging.clearBlock(applicationContext)
+        // This boot's network prompt stays: a later restore the same boot must not ask again.
+        WirelessDebugging.clearNoWifi(applicationContext)
         note("SUCCESS on port $port (attempt=$runAttemptCount)")
         return Result.success()
     }
 
     /**
-     * This run's use of wireless debugging. A start nobody made by hand stands down while what
-     * stopped the last restore still holds (still no Wi-Fi; still the untrusted network), so the
-     * watchdog and the boot retry neither wait nor prompt again; a start by hand always tries.
+     * This run's use of wireless debugging. A start nobody made by hand stands down after this
+     * boot's network prompt (while wireless debugging is still off) and while there is still no
+     * Wi-Fi after a no-Wi-Fi stop, so the watchdog, the boot retry and WorkManager's re-runs
+     * neither wait nor prompt again. A start by hand made after the prompt may ask once more; a
+     * re-run of one made before it may not (its requested-at, as the unanswered marker does).
      */
     private fun wirelessSession(restoresState: Boolean = false): WirelessDebugging.Session {
-        val blocked = WirelessDebugging.blocked(applicationContext)
-        if (blocked != null) {
-            if (inputData.getBoolean(KEY_EXPLICIT, false)) {
-                note("a start by hand: trying wireless debugging again despite the last restore's ${blocked.name}")
-            } else {
-                WirelessDebugging.standDownReason(applicationContext)?.let { throw WirelessDebuggingBlockedException(blocked, it) }
-            }
-            WirelessDebugging.clearBlock(applicationContext)
+        val explicit = inputData.getBoolean(KEY_EXPLICIT, false)
+        WirelessDebugging.standDownReason(applicationContext, explicit, inputData.getLong(KEY_REQUESTED_AT, 0L))?.let { (reason, why) ->
+            throw WirelessDebuggingBlockedException(reason, why)
         }
+        if (explicit && WirelessDebugging.promptedAt(applicationContext) != null) {
+            note("a start by hand made after this boot's network prompt: it may ask once more")
+            WirelessDebugging.clearPrompted(applicationContext)
+        }
+        WirelessDebugging.clearNoWifi(applicationContext)
         return WirelessDebugging.Session(applicationContext, ::note, ::warn, ::promoteToForeground, restoresState)
     }
 
     private var promoted = false
+    private var promotedOk = false
 
     /**
      * Waiting for Wi-Fi, an unlock or the user can outlast what a background job is allowed, so the
@@ -360,8 +366,8 @@ class AdbStartWorker(
      * does this run's identical progress step aside; if promotion fails, the progress stays the
      * one visible sign of the start.
      */
-    private suspend fun promoteToForeground() {
-        if (promoted) return
+    private suspend fun promoteToForeground(): Boolean {
+        if (promoted) return promotedOk
         promoted = true
         val notification = ShizukuReceiverStarter.buildForegroundNotification(applicationContext)
         // On Android 14+ (API 34), ForegroundInfo must declare a foreground service type (one the
@@ -382,6 +388,7 @@ class AdbStartWorker(
         try {
             setForeground(foregroundInfo)
             setProgress(workDataOf(KEY_STEP to StartNotificationState.Step.FOREGROUND.name))
+            promotedOk = true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -390,6 +397,7 @@ class AdbStartWorker(
                 .w(e, "doWork: foreground promotion failed")
             warn("foreground promotion failed: ${HeadlessLogger.brief(e)}")
         }
+        return promotedOk
     }
 
     private fun Throwable.toUserMessage(context: Context): String =

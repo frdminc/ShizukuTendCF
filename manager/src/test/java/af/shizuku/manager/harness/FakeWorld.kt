@@ -102,8 +102,15 @@ class FakeWorld(
 
     private val trustPromptCount = AtomicInteger()
 
-    /** Writes of adb_wifi_enabled=1 the system undoes because WifiManager has no BSSID yet. */
-    val bssidLagWrites = AtomicInteger()
+    /**
+     * For this long after Wi-Fi connects WifiManager has no BSSID for it, and the system undoes a
+     * write of adb_wifi_enabled=1 without a prompt.
+     */
+    @Volatile
+    var bssidLagMs = 0L
+
+    @Volatile
+    private var wifiConnectedAtNs = 0L
     val trustPrompts: Int get() = trustPromptCount.get()
     private val discoveries = CopyOnWriteArrayList<(Int) -> Unit>()
     private var nextNetId = 100
@@ -164,7 +171,6 @@ class FakeWorld(
         WirelessDebugging.pollMs = 20
         WirelessDebugging.toggleGapMs = 20
         WirelessDebugging.wifiSettleMs = 20
-        WirelessDebugging.earlyResetRetryMs = 20
         // An hour since boot: no Wi-Fi here is "just connected" unless a scenario says so.
         WirelessDebugging.uptimeMs = { 3_600_000 }
         Settings.Global.putInt(app.contentResolver, Settings.Global.BOOT_COUNT, 1)
@@ -239,7 +245,7 @@ class FakeWorld(
         val w = wifi
         when {
             // WifiManager has no BSSID for the new network yet: off again, with no prompt.
-            w != null && bssidLagWrites.getAndUpdate { if (it > 0) it - 1 else 0 } > 0 -> setAdbWifi(0)
+            w != null && System.nanoTime() - wifiConnectedAtNs < bssidLagMs * 1_000_000 -> setAdbWifi(0)
             w == null -> setAdbWifi(0)
             !w.trusted -> {
                 trustPromptCount.incrementAndGet()
@@ -269,6 +275,7 @@ class FakeWorld(
             NET_CAPABILITY_NOT_VCN_MANAGED,
         ).forEach { shadowOf(caps).addCapability(it) }
         wifiCaps = caps
+        wifiConnectedAtNs = System.nanoTime()
         @Suppress("DEPRECATION")
         shadowOf(cm).addNetwork(
             network,
@@ -324,6 +331,16 @@ class FakeWorld(
     }
 
     /** adbd listens on [port] (tcpip, or something outside the manager did it). */
+
+    /** Something closes adbd's TCP port again (adb usb). */
+    fun closeTcpPort() {
+        tcpAdbd?.close()
+        tcpAdbd = null
+        serverDown()
+        // The server went with it; the manager notices (its binder death does the same).
+        ShizukuStateMachine.update()
+    }
+
     fun openTcpPort(port: Int) {
         tcpAdbd?.close()
         tcpAdbd = FakeAdbd(onShell = { serverUp() }, port = port, authorized = true)
