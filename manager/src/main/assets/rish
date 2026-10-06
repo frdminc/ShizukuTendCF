@@ -54,4 +54,9 @@ fi
 # Set SHIZUKU_TOKEN if you have authentication enabled in Shizuku app
 # [ -z "$SHIZUKU_TOKEN" ] && export SHIZUKU_TOKEN="YOUR_TOKEN_HERE"
 
+# Termux (and other terminal apps) can export LD_LIBRARY_PATH pointing at their own libraries. On
+# ColorOS/realme (Android 14+) app_process then loads Termux's libzstd.so, which clashes with the
+# system libunwindstack.so, and fails to link. app_process only needs the system libraries.
+unset LD_LIBRARY_PATH
+
 /system/bin/app_process -Djava.class.path="$DEX" /system/bin --nice-name=rish rikka.shizuku.shell.ShizukuShellLoader "$@"
