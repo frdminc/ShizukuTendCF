@@ -30,6 +30,11 @@ the same rules. Jules has its own setup notes in [`JULES.md`](JULES.md).
    `memory/handoffs/ShizukuTendCF/reports-2026-10-05/a2-scenario-catalogue-zcode.md`),
    then the fix. Ten review rounds on 2026-10-04 found ordering bugs the tests
    could have.
+7. **The app handles a problem itself even when `~/ops` also does.** If stayturgid's
+   Termux repair pass, fleet-watch or a deploy role works around something (for example
+   restoring ADB after a reboot), the app should still deal with it where it can: upstream
+   ShizukuPlus users have none of that tooling, and for the fleet the redundancy is the point.
+   Don't call a case handled because the ops tooling covers it.
 
 ## Project quick-ref
 
