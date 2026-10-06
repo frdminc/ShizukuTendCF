@@ -216,8 +216,14 @@ class AdbStartWorker(
             // Only Wi-Fi, another network or the user can change this; a WorkManager retry would
             // wait (or raise the system's network prompt) again. The notice says what to do, and
             // the network callback starts again when Wi-Fi connects or the network changes.
-            warn("FAILURE (attempt=$runAttemptCount): ${e.message}; not retrying until Wi-Fi connects, the network changes or a start by hand")
-            WirelessDebugging.armResume(applicationContext)
+            when (e.reason) {
+                WirelessDebugging.Blocked.NO_WIFI -> {
+                    warn("FAILURE (attempt=$runAttemptCount): ${e.message}; not retrying until Wi-Fi connects or a start by hand")
+                    WirelessDebugging.armResume(applicationContext)
+                }
+                WirelessDebugging.Blocked.UNTRUSTED_NETWORK ->
+                    warn("FAILURE (attempt=$runAttemptCount): ${e.message}; not retrying this boot until a start by hand or wireless debugging is turned on")
+            }
             if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
                 ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
             }
@@ -296,14 +302,26 @@ class AdbStartWorker(
             note("adbd listens on tcp port $sysPort; moving it to $desiredPort")
             return startOn(sysPort)
         }
+        if (!WirelessDebugging.available()) {
+            // Before Android 11, or without TLS adb, only USB or root can reopen it; something
+            // else (ops tooling, `adb tcpip`) may, and the next run's probe would find it.
+            warn("tcp port $desiredPort closed and this device has no wireless debugging to reopen it; RETRY later")
+            return Result.retry()
+        }
         note("tcp port $desiredPort closed; restoring it through wireless debugging in this attempt")
-        val session = wirelessSession()
+        val session = wirelessSession(restoresState = true)
+        // A start that stood down for another (one holding adbd's dialog, or an interactive start)
+        // leaves wireless debugging to it, as AdbStarter does.
+        var stoodDown = false
         try {
             val port = session.findPort()
             note("starting adb on wireless debugging port $port to reopen tcp port $desiredPort")
             return startOn(port)
+        } catch (e: AdbAuthPendingException) {
+            stoodDown = true
+            throw e
         } finally {
-            session.restore()
+            if (!stoodDown) session.restore()
         }
     }
 
@@ -321,8 +339,8 @@ class AdbStartWorker(
      * stopped the last restore still holds (still no Wi-Fi; still the untrusted network), so the
      * watchdog and the boot retry neither wait nor prompt again; a start by hand always tries.
      */
-    private fun wirelessSession(): WirelessDebugging.Session {
-        val blocked = WirelessDebugging.blocked()
+    private fun wirelessSession(restoresState: Boolean = false): WirelessDebugging.Session {
+        val blocked = WirelessDebugging.blocked(applicationContext)
         if (blocked != null) {
             if (inputData.getBoolean(KEY_EXPLICIT, false)) {
                 note("a start by hand: trying wireless debugging again despite the last restore's ${blocked.name}")
@@ -331,7 +349,7 @@ class AdbStartWorker(
             }
             WirelessDebugging.clearBlock(applicationContext)
         }
-        return WirelessDebugging.Session(applicationContext, ::note, ::warn, ::promoteToForeground)
+        return WirelessDebugging.Session(applicationContext, ::note, ::warn, ::promoteToForeground, restoresState)
     }
 
     private var promoted = false

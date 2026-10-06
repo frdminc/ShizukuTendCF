@@ -101,9 +101,13 @@ class FakeWorld(
     var staleWirelessDebugging = false
 
     private val trustPromptCount = AtomicInteger()
+
+    /** Writes of adb_wifi_enabled=1 the system undoes because WifiManager has no BSSID yet. */
+    val bssidLagWrites = AtomicInteger()
     val trustPrompts: Int get() = trustPromptCount.get()
     private val discoveries = CopyOnWriteArrayList<(Int) -> Unit>()
     private var nextNetId = 100
+    private var wifiCaps: NetworkCapabilities? = null
 
     /** Input of every AdbStartWorker WorkManager ran, oldest first: what a rerun repeats. */
     val startInputs = CopyOnWriteArrayList<Data>()
@@ -160,6 +164,10 @@ class FakeWorld(
         WirelessDebugging.pollMs = 20
         WirelessDebugging.toggleGapMs = 20
         WirelessDebugging.wifiSettleMs = 20
+        WirelessDebugging.earlyResetRetryMs = 20
+        // An hour since boot: no Wi-Fi here is "just connected" unless a scenario says so.
+        WirelessDebugging.uptimeMs = { 3_600_000 }
+        Settings.Global.putInt(app.contentResolver, Settings.Global.BOOT_COUNT, 1)
         // Robolectric's SystemClock stands still unless the main looper is idled.
         WirelessDebugging.elapsedMs = { System.nanoTime() / 1_000_000 }
         // Skips the worker's post-boot settling delay.
@@ -230,6 +238,8 @@ class FakeWorld(
         }
         val w = wifi
         when {
+            // WifiManager has no BSSID for the new network yet: off again, with no prompt.
+            w != null && bssidLagWrites.getAndUpdate { if (it > 0) it - 1 else 0 } > 0 -> setAdbWifi(0)
             w == null -> setAdbWifi(0)
             !w.trusted -> {
                 trustPromptCount.incrementAndGet()
@@ -248,6 +258,17 @@ class FakeWorld(
         val network = ShadowNetwork.newInstance(nextNetId++)
         val caps = ShadowNetworkCapabilities.newInstance()
         shadowOf(caps).addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+        // What every ordinary network has; deliberately not INTERNET, VALIDATED or NOT_METERED.
+        listOf(
+            NetworkCapabilities.NET_CAPABILITY_NOT_VPN,
+            NetworkCapabilities.NET_CAPABILITY_TRUSTED,
+            NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED,
+            NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING,
+            NetworkCapabilities.NET_CAPABILITY_NOT_CONGESTED,
+            NetworkCapabilities.NET_CAPABILITY_NOT_SUSPENDED,
+            NET_CAPABILITY_NOT_VCN_MANAGED,
+        ).forEach { shadowOf(caps).addCapability(it) }
+        wifiCaps = caps
         @Suppress("DEPRECATION")
         shadowOf(cm).addNetwork(
             network,
@@ -262,6 +283,12 @@ class FakeWorld(
     fun connectWifi(trusted: Boolean) {
         dropWifi()
         val network = addWifi(trusted)
+        // The shadow keeps no request with a callback; every callback here is the manager's Wi-Fi
+        // request, so deliver only what that request would match (as ConnectivityService does).
+        if (!WirelessDebugging.wifiRequest().canBeSatisfiedBy(wifiCaps)) {
+            settle()
+            return
+        }
         shadowOf(cm).networkCallbacks.toList().forEach { it.onAvailable(network) }
         // The system sends a PendingIntent callback to its explicit receiver.
         shadowOf(cm).networkCallbackPendingIntents.toList().forEach { pi ->
@@ -288,6 +315,8 @@ class FakeWorld(
         setAdbWifi(1)
     }
 
+    fun wirelessDebuggingOn() = setAdbWifi(1)
+
     /** Wireless debugging is on but its mDNS announcement has gone stale. */
     fun staleWirelessDebuggingOn() {
         setAdbWifi(1)
@@ -299,6 +328,35 @@ class FakeWorld(
         tcpAdbd?.close()
         tcpAdbd = FakeAdbd(onShell = { serverUp() }, port = port, authorized = true)
     }
+
+    private val keyguard get() = app.getSystemService(android.app.KeyguardManager::class.java)
+
+    fun lockScreen() = shadowOf(keyguard).setKeyguardLocked(true)
+
+    fun unlockScreen() {
+        shadowOf(keyguard).setKeyguardLocked(false)
+        app.sendBroadcast(Intent(Intent.ACTION_USER_PRESENT))
+        settle()
+    }
+
+    /** The device restarts: a new boot count, wireless debugging off and adbd's TCP port closed. */
+    fun reboot() {
+        Settings.Global.putInt(app.contentResolver, Settings.Global.BOOT_COUNT, Settings.Global.getInt(app.contentResolver, Settings.Global.BOOT_COUNT, 0) + 1)
+        setAdbWifi(0)
+        tcpAdbd?.close()
+        tcpAdbd = null
+        serverDown()
+    }
+
+    fun awaitLog(line: String) =
+        waitUntil({ "the start log to say \"$line\"" }) {
+            HeadlessLogger
+                .getLogPath()
+                ?.let { java.io.File(it) }
+                ?.takeIf { it.exists() }
+                ?.readText()
+                ?.contains(line) == true
+        }
 
     fun awaitWifiWait() = waitUntil({ "a start to wait for Wi-Fi" }) { shadowOf(cm).networkCallbacks.isNotEmpty() }
 
@@ -404,6 +462,9 @@ class FakeWorld(
         const val AUTH_TIMEOUT_MS = 3_000
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
         const val ADB_WIFI = "adb_wifi_enabled"
+
+        // A system API constant (NetworkCapabilities.NET_CAPABILITY_NOT_VCN_MANAGED) that requests carry by default.
+        const val NET_CAPABILITY_NOT_VCN_MANAGED = 28
     }
 }
 

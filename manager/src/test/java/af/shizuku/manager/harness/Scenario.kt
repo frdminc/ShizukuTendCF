@@ -117,6 +117,15 @@ class Scenario(
         world.settle()
     }
 
+    fun lockScreen() = world.lockScreen()
+
+    fun unlockScreen() = world.unlockScreen()
+
+    /** The device restarts (then [boot] delivers BOOT_COMPLETED). */
+    fun reboot() = world.reboot()
+
+    fun awaitLog(line: String) = world.awaitLog(line)
+
     /** A start is waiting for Wi-Fi (its network callback is registered). */
     fun startWaitsForWifi() = world.awaitWifiWait()
 

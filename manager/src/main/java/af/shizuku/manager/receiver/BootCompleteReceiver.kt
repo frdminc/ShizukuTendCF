@@ -44,6 +44,9 @@ class BootCompleteReceiver : BroadcastReceiver() {
                 if (action == Intent.ACTION_BOOT_COMPLETED) {
                     af.shizuku.manager.adb.AdbAuthWait
                         .clearUnanswered()
+                    // A refused Wi-Fi network gets one automatic prompt per boot.
+                    af.shizuku.manager.adb.WirelessDebugging
+                        .clearBlock(context)
                 }
                 ShizukuReceiverStarter.start(context)
             } catch (e: Exception) {

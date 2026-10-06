@@ -920,7 +920,7 @@
     <string name="wadb_restore_no_wifi_title">Waiting for Wi-Fi</string>
     <string name="wadb_restore_no_wifi_text">Connect to Wi-Fi once so Shizuku can restore its ADB connection. It continues by itself when Wi-Fi connects.</string>
     <string name="wadb_restore_untrusted_title">Allow wireless debugging on this network</string>
-    <string name="wadb_restore_untrusted_text">Open Wireless debugging and choose \"Always allow on this network\" once. Shizuku then restores its ADB connection by itself, now and after each restart.</string>
+    <string name="wadb_restore_untrusted_text">Open Wireless debugging, choose \"Always allow on this network\" once, then tap Attempt now. After that Shizuku restores its ADB connection by itself after each restart.</string>
     <string name="wadb_restore_open_wireless_debugging">Open Wireless debugging</string>
 
     <!-- Watchdog -->

@@ -6,6 +6,7 @@ import af.shizuku.manager.BuildConfig
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.ShizukuSettings.LaunchMethod
 import af.shizuku.manager.adb.AdbAuthWait
+import af.shizuku.manager.adb.WirelessDebugging
 import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.ShizukuStateMachine
 import android.Manifest.permission.WRITE_SECURE_SETTINGS
@@ -88,8 +89,25 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                     // out with --ez enable_wireless_adb false. UNKNOWN is persisted as ADB because
                     // the shared starter treats UNKNOWN as "background start not supported".
                     HeadlessLogger.i("Start", "Launch mode=$launchMode, attempting ADB start")
+                    val force = intent.getBooleanExtra(EXTRA_FORCE, false)
+                    if (force && WirelessDebugging.blocked(context) != null) {
+                        HeadlessLogger.i("Start", "Forced: clearing what stopped the last wireless debugging restore")
+                        WirelessDebugging.clearBlock(context)
+                    }
                     if (intent.getBooleanExtra(EXTRA_ENABLE_WIRELESS_ADB, true)) {
-                        tryEnsureWirelessAdb(context)
+                        when {
+                            // The start worker turns wireless debugging on only if the TCP port
+                            // needs it, and back off afterwards; turned on here, it would raise a
+                            // refused network's prompt again and stay on after every start.
+                            ShizukuSettings.getTcpMode() ->
+                                HeadlessLogger.i("Start", "TCP mode: leaving wireless debugging to the start worker")
+                            WirelessDebugging.blocked(context) != null ->
+                                HeadlessLogger.i(
+                                    "Start",
+                                    "Not turning wireless debugging on: ${WirelessDebugging.standDownReason(context) ?: "the last restore was stopped"}; send --ez $EXTRA_FORCE true to try anyway",
+                                )
+                            else -> tryEnsureWirelessAdb(context)
+                        }
                     }
                     if (launchMode != LaunchMethod.ADB) {
                         ShizukuSettings.setLastLaunchMode(LaunchMethod.ADB)
