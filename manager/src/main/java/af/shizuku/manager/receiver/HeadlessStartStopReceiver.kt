@@ -16,6 +16,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
 import rikka.shizuku.Shizuku
+import af.shizuku.manager.utils.EnvironmentUtils as ManagerEnvironmentUtils
 
 /**
  * ADB-shell / root only control surface for fleet automation: start, stop and query Shizuku
@@ -119,9 +120,11 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                     runCatching {
                         Settings.Global.getInt(context.contentResolver, "adb_wifi_enabled", 0)
                     }.getOrDefault(0)
+                // Android 17 QPR1 (API 37) hides adb_enabled from apps (it always reads 0), so
+                // read it through the helper that knows that, not raw, or USB shows as off.
                 val adbUsb =
                     runCatching {
-                        Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0)
+                        if (ManagerEnvironmentUtils.isAdbEnabled()) 1 else 0
                     }.getOrDefault(0)
 
                 val adbParts = mutableListOf<String>()
@@ -178,6 +181,10 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
         }
         try {
             val cr = context.contentResolver
+            // Deliberately the raw read, not ManagerEnvironmentUtils.isAdbEnabled(): on API 37+
+            // the raw value always reads 0, so this writes 1 every time, which is a no-op when
+            // USB debugging is already on and turns it on when it is not. The helper would
+            // report "on" there and skip the write.
             if (Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 0) == 0) {
                 Settings.Global.putInt(cr, Settings.Global.ADB_ENABLED, 1)
                 HeadlessLogger.i("Start", "Enabled USB ADB")
