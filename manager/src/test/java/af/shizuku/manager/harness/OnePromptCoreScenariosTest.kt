@@ -173,13 +173,22 @@ class OnePromptCoreScenariosTest {
         // cannot load (see OnePromptScenariosTest), so the key is assembled without it: a JDK RSA
         // key for sign(), and any public-key blob, which FakeAdbd only counts.
         val key: AdbKey by lazy {
-            val unsafe = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe").apply { isAccessible = true }.get(null)
+            val unsafe =
+                Class
+                    .forName("sun.misc.Unsafe")
+                    .getDeclaredField("theUnsafe")
+                    .apply { isAccessible = true }
+                    .get(null)
             val key = unsafe.javaClass.getMethod("allocateInstance", Class::class.java).invoke(unsafe, AdbKey::class.java) as AdbKey
             val pair = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
+
             fun set(
                 field: String,
                 value: Any,
-            ) = AdbKey::class.java.getDeclaredField(field).apply { isAccessible = true }.set(key, value)
+            ) = AdbKey::class.java
+                .getDeclaredField(field)
+                .apply { isAccessible = true }
+                .set(key, value)
             set("privateKey", pair.private)
             set("publicKey", pair.public)
             set("adbPublicKey\$delegate", lazyOf("QAAAAFake= shizuku+\u0000".toByteArray()))

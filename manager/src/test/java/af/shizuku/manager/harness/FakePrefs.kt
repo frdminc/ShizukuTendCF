@@ -21,10 +21,18 @@ class FakePrefs : SharedPreferences {
     var failOnRead = false
 
     /** The OS finished writing every apply() so far. */
-    fun flush() = synchronized(lock) { disk.clear(); disk.putAll(memory) }
+    fun flush() =
+        synchronized(lock) {
+            disk.clear()
+            disk.putAll(memory)
+        }
 
     /** The process died: whatever apply() had not reached disk is gone. */
-    fun killProcess() = synchronized(lock) { memory.clear(); memory.putAll(disk) }
+    fun killProcess() =
+        synchronized(lock) {
+            memory.clear()
+            memory.putAll(disk)
+        }
 
     fun inMemory(key: String): Boolean = synchronized(lock) { memory.containsKey(key) }
 
@@ -43,18 +51,36 @@ class FakePrefs : SharedPreferences {
 
     override fun getAll(): MutableMap<String, *> = read { HashMap(memory) }
 
-    override fun getString(key: String?, defValue: String?): String? = read { get(key, defValue) }
+    override fun getString(
+        key: String?,
+        defValue: String?,
+    ): String? = read { get(key, defValue) }
 
-    override fun getStringSet(key: String?, defValues: MutableSet<String>?): MutableSet<String>? =
+    override fun getStringSet(
+        key: String?,
+        defValues: MutableSet<String>?,
+    ): MutableSet<String>? =
         read { get<Set<String>?>(key, defValues)?.toMutableSet() }
 
-    override fun getInt(key: String?, defValue: Int): Int = read { get(key, defValue) }
+    override fun getInt(
+        key: String?,
+        defValue: Int,
+    ): Int = read { get(key, defValue) }
 
-    override fun getLong(key: String?, defValue: Long): Long = read { get(key, defValue) }
+    override fun getLong(
+        key: String?,
+        defValue: Long,
+    ): Long = read { get(key, defValue) }
 
-    override fun getFloat(key: String?, defValue: Float): Float = read { get(key, defValue) }
+    override fun getFloat(
+        key: String?,
+        defValue: Float,
+    ): Float = read { get(key, defValue) }
 
-    override fun getBoolean(key: String?, defValue: Boolean): Boolean = read { get(key, defValue) }
+    override fun getBoolean(
+        key: String?,
+        defValue: Boolean,
+    ): Boolean = read { get(key, defValue) }
 
     override fun contains(key: String?): Boolean = read { key != null && memory.containsKey(key) }
 

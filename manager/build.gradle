@@ -168,26 +168,34 @@ afterEvaluate {
         optimizeReleaseResources.finalizedBy(collapseReleaseResourceNames)
     }
     
-    tasks.register("copyCompatApkRelease", Copy) {
-        dependsOn ":compat:assembleRelease"
-        // Use fileTree so we match both compat-release.apk (signed) and compat-release-unsigned.apk.
-        // The hardcoded filename was the root cause of the compat stub never being bundled on CI (#293).
-        from fileTree("${project(':compat').layout.buildDirectory.get().asFile}/outputs/apk/release") {
-            include "*.apk"
+    // Copies the compat stub APK to src/main/assets/compat.apk. Not a Copy task: a Copy task's
+    // output is its whole destination directory, so it claimed all of src/main/assets (tracked
+    // files included) and every task whose input tree covers the manager sources, such as
+    // spotlessKotlin, failed Gradle's implicit-dependency validation when run in the same build.
+    // The declared output is the one file this task writes.
+    ["debug", "release"].each { buildType ->
+        def cap = buildType.capitalize()
+        tasks.register("copyCompatApk${cap}") {
+            dependsOn ":compat:assemble${cap}"
+            // Use fileTree so we match both compat-release.apk (signed) and compat-release-unsigned.apk.
+            // The hardcoded filename was the root cause of the compat stub never being bundled on CI (#293).
+            def apks = fileTree(project(':compat').layout.buildDirectory.dir("outputs/apk/${buildType}")) {
+                include "*.apk"
+            }
+            def target = file("src/main/assets/compat.apk")
+            def fs = services.get(FileSystemOperations)
+            inputs.files(apks).skipWhenEmpty().withPropertyName("compatApks")
+            outputs.file(target).withPropertyName("compatApk")
+            doLast {
+                fs.copy {
+                    from apks
+                    into target.parentFile
+                    rename { target.name }
+                }
+            }
         }
-        into "src/main/assets"
-        rename { "compat.apk" }
     }
 
-    tasks.register("copyCompatApkDebug", Copy) {
-        dependsOn ":compat:assembleDebug"
-        from fileTree("${project(':compat').layout.buildDirectory.get().asFile}/outputs/apk/debug") {
-            include "*.apk"
-        }
-        into "src/main/assets"
-        rename { "compat.apk" }
-    }
-    
     // Wire compat and shell for both the generic pre-build hooks (single-flavor builds)
     // and the flavor-specific hooks produced when product flavors are configured.
     tasks.findByName("preReleaseBuild")?.dependsOn("copyCompatApkRelease")

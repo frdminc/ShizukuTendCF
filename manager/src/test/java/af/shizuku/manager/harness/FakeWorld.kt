@@ -64,7 +64,10 @@ class FakeWorld(
 
     fun install() {
         if (Security.getProvider(ANDROID_KEYSTORE) == null) Security.addProvider(UnusableAndroidKeyStore())
-        ShizukuApplication::class.java.getDeclaredField("appContext").apply { isAccessible = true }.set(null, app)
+        ShizukuApplication::class.java
+            .getDeclaredField("appContext")
+            .apply { isAccessible = true }
+            .set(null, app)
         Starter.initialize(app)
         ShizukuSettings.setPreferencesForTesting(prefs)
         AdbAuthWait.clockMs = { clock.get() }
@@ -115,7 +118,10 @@ class FakeWorld(
     fun serverDown() = setShizukuBinder(null)
 
     private fun setShizukuBinder(binder: Binder?) =
-        Shizuku::class.java.getDeclaredField("binder").apply { isAccessible = true }.set(null, binder)
+        Shizuku::class.java
+            .getDeclaredField("binder")
+            .apply { isAccessible = true }
+            .set(null, binder)
 
     // The test thread is Robolectric's main thread, which WorkManager hands workers to, so every
     // wait runs the main looper instead of blocking it.

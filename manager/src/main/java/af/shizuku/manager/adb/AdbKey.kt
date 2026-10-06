@@ -332,7 +332,10 @@ class AdbKey(
     /** MD5 of the public key blob as colon-separated hex, the form adbd's dialog displays. */
     fun fingerprint(): String {
         val base64 = String(adbPublicKey).substringBefore(' ').trim { it <= ' ' }
-        val digest = java.security.MessageDigest.getInstance("MD5").digest(android.util.Base64.decode(base64, android.util.Base64.DEFAULT))
+        val digest =
+            java.security.MessageDigest
+                .getInstance("MD5")
+                .digest(android.util.Base64.decode(base64, android.util.Base64.DEFAULT))
         return digest.joinToString(":") { "%02X".format(it) }
     }
 

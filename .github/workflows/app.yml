@@ -61,6 +61,9 @@ jobs:
       - name: Run Lint
         run: ./gradlew :manager:lint
 
+      - name: Check Formatting (Spotless)
+        run: ./gradlew :manager:spotlessCheck
+
       - name: Run Unit Tests
         run: ./gradlew --continue :manager:testShizukuplusDebugUnitTest :server:testDebugUnitTest :database:testDebugUnitTest
 

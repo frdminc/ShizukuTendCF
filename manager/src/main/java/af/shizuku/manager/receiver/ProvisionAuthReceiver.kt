@@ -16,12 +16,14 @@ import android.widget.Toast
  * system); Binder.getCallingUid() is not meaningful inside onReceive, so it is not used.
  */
 class ProvisionAuthReceiver : BroadcastReceiver() {
-
     private companion object {
         val TOKEN_FORMAT = Regex("^[A-Za-z0-9_-]{24,128}$")
     }
 
-    override fun onReceive(context: Context, intent: Intent) {
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
         if (intent.action != "${context.packageName}.PROVISION_AUTH") return
         HeadlessLogger.init(context)
         HeadlessLogger.i("ProvisionAuth", "Auth token provisioning requested")

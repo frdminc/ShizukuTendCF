@@ -96,7 +96,8 @@ class AppsViewModel(
                 // empty while Shizuku is running AND we previously had a non-zero count, treat
                 // it as a transient IPC failure and skip posting rather than overwriting a valid
                 // count with 0 (#424). Fresh installs (previous count null or 0) post normally.
-                if (allPackages.isEmpty() && ShizukuStateMachine.isRunning() &&
+                if (allPackages.isEmpty() &&
+                    ShizukuStateMachine.isRunning() &&
                     (_grantedCount.value?.data ?: 0) > 0
                 ) {
                     return@launch

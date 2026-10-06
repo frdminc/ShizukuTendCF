@@ -18,13 +18,16 @@ import java.security.MessageDigest
  * together. It must never carry profile contents or secrets.
  */
 object FleetApplyReport {
-
     private const val TAG = "FleetProfile"
     const val SCHEMA = 1
     const val SOURCE_PATH = "path"
     const val SOURCE_URI = "uri"
 
-    data class Snapshot(val ts: Long, val success: Boolean, val message: String)
+    data class Snapshot(
+        val ts: Long,
+        val success: Boolean,
+        val message: String,
+    )
 
     fun resultFile(context: Context): File? =
         context.getExternalFilesDir(null)?.resolve("fleet")?.resolve("last-apply.json")
@@ -39,27 +42,33 @@ object FleetApplyReport {
         source: String,
         tsSeconds: Long,
         appVersion: String,
-    ): JSONObject = JSONObject().apply {
-        put("schema", SCHEMA)
-        put("ts", tsSeconds)
-        put("success", result.success)
-        put("applied", result.appliedCount)
-        put("skipped", result.skippedCount)
-        put("errors", JSONArray(result.errors))
-        put("message", result.message)
-        // put(name, null) would drop the key; the contract wants an explicit null.
-        put("profile_sha256", result.profileSha256 ?: JSONObject.NULL)
-        put("source", source)
-        put("app_version", appVersion)
-    }
+    ): JSONObject =
+        JSONObject().apply {
+            put("schema", SCHEMA)
+            put("ts", tsSeconds)
+            put("success", result.success)
+            put("applied", result.appliedCount)
+            put("skipped", result.skippedCount)
+            put("errors", JSONArray(result.errors))
+            put("message", result.message)
+            // put(name, null) would drop the key; the contract wants an explicit null.
+            put("profile_sha256", result.profileSha256 ?: JSONObject.NULL)
+            put("source", source)
+            put("app_version", appVersion)
+        }
 
     /** Never throws: a report that cannot be written must not change the apply's outcome. */
     @JvmStatic
-    fun record(context: Context, result: FleetProfileApplier.Result, source: String) {
+    fun record(
+        context: Context,
+        result: FleetProfileApplier.Result,
+        source: String,
+    ) {
         // android.util.Log, not Timber: release builds plant no tree that reaches logcat.
-        val line = "apply success=${result.success} applied=${result.appliedCount} " +
-            "skipped=${result.skippedCount} errors=${result.errors.size} " +
-            "sha256=${result.profileSha256?.take(12) ?: "null"}"
+        val line =
+            "apply success=${result.success} applied=${result.appliedCount} " +
+                "skipped=${result.skippedCount} errors=${result.errors.size} " +
+                "sha256=${result.profileSha256?.take(12) ?: "null"}"
         if (result.success) Log.i(TAG, line) else Log.w(TAG, line)
 
         try {
@@ -73,7 +82,10 @@ object FleetApplyReport {
 
     // Readers poll this file while the app may be rewriting it, so they must only ever see a
     // whole old or whole new object: write a sibling temp file, sync it, then rename over.
-    private fun writeAtomically(target: File, text: String) {
+    private fun writeAtomically(
+        target: File,
+        text: String,
+    ) {
         val dir = target.parentFile ?: throw IllegalStateException("no parent dir")
         if (!dir.isDirectory && !dir.mkdirs()) throw IllegalStateException("cannot create ${dir.path}")
         val tmp = File(dir, target.name + ".tmp")
@@ -88,13 +100,14 @@ object FleetApplyReport {
     }
 
     @JvmStatic
-    fun read(context: Context): Snapshot? = try {
-        val file = resultFile(context)?.takeIf { it.isFile }
-        file?.let {
-            val json = JSONObject(it.readText(Charsets.UTF_8))
-            Snapshot(json.getLong("ts"), json.getBoolean("success"), json.optString("message"))
+    fun read(context: Context): Snapshot? =
+        try {
+            val file = resultFile(context)?.takeIf { it.isFile }
+            file?.let {
+                val json = JSONObject(it.readText(Charsets.UTF_8))
+                Snapshot(json.getLong("ts"), json.getBoolean("success"), json.optString("message"))
+            }
+        } catch (e: Exception) {
+            null
         }
-    } catch (e: Exception) {
-        null
-    }
 }

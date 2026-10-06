@@ -15,11 +15,17 @@ import java.io.File
  * is best effort per key, not transactional: a bad value skips that key and is reported.
  */
 object FleetProfileApplier {
-
-    private val knownKeys = setOf(
-        "mode", "start_on_boot", "watchdog", "tcp_mode", "tcp_port",
-        "auto_disable_usb_debugging", "legacy_pairing", "update_mode",
-    )
+    private val knownKeys =
+        setOf(
+            "mode",
+            "start_on_boot",
+            "watchdog",
+            "tcp_mode",
+            "tcp_port",
+            "auto_disable_usb_debugging",
+            "legacy_pairing",
+            "update_mode",
+        )
 
     data class Result(
         val success: Boolean,
@@ -32,15 +38,17 @@ object FleetProfileApplier {
     )
 
     @JvmStatic
-    fun applyJson(context: Context, json: String): Result {
-        return try {
+    fun applyJson(
+        context: Context,
+        json: String,
+    ): Result =
+        try {
             val profile = JSONObject(json)
             applyProfile(context, profile)
         } catch (e: Exception) {
             // org.json appends the whole input to its syntax errors; never echo file contents.
             Result(false, 0, 0, listOf("Invalid JSON"), "Profile parse failed: invalid JSON")
         }
-    }
 
     /**
      * Directories a profile file may be read from. The app's own external files dir is writable
@@ -57,7 +65,10 @@ object FleetProfileApplier {
         listOfNotNull(context.getExternalFilesDir(null), context.filesDir.resolve("fleet"))
             .map { it.canonicalFile }
 
-    private fun isAllowedPath(context: Context, file: File): Boolean {
+    private fun isAllowedPath(
+        context: Context,
+        file: File,
+    ): Boolean {
         val canonical = runCatching { file.canonicalFile }.getOrNull() ?: return false
         return allowedDirs(context).any { dir ->
             canonical.path == dir.path || canonical.path.startsWith(dir.path + File.separator)
@@ -65,7 +76,10 @@ object FleetProfileApplier {
     }
 
     @JvmStatic
-    fun applyFromPath(context: Context, path: String): Result {
+    fun applyFromPath(
+        context: Context,
+        path: String,
+    ): Result {
         val file = File(path)
         if (!isAllowedPath(context, file)) {
             val where = allowedDirs(context).joinToString(" or ") { it.path }
@@ -79,7 +93,10 @@ object FleetProfileApplier {
     }
 
     @JvmStatic
-    fun applyFromUri(context: Context, uri: Uri): Result {
+    fun applyFromUri(
+        context: Context,
+        uri: Uri,
+    ): Result {
         when (uri.scheme) {
             "file" -> return applyFromPath(context, uri.path ?: "")
             "content" -> {
@@ -87,9 +104,10 @@ object FleetProfileApplier {
                 // Resolve the authority (minus any "<userId>@" prefix) to its owning package rather
                 // than string-matching, since this app also owns authorities under other names.
                 val authority = (uri.authority ?: "").replace(Regex("^\\d+@"), "")
-                val owner = runCatching {
-                    context.packageManager.resolveContentProvider(authority, 0)?.packageName
-                }.getOrNull()
+                val owner =
+                    runCatching {
+                        context.packageManager.resolveContentProvider(authority, 0)?.packageName
+                    }.getOrNull()
                 if (authority.isEmpty() || owner == null || owner == context.packageName) {
                     return Result(false, 0, 0, listOf("URI not allowed"), "Profile URI must point at another app's provider")
                 }
@@ -97,19 +115,26 @@ object FleetProfileApplier {
             else -> return Result(false, 0, 0, listOf("Unsupported URI scheme"), "Unsupported URI scheme")
         }
         return try {
-            val stream = context.contentResolver.openInputStream(uri)
-                ?: return Result(false, 0, 0, listOf("Cannot open URI"), "Cannot open profile URI")
+            val stream =
+                context.contentResolver.openInputStream(uri)
+                    ?: return Result(false, 0, 0, listOf("Cannot open URI"), "Cannot open profile URI")
             applyBytes(context, stream.use { it.readBytes() })
         } catch (e: Exception) {
             Result(false, 0, 0, listOf(e.javaClass.simpleName), "Failed to read profile URI: ${e.javaClass.simpleName}")
         }
     }
 
-    private fun applyBytes(context: Context, bytes: ByteArray): Result =
+    private fun applyBytes(
+        context: Context,
+        bytes: ByteArray,
+    ): Result =
         applyJson(context, String(bytes, Charsets.UTF_8))
             .copy(profileSha256 = FleetApplyReport.sha256Hex(bytes))
 
-    private fun applyProfile(context: Context, profile: JSONObject): Result {
+    private fun applyProfile(
+        context: Context,
+        profile: JSONObject,
+    ): Result {
         val errors = mutableListOf<String>()
         val prefs = ShizukuSettings.getPreferences()
         val clearExisting = profile.optJSONObject("_meta")?.optBoolean("clear_existing", false) ?: false
@@ -159,38 +184,43 @@ object FleetProfileApplier {
 
         editor.apply()
 
-        val message = "Applied $applied preferences, skipped $skipped" +
-            if (errors.isEmpty()) "" else " (${errors.size} errors)"
+        val message =
+            "Applied $applied preferences, skipped $skipped" +
+                if (errors.isEmpty()) "" else " (${errors.size} errors)"
 
         return Result(errors.isEmpty(), applied, skipped, errors, message)
     }
 
-    private fun parseLaunchMode(value: Any): Int = when (value) {
-        is Int -> value
-        is String -> when (value.lowercase()) {
-            "unknown", "none" -> ShizukuSettings.LaunchMethod.UNKNOWN
-            "root" -> ShizukuSettings.LaunchMethod.ROOT
-            "adb" -> ShizukuSettings.LaunchMethod.ADB
-            else -> throw IllegalArgumentException("Unknown launch mode: $value")
+    private fun parseLaunchMode(value: Any): Int =
+        when (value) {
+            is Int -> value
+            is String ->
+                when (value.lowercase()) {
+                    "unknown", "none" -> ShizukuSettings.LaunchMethod.UNKNOWN
+                    "root" -> ShizukuSettings.LaunchMethod.ROOT
+                    "adb" -> ShizukuSettings.LaunchMethod.ADB
+                    else -> throw IllegalArgumentException("Unknown launch mode: $value")
+                }
+            else -> throw IllegalArgumentException("Unsupported type for mode: ${value.javaClass.simpleName}")
         }
-        else -> throw IllegalArgumentException("Unsupported type for mode: ${value.javaClass.simpleName}")
-    }
 
     /**
      * The old fork stored a single update_mode int (0 off / 1 stable / 2 beta); this base keeps an
      * enable flag plus a channel ("stable" or "dev"). Accept both spellings.
      */
     private fun applyUpdateMode(value: Any) {
-        val mode = when (value) {
-            is Int -> when (value) {
-                0 -> "off"
-                1 -> "stable"
-                2 -> "beta"
-                else -> throw IllegalArgumentException("Unknown update mode: $value")
+        val mode =
+            when (value) {
+                is Int ->
+                    when (value) {
+                        0 -> "off"
+                        1 -> "stable"
+                        2 -> "beta"
+                        else -> throw IllegalArgumentException("Unknown update mode: $value")
+                    }
+                is String -> value.lowercase()
+                else -> throw IllegalArgumentException("Unsupported type for update_mode: ${value.javaClass.simpleName}")
             }
-            is String -> value.lowercase()
-            else -> throw IllegalArgumentException("Unsupported type for update_mode: ${value.javaClass.simpleName}")
-        }
         when (mode) {
             "off" -> ShizukuSettings.setAutoUpdateEnabled(false)
             "stable" -> {
@@ -206,17 +236,23 @@ object FleetProfileApplier {
     }
 
     private fun parseTcpPort(value: Any): String {
-        val port = when (value) {
-            is Int -> value
-            is String -> value.trim().toIntOrNull()
-                ?: throw IllegalArgumentException("tcp_port is not a number: $value")
-            else -> throw IllegalArgumentException("Unsupported type for tcp_port: ${value.javaClass.simpleName}")
-        }
+        val port =
+            when (value) {
+                is Int -> value
+                is String ->
+                    value.trim().toIntOrNull()
+                        ?: throw IllegalArgumentException("tcp_port is not a number: $value")
+                else -> throw IllegalArgumentException("Unsupported type for tcp_port: ${value.javaClass.simpleName}")
+            }
         require(port in 1..65535) { "tcp_port out of range: $port" }
         return port.toString()
     }
 
-    private fun putValue(editor: SharedPreferences.Editor, key: String, value: Any?) {
+    private fun putValue(
+        editor: SharedPreferences.Editor,
+        key: String,
+        value: Any?,
+    ) {
         when (value) {
             is Boolean -> editor.putBoolean(key, value)
             is String -> editor.putString(key, value)

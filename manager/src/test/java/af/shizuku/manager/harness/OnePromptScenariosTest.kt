@@ -38,7 +38,10 @@ class OnePromptScenariosTest {
         // wireless-debugging port: it answers an accepted dialog with "tcpip:<tcp_port>"
         // (5555 by default) and reconnects there, where FakeAdbd listens on nothing.
         // Plain saved-port mode is the path FakeAdbd models.
-        world.prefs.edit().putBoolean("tcp_mode", false).commit()
+        world.prefs
+            .edit()
+            .putBoolean("tcp_mode", false)
+            .commit()
     }
 
     @After

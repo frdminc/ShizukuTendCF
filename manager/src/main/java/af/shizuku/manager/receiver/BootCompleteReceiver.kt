@@ -39,7 +39,8 @@ class BootCompleteReceiver : BroadcastReceiver() {
                 // A real boot may raise adbd's authorisation dialog once more; the unprotected
                 // QUICKBOOT actions, which any app can send, may not reset that.
                 if (action == Intent.ACTION_BOOT_COMPLETED) {
-                    af.shizuku.manager.adb.AdbAuthWait.clearUnanswered()
+                    af.shizuku.manager.adb.AdbAuthWait
+                        .clearUnanswered()
                 }
                 ShizukuReceiverStarter.start(context)
             } catch (e: Exception) {

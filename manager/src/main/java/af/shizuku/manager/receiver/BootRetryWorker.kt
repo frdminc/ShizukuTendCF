@@ -1,10 +1,9 @@
 package af.shizuku.manager.receiver
 
+import af.shizuku.common.util.UserHandleCompat
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.utils.ShizukuStateMachine
-import af.shizuku.common.util.UserHandleCompat
 import android.content.Context
-import timber.log.Timber
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -14,10 +13,13 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.delay
+import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
-class BootRetryWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-
+class BootRetryWorker(
+    context: Context,
+    params: WorkerParameters,
+) : CoroutineWorker(context, params) {
     companion object {
         private const val TAG = "BootRetry"
         private const val VERIFY_DELAY_MS = 3000L
@@ -43,22 +45,25 @@ class BootRetryWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 } else {
                     NetworkType.CONNECTED
                 }
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(network)
-                .build()
+            val constraints =
+                Constraints
+                    .Builder()
+                    .setRequiredNetworkType(network)
+                    .build()
 
-            val retry = OneTimeWorkRequestBuilder<BootRetryWorker>()
-                .setConstraints(constraints)
-                .setInitialDelay(10, TimeUnit.SECONDS)
-                .setBackoffCriteria(
-                    BackoffPolicy.EXPONENTIAL,
-                    10,
-                    TimeUnit.SECONDS,
-                )
-                .addTag(WORK_NAME)
-                .build()
+            val retry =
+                OneTimeWorkRequestBuilder<BootRetryWorker>()
+                    .setConstraints(constraints)
+                    .setInitialDelay(10, TimeUnit.SECONDS)
+                    .setBackoffCriteria(
+                        BackoffPolicy.EXPONENTIAL,
+                        10,
+                        TimeUnit.SECONDS,
+                    ).addTag(WORK_NAME)
+                    .build()
 
-            WorkManager.getInstance(context)
+            WorkManager
+                .getInstance(context)
                 .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, retry)
         }
 
@@ -92,7 +97,9 @@ class BootRetryWorker(context: Context, params: WorkerParameters) : CoroutineWor
         // once a start has ended with the dialog unanswered only a human can make progress, and
         // every further attempt would raise another dialog on an unattended device.
         // BootCompleteReceiver clears the marker before the boot's first start.
-        if (af.shizuku.manager.adb.AdbAuthWait.isUnanswered()) {
+        if (af.shizuku.manager.adb.AdbAuthWait
+                .isUnanswered()
+        ) {
             Timber.tag(TAG).i("adbd authorisation was not accepted, stopping retry until the next explicit start")
             return Result.success()
         }

@@ -101,7 +101,8 @@ class WatchdogService : Service() {
                             // now", is what the user sees instead.
                             val withheld =
                                 ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ADB &&
-                                    af.shizuku.manager.adb.AdbAuthWait.isUnanswered()
+                                    af.shizuku.manager.adb.AdbAuthWait
+                                        .isUnanswered()
                             if (withheld) {
                                 ManagerActivityLog.log(
                                     applicationContext,

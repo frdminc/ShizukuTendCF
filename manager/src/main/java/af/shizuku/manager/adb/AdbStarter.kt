@@ -204,24 +204,25 @@ object AdbStarter {
         port: Int,
     ): Boolean {
         if (port !in 1..65535 || AdbAuthWait.isWaiting()) return true
-        val result = runCatching {
-            val cr = context.contentResolver
-            if (context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
-                Settings.Global.putInt(cr, Settings.Global.ADB_ENABLED, 1)
-                Settings.Global.putLong(cr, "adb_allowed_connection_time", 0L)
-            }
+        val result =
+            runCatching {
+                val cr = context.contentResolver
+                if (context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
+                    Settings.Global.putInt(cr, Settings.Global.ADB_ENABLED, 1)
+                    Settings.Global.putLong(cr, "adb_allowed_connection_time", 0L)
+                }
 
-            if (!EnvironmentUtils.isAdbEnabled()) throw IllegalStateException("ADB is not enabled")
+                if (!EnvironmentUtils.isAdbEnabled()) throw IllegalStateException("ADB is not enabled")
 
-            ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPING)
-            val key = AdbKey(PreferenceAdbKeyStore(ShizukuSettings.getPreferences()), "shizuku+")
-            withContext(Dispatchers.IO) {
-                AdbClient("127.0.0.1", port, key).use { client ->
-                    connectWithRetry(client, port)
-                    client.command("usb:")
+                ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPING)
+                val key = AdbKey(PreferenceAdbKeyStore(ShizukuSettings.getPreferences()), "shizuku+")
+                withContext(Dispatchers.IO) {
+                    AdbClient("127.0.0.1", port, key).use { client ->
+                        connectWithRetry(client, port)
+                        client.command("usb:")
+                    }
                 }
             }
-        }
         result.onFailure {
             if (it is CancellationException) throw it
             if (it !is CancellationException && !it.isExpectedAdbError(includeIllegalState = true)) {

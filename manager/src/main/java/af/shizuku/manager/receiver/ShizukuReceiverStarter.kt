@@ -71,7 +71,8 @@ object ShizukuReceiverStarter {
         context: Context,
         forceStart: Boolean = false,
     ) {
-        if (!forceStart && (
+        if (!forceStart &&
+            (
                 UserHandleCompat.myUserId() > 0 ||
                     ShizukuStateMachine.isRunning() ||
                     ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING
@@ -293,10 +294,11 @@ object ShizukuReceiverStarter {
 
     /** Tests only: the in-memory notification state a process death loses. */
     internal fun resetForTesting() {
-        serial.submit {
-            rendered = null
-            renderedStamp = 0L
-        }.get()
+        serial
+            .submit {
+                rendered = null
+                renderedStamp = 0L
+            }.get()
         refreshQueued.set(false)
         awaitingUnlock.set(false)
         observing.set(false)
@@ -401,7 +403,11 @@ object ShizukuReceiverStarter {
                 AdbAuthWait.dismissUnansweredNotice()
                 if (!unlocked(app)) return@execute
                 runCatching {
-                    WorkManager.getInstance(app).cancelUniqueWork(AdbStartWorker.UNIQUE_WORK_NAME).result.get(WORK_TIMEOUT_S, TimeUnit.SECONDS)
+                    WorkManager
+                        .getInstance(app)
+                        .cancelUniqueWork(AdbStartWorker.UNIQUE_WORK_NAME)
+                        .result
+                        .get(WORK_TIMEOUT_S, TimeUnit.SECONDS)
                 }.onFailure { Timber.tag(TAG).w(it, "cancel: WorkManager unavailable") }
                 runCatching { app.getSystemService(NotificationManager::class.java)?.cancel(PERMISSION_NOTIFICATION_ID) }
                 render(app, force = false)

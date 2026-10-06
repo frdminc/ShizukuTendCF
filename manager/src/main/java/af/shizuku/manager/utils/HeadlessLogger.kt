@@ -11,12 +11,12 @@ import java.util.Date
 import java.util.Locale
 
 object HeadlessLogger {
-
     private const val TAG = "ShizukuHeadless"
     private const val LOG_FILE = "headless.log"
     private const val MAX_SIZE = 256 * 1024
 
     @Volatile private var logDir: File? = null
+
     @Volatile private var logFile: File? = null
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
@@ -37,19 +37,38 @@ object HeadlessLogger {
         logFile = logDir?.let { File(it, LOG_FILE) }
     }
 
-    fun i(component: String, message: String) = log(Level.INFO, component, message)
-    fun w(component: String, message: String) = log(Level.WARN, component, message)
-    fun e(component: String, message: String, throwable: Throwable? = null) {
-        val msg = if (throwable != null) {
-            val sw = StringWriter()
-            throwable.printStackTrace(PrintWriter(sw))
-            "$message\n${sw.toString()}"
-        } else message
+    fun i(
+        component: String,
+        message: String,
+    ) = log(Level.INFO, component, message)
+
+    fun w(
+        component: String,
+        message: String,
+    ) = log(Level.WARN, component, message)
+
+    fun e(
+        component: String,
+        message: String,
+        throwable: Throwable? = null,
+    ) {
+        val msg =
+            if (throwable != null) {
+                val sw = StringWriter()
+                throwable.printStackTrace(PrintWriter(sw))
+                "$message\n$sw"
+            } else {
+                message
+            }
         log(Level.ERROR, component, msg)
     }
 
     @Synchronized
-    private fun log(level: Level, component: String, message: String) {
+    private fun log(
+        level: Level,
+        component: String,
+        message: String,
+    ) {
         val ts = dateFormat.format(Date())
         val line = "$ts ${level.name.padEnd(5)} $component: $message"
 

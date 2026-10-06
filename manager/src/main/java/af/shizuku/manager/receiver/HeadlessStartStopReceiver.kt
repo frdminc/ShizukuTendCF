@@ -4,8 +4,8 @@ import af.shizuku.common.util.EnvironmentUtils
 import af.shizuku.common.util.UserHandleCompat
 import af.shizuku.manager.BuildConfig
 import af.shizuku.manager.ShizukuSettings
-import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.ShizukuSettings.LaunchMethod
+import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.ShizukuStateMachine
 import android.Manifest.permission.WRITE_SECURE_SETTINGS
@@ -26,8 +26,10 @@ import rikka.shizuku.Shizuku
  * package or it is dropped: `adb shell am broadcast -p <pkg> -a <pkg>.HEADLESS_STATUS`.
  */
 class HeadlessStartStopReceiver : BroadcastReceiver() {
-
-    override fun onReceive(context: Context, intent: Intent) {
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
         HeadlessLogger.init(context)
         when (intent.action) {
             ACTION_HEADLESS_START -> {
@@ -109,12 +111,14 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                 val binderAlive = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
 
                 val adbTcpPort = EnvironmentUtils.getAdbTcpPort()
-                val adbWifi = runCatching {
-                    Settings.Global.getInt(context.contentResolver, "adb_wifi_enabled", 0)
-                }.getOrDefault(0)
-                val adbUsb = runCatching {
-                    Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0)
-                }.getOrDefault(0)
+                val adbWifi =
+                    runCatching {
+                        Settings.Global.getInt(context.contentResolver, "adb_wifi_enabled", 0)
+                    }.getOrDefault(0)
+                val adbUsb =
+                    runCatching {
+                        Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0)
+                    }.getOrDefault(0)
 
                 val adbParts = mutableListOf<String>()
                 if (adbUsb != 0) adbParts.add("USB:on")
@@ -128,18 +132,19 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                         if (authUnanswered) " AUTH_UNANSWERED" else ""
                 val logPath = HeadlessLogger.getLogPath() ?: "unavailable"
 
-                val extras = Bundle().apply {
-                    putString("state", stateLabel)
-                    putBoolean("binder_alive", binderAlive)
-                    putBoolean("auth_unanswered", authUnanswered)
-                    putInt("adb_tcp_port", adbTcpPort)
-                    putInt("configured_tcp_port", ShizukuSettings.getTcpPort())
-                    putInt("adb_wifi_enabled", adbWifi)
-                    putInt("adb_enabled", adbUsb)
-                    putString("version_name", BuildConfig.VERSION_NAME)
-                    putInt("version_code", BuildConfig.VERSION_CODE)
-                    putString("log_path", logPath)
-                }
+                val extras =
+                    Bundle().apply {
+                        putString("state", stateLabel)
+                        putBoolean("binder_alive", binderAlive)
+                        putBoolean("auth_unanswered", authUnanswered)
+                        putInt("adb_tcp_port", adbTcpPort)
+                        putInt("configured_tcp_port", ShizukuSettings.getTcpPort())
+                        putInt("adb_wifi_enabled", adbWifi)
+                        putInt("adb_enabled", adbUsb)
+                        putString("version_name", BuildConfig.VERSION_NAME)
+                        putInt("version_code", BuildConfig.VERSION_CODE)
+                        putString("log_path", logPath)
+                    }
 
                 HeadlessLogger.i("Status", summary)
                 setResult(state.ordinal, summary, extras)

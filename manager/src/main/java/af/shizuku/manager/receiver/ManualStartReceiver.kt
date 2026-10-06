@@ -14,7 +14,8 @@ class ManualStartReceiver : AuthenticatedReceiver() {
 
         // Token-authenticated, so this is an explicit start: it may raise one new dialog even if
         // a previous one went unanswered.
-        af.shizuku.manager.adb.AdbAuthWait.clearUnanswered()
+        af.shizuku.manager.adb.AdbAuthWait
+            .clearUnanswered()
         ShizukuReceiverStarter.start(context)
     }
 }

@@ -230,7 +230,14 @@ object ShizukuStateMachine {
                     val elapsed = System.currentTimeMillis() - startingTimestamp.get()
                     // A start waiting on adbd's authorisation dialog is still in progress; calling
                     // it STOPPED would invite a second start, and with it a second dialog.
-                    if (elapsed > STARTING_TIMEOUT_MS && !af.shizuku.manager.adb.AdbAuthWait.isWaiting()) State.STOPPED else State.STARTING
+                    if (elapsed > STARTING_TIMEOUT_MS &&
+                        !af.shizuku.manager.adb.AdbAuthWait
+                            .isWaiting()
+                    ) {
+                        State.STOPPED
+                    } else {
+                        State.STARTING
+                    }
                 }
                 currentState == State.STOPPING -> State.STOPPING
                 currentState == State.CRASHED -> State.CRASHED
