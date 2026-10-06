@@ -4,6 +4,9 @@ All notable changes to ShizukuPlus are documented here. See [AI_ATTRIBUTIONS.md]
 
 ## [Unreleased]
 
+### 🔒 Security
+- **Root mode now asks before granting Shizuku access, exactly like ADB mode** — since ShizukuPlus e3b2f7f2 the server marked every app that attached as allowed whenever it ran as root (uid 0), so in root mode any installed app that bundled the Shizuku client got full privileged access with no dialog. That auto-grant is removed: an app with no grant now gets the usual permission dialog when it requests access, and Deny works as in ADB mode. **Behaviour change for root users:** apps that only ever had the silent root grant (it was never saved) will show the permission dialog once after updating; grants you already approved in the dialog, grants held as the Shizuku runtime permission, and apps covered by the trusted signer allowlist keep working without a new prompt. Same fix as SnakyGD/ShizukuPlus-RootConsent.
+
 ---
 
 ## [v13.7.0.r2737 — Stable Release]
