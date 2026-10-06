@@ -5,6 +5,8 @@ import af.shizuku.manager.ShizukuApplication
 import af.shizuku.manager.ShizukuSettings
 import android.Manifest.permission.WRITE_SECURE_SETTINGS
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import io.sentry.Breadcrumb
 import io.sentry.Sentry
@@ -17,6 +19,7 @@ import kotlinx.coroutines.launch
 import rikka.shizuku.Shizuku
 import timber.log.Timber
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 object ShizukuStateMachine {
@@ -30,7 +33,23 @@ object ShizukuStateMachine {
     // crash, so the watchdog's CRASHED-triggered restart would never fire for exactly the case it
     // exists to handle.
     private var state = AtomicReference<State>(loadPersistedSettledState())
-    private val listeners = CopyOnWriteArrayList<(State) -> Unit>()
+    private val listeners = CopyOnWriteArrayList<Registration>()
+
+    /**
+     * A state listener. Transitions happen on whatever thread makes them (AdbStarter, the start
+     * worker, binder callbacks), so a listener that touches views is called on the main thread
+     * ([onMainThread]); only thread-safe ones (asFlow's trySend) are called inline.
+     */
+    private class Registration(
+        val listener: (State) -> Unit,
+        val onMainThread: Boolean,
+    )
+
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+
+    // Main-thread deliveries posted but not yet run. While any are queued, a transition made on the
+    // main thread queues behind them instead of running inline, so listeners see states in order.
+    private val queuedMainDeliveries = AtomicInteger(0)
     private val startingTimestamp =
         java.util.concurrent.atomic
             .AtomicLong(0L)
@@ -93,7 +112,9 @@ object ShizukuStateMachine {
         val oldState = state.getAndUpdate { current -> transform(current).also { computed = it } }
         val newState = computed ?: error("getAndUpdate lambda must always execute synchronously")
         if (oldState != newState) {
-            listeners.forEach { it(newState) }
+            // Each listener is isolated: one that throws must not abort the transition's side
+            // effects below (the persisted state, the STATE_CHANGED broadcast) or the caller's start.
+            deliver(newState)
             Timber.tag("ShizukuStateMachine").d(newState.toString())
 
             // Record which app build is starting this server instance. All deliberate start paths
@@ -271,19 +292,72 @@ object ShizukuStateMachine {
 
     fun isDead(): Boolean = (get() == State.STOPPED || get() == State.CRASHED)
 
-    fun addListener(listener: (State) -> Unit) {
-        listeners.add(listener)
-        listener(state.get())
+    /**
+     * Calls [listener] with the current state and on every transition, always on the main thread,
+     * so it may touch views. Use [asFlow] to follow the state from another thread.
+     */
+    fun addListener(listener: (State) -> Unit) = addListener(listener, onMainThread = true)
+
+    private fun addListener(
+        listener: (State) -> Unit,
+        onMainThread: Boolean,
+    ) {
+        listeners.add(Registration(listener, onMainThread))
+        if (onMainThread) {
+            runOnMainThread { if (listeners.any { it.listener === listener }) notify(listener, state.get()) }
+        } else {
+            notify(listener, state.get())
+        }
     }
 
     fun removeListener(listener: (State) -> Unit) {
-        listeners.remove(listener)
+        listeners.removeAll { it.listener === listener }
     }
 
+    // The flow's listener only hands the state to a channel, which is thread-safe, so it is called
+    // inline: the watchdog and start-notification collectors do not wait on the main thread.
     fun asFlow(): Flow<State> =
         callbackFlow {
             val listener: (State) -> Unit = { trySend(it).isSuccess }
-            addListener(listener)
+            addListener(listener, onMainThread = false)
             awaitClose { removeListener(listener) }
         }
+
+    private fun deliver(newState: State) {
+        listeners.forEach { if (!it.onMainThread) notify(it.listener, newState) }
+        if (listeners.any { it.onMainThread }) {
+            // Read the list when the delivery runs: a listener removed meanwhile (a destroyed
+            // activity's) is not called, one added meanwhile already had the current state.
+            runOnMainThread { listeners.forEach { if (it.onMainThread) notify(it.listener, newState) } }
+        }
+    }
+
+    private fun notify(
+        listener: (State) -> Unit,
+        newState: State,
+    ) {
+        try {
+            listener(newState)
+        } catch (e: Exception) {
+            Timber.tag("ShizukuStateMachine").w(e, "State listener failed on $newState")
+        }
+    }
+
+    private fun runOnMainThread(block: () -> Unit) {
+        val main = runCatching { Looper.getMainLooper() }.getOrNull()
+        if (main == null || (Looper.myLooper() == main && queuedMainDeliveries.get() == 0)) {
+            block()
+            return
+        }
+        queuedMainDeliveries.incrementAndGet()
+        val posted =
+            mainHandler.post {
+                try {
+                    block()
+                } finally {
+                    queuedMainDeliveries.decrementAndGet()
+                }
+            }
+        if (!posted) queuedMainDeliveries.decrementAndGet()
+    }
 }
