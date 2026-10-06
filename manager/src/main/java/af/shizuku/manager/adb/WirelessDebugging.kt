@@ -208,14 +208,30 @@ object WirelessDebugging {
     fun wifiNetwork(context: Context): Network? {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return null
         return runCatching {
-            @Suppress("DEPRECATION")
-            cm.allNetworks.firstOrNull {
-                val caps = cm.getNetworkCapabilities(it)
-                caps != null &&
+            fun isWifi(n: Network?): Boolean {
+                val caps = n?.let { cm.getNetworkCapabilities(it) }
+                return caps != null &&
                     caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
                     caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             }
+            // The active network first: a phone can report more than one Wi-Fi network (a
+            // secondary or local-only one), and allNetworks' order is not stable, so "the first
+            // Wi-Fi network" could alternate and read as a network change on every check.
+            cm.activeNetwork?.takeIf { isWifi(it) }
+                ?:
+                @Suppress("DEPRECATION")
+                cm.allNetworks.firstOrNull { isWifi(it) }
         }.getOrNull()
+    }
+
+    /** True while [network] is still a connected Wi-Fi network, however other networks are listed. */
+    private fun isConnectedWifi(
+        context: Context,
+        network: Network,
+    ): Boolean {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return false
+        return runCatching { cm.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true }
+            .getOrDefault(false)
     }
 
     // Any Wi-Fi. Not NOT_METERED or VALIDATED (WorkManager's UNMETERED/CONNECTED constraints imply
@@ -669,7 +685,7 @@ object WirelessDebugging {
                 if (promptedAt(context) != null) throw untrustedStop("this boot's network prompt has been raised already")
                 // Wi-Fi may have moved while this round settled: the system would check the new
                 // network, which has not settled.
-                if (wifiNetwork(context) != network) {
+                if (!isConnectedWifi(context, network)) {
                     note("Wi-Fi changed before wireless debugging was turned on; not writing")
                     return Round.NetworkChanged
                 }
@@ -695,7 +711,7 @@ object WirelessDebugging {
                     }
                     if (setting(context) == 0) {
                         val wifi = wifiNetwork(context)
-                        if (wifi != network) {
+                        if (!isConnectedWifi(context, network)) {
                             if (wroteThisRound && wifi != null) {
                                 // This round's write met another network, which the system checked
                                 // and may have asked about: count it as this boot's prompt.
@@ -769,7 +785,7 @@ object WirelessDebugging {
                     cancelNotice(context)
                     return
                 }
-                if (wifiNetwork(context) != network) {
+                if (!isConnectedWifi(context, network)) {
                     note("the Wi-Fi network changed while waiting for the user")
                     return
                 }
