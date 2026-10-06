@@ -500,6 +500,100 @@ class TcpRestoreScenariosTest {
             }
         }
 
+    // A write the system accepted is no prompt, however the run ends.
+    @Test
+    fun `accepted-write-then-mdns-timeout-is-no-prompt`() =
+        scenario {
+            world.silentDiscoveries.set(1)
+            boot()
+            world.awaitRetry()
+            world.cancelStartWork()
+            assertEquals("wireless debugging put back off", 0, adbWifiEnabled)
+            // WorkManager's retry of the same request.
+            assertEquals(ListenableWorker.Result.success(), workerRerun())
+            check {
+                assertTrue("tcp port open again", tcpPortOpen)
+                assertEquals(0, trustPrompts)
+                assertLogLacks("counting that as this boot's network prompt")
+            }
+            // Nothing recorded: a later start still restores, and HEADLESS_START is not refused.
+            world.closeTcpPort()
+            assertEquals(0, headlessStart().code)
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(0, trustPrompts)
+            }
+        }
+
+    @Test
+    fun `wifi-switches-to-an-untrusted-network-during-the-settle-prompts-once`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            WirelessDebugging.wifiSettleMs = 800
+            wifiDrops()
+            boot()
+            startWaitsForWifi()
+            wifiConnects()
+            awaitLog("settling")
+            wifiConnects(trusted = false)
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals(1, trustPrompts)
+            }
+        }
+
+    @Test
+    fun `wifi-switches-during-the-settle-waits-for-the-new-bssid`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            WirelessDebugging.wifiSettleMs = 800
+            world.bssidLagMs = 300
+            wifiDrops()
+            boot()
+            startWaitsForWifi()
+            wifiConnects()
+            awaitLog("settling")
+            wifiConnects()
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(0, trustPrompts)
+            }
+        }
+
+    @Test
+    fun `wifi-switches-to-an-untrusted-network-at-the-write-prompts-once`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.switchOnNextWrite = false
+            boot()
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals(1, trustPrompts)
+            }
+        }
+
+    @Test
+    fun `late-allow-after-the-wait-is-still-turned-off-again`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            wifiConnects(trusted = false)
+            boot()
+            awaitStartWork()
+            assertEquals(WorkInfo.State.FAILED, lastWork)
+            // The user answers the prompt after the wait: the system turns wireless debugging on.
+            userAllowsThisNetwork()
+            backgroundStart()
+            awaitStartWork()
+            check {
+                assertEquals("off again: this restore turned it on", 0, adbWifiEnabled)
+                assertRestored()
+            }
+        }
+
     @Test
     fun `wireless-debugging-left-on-by-a-dead-run-is-turned-off`() =
         scenario {

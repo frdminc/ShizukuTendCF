@@ -305,8 +305,8 @@ object WirelessDebugging {
     }
 
     /**
-     * A start succeeded, or Wi-Fi is back: forgets the no-Wi-Fi stop, its notice and its Wi-Fi
-     * trigger. This boot's prompt stays (see [clearPrompted]).
+     * A start succeeded, or one may go ahead: forgets the no-Wi-Fi stop, its Wi-Fi trigger and the
+     * restore's notice. This boot's prompt stays (see [clearPrompted]).
      */
     fun clearNoWifi(context: Context) {
         if (runCatching { prefs().contains(KEY_NO_WIFI_BOOT) }.getOrDefault(false)) {
@@ -318,7 +318,7 @@ object WirelessDebugging {
             }
             disarmResume(context)
         }
-        if (promptedAt(context) == null) cancelNotice(context)
+        cancelNotice(context)
     }
 
     /** BOOT_COMPLETED: everything here is per boot. */
@@ -524,8 +524,11 @@ object WirelessDebugging {
         // Set when this start first waits for the user: an unlock and the answer share the wait.
         private var userDeadline: Long? = null
 
-        // When this start saw Wi-Fi appear (it waited for it).
+        // When this start saw Wi-Fi appear (it waited for it, or it differs from the last round's).
         private var wifiSeenAt: Long? = null
+
+        // The Wi-Fi network the last round used.
+        private var lastNetwork: Network? = null
 
         private sealed interface Round {
             data class Found(
@@ -598,12 +601,18 @@ object WirelessDebugging {
 
         /** If this start (or a run of it that died) turned wireless debugging on, turns it off again. */
         fun restore() {
+            // Still 1 at the end of the run: the system accepted the write, which raised no
+            // prompt, however the run ended (an mDNS timeout, the budget, Cancel, a stop).
+            if (setting(context) == 1) setWritePending(context, false)
             if (!restoresState || initial == null) return
             if (initial == 0 && setting(context) == 1) {
                 put(context, 0)
                 note("wireless debugging was off before this start; turned it off again (adb_wifi_enabled=${setting(context)})")
             }
-            runCatching { prefs().edit().remove(KEY_TURNED_ON).commit() }
+            // This boot's prompt may still be on screen: a late "Allow" turns wireless debugging
+            // on, and whichever start comes next must know that a restore turned it on.
+            val promptMayStillBeAnswered = initial == 0 && promptedAt(context) != null && setting(context) != 1
+            if (!promptMayStillBeAnswered) runCatching { prefs().edit().remove(KEY_TURNED_ON).commit() }
         }
 
         private suspend fun requireWifi(): Network {
@@ -624,6 +633,12 @@ object WirelessDebugging {
                     cancelNotice(context)
                     connected
                 }
+            if (lastNetwork != null && network != lastNetwork) {
+                // Another network than the last round's: its BSSID may not be known yet either.
+                wifiSeenAt = elapsedMs()
+                note("Wi-Fi is now network $network")
+            }
+            lastNetwork = network
             val age = wifiAgeMs()
             if (age < wifiSettleMs) {
                 note("Wi-Fi appeared $age ms ago; settling ${wifiSettleMs - age} ms before turning wireless debugging on")
@@ -645,8 +660,16 @@ object WirelessDebugging {
                 if (leftOn && before == 1) note("an earlier start turned wireless debugging on and did not turn it off; it counts as off")
                 initial = if (leftOn) 0 else before
             }
+            var wroteThisRound = false
             if (before != 1) {
                 if (promptedAt(context) != null) throw untrustedStop("this boot's network prompt has been raised already")
+                // Wi-Fi may have moved while this round settled: the system would check the new
+                // network, which has not settled.
+                if (wifiNetwork(context) != network) {
+                    note("Wi-Fi changed before wireless debugging was turned on; not writing")
+                    return Round.NetworkChanged
+                }
+                wroteThisRound = true
                 if (restoresState && initial == 0) runCatching { prefs().edit().putBoolean(KEY_TURNED_ON, true).commit() }
                 turnOn()
                 note("turning wireless debugging on: adb_wifi_enabled $before -> ${setting(context)}")
@@ -669,8 +692,16 @@ object WirelessDebugging {
                     if (setting(context) == 0) {
                         val wifi = wifiNetwork(context)
                         if (wifi != network) {
-                            setWritePending(context, false)
-                            warn("adb_wifi_enabled went to 0: Wi-Fi ${if (wifi == null) "disconnected" else "changed to network $wifi"}")
+                            if (wroteThisRound && wifi != null) {
+                                // This round's write met another network, which the system checked
+                                // and may have asked about: count it as this boot's prompt.
+                                markPrompted(context)
+                                notifyUntrusted(context)
+                                warn("adb_wifi_enabled went to 0 after the write with Wi-Fi now on network $wifi; counting that as this boot's network prompt")
+                            } else {
+                                setWritePending(context, false)
+                                warn("adb_wifi_enabled went to 0: Wi-Fi ${if (wifi == null) "disconnected" else "changed to network $wifi"}")
+                            }
                             return Round.NetworkChanged
                         }
                         // The same, settled Wi-Fi: the system refused (and asked, if the user can
@@ -684,6 +715,8 @@ object WirelessDebugging {
                         deadline = elapsedMs() + discoveryMs
                     } else if (elapsedMs() >= minOf(deadline, sessionDeadline())) {
                         if (!mayToggle || elapsedMs() >= sessionDeadline()) {
+                            // On all this time: the write was accepted, no prompt.
+                            if (setting(context) == 1) setWritePending(context, false)
                             warn("mDNS discovery timed out after ${discoveryMs / 1000} s (adb_wifi_enabled=${setting(context)})")
                             throw TimeoutException("Timed out during mDNS port discovery")
                         }
@@ -691,6 +724,7 @@ object WirelessDebugging {
                         note("mDNS found nothing in ${discoveryMs / 1000} s although wireless debugging is on; turning it off and on once")
                         put(context, 0)
                         delay(toggleGapMs)
+                        wroteThisRound = true
                         turnOn()
                         note("wireless debugging toggled: adb_wifi_enabled=${setting(context)}")
                         deadline = elapsedMs() + discoveryMs

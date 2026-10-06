@@ -109,7 +109,7 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                     ) {
                         HeadlessLogger.w(
                             "Start",
-                            "Withheld: TCP port ${ShizukuSettings.getTcpPort()} closed and this boot's wireless debugging network prompt was not answered; " +
+                            "Withheld: TCP port ${ShizukuSettings.getTcpPort()} closed, wireless debugging is off, and this boot's automatic network prompt has been used; " +
                                 "send --ez $EXTRA_FORCE true or tap Attempt now",
                         )
                         setResult(RESULT_WIRELESS_UNTRUSTED, "WIRELESS_UNTRUSTED", null)

@@ -102,6 +102,13 @@ class FakeWorld(
 
     private val trustPromptCount = AtomicInteger()
 
+    /** mDNS discoveries still to hear nothing. */
+    val silentDiscoveries = AtomicInteger()
+
+    /** Wi-Fi switches to a network of this trust at the next write of adb_wifi_enabled=1. */
+    @Volatile
+    var switchOnNextWrite: Boolean? = null
+
     /**
      * For this long after Wi-Fi connects WifiManager has no BSSID for it, and the system undoes a
      * write of adb_wifi_enabled=1 without a prompt.
@@ -160,6 +167,11 @@ class FakeWorld(
         app.contentResolver.registerContentObserver(Settings.Global.getUriFor(ADB_WIFI), false, adbWifiObserver)
         WirelessDebugging.discovery =
             WirelessDebugging.PortDiscovery { _, onPort ->
+                // An mDNS discovery that hears nothing (multicast lost).
+                if (silentDiscoveries.getAndUpdate { if (it > 0) it - 1 else 0 } > 0) {
+                    val none: () -> Unit = {}
+                    return@PortDiscovery none
+                }
                 discoveries += onPort
                 announce()
                 val stop: () -> Unit = { discoveries -= onPort }
@@ -241,6 +253,12 @@ class FakeWorld(
         if (adbWifiEnabled != 1) {
             staleWirelessDebugging = false
             return
+        }
+        // Wi-Fi moves to another network just as the manager writes: the system checks that one.
+        switchOnNextWrite?.let { trusted ->
+            switchOnNextWrite = null
+            wifi?.let { shadowOf(cm).removeNetwork(it.network) }
+            addWifi(trusted)
         }
         val w = wifi
         when {
@@ -421,6 +439,22 @@ class FakeWorld(
             last.all { it.state.isFinished }
         }
         return last.lastOrNull()?.state
+    }
+
+    /** The start work ran and asked WorkManager to retry it (now ENQUEUED with a backoff). */
+    fun awaitRetry() {
+        settle()
+        waitUntil({ "the start work to ask for a retry" }) {
+            workManager.getWorkInfosForUniqueWork(AdbStartWorker.UNIQUE_WORK_NAME).get().any {
+                it.state == WorkInfo.State.ENQUEUED && it.runAttemptCount > 0
+            }
+        }
+    }
+
+    /** Cancels the start work (its backoff would outlast the scenario). */
+    fun cancelStartWork() {
+        workManager.cancelUniqueWork(AdbStartWorker.UNIQUE_WORK_NAME).result.get()
+        settle()
     }
 
     /** One BootRetryWorker run, with its verify delay in virtual time. */
