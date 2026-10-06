@@ -3,6 +3,7 @@ package af.shizuku.manager.harness
 import af.shizuku.manager.ShizukuApplication
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.adb.AdbAuthWait
+import af.shizuku.manager.adb.WirelessDebugging
 import af.shizuku.manager.receiver.BootRetryWorker
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.starter.Starter
@@ -11,7 +12,14 @@ import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.worker.AdbStartWorker
 import android.Manifest
 import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.database.ContentObserver
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkInfo
 import android.os.Binder
 import android.os.Looper
 import android.provider.Settings
@@ -27,10 +35,15 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowNetwork
+import org.robolectric.shadows.ShadowNetworkCapabilities
+import org.robolectric.shadows.ShadowNetworkInfo
 import rikka.shizuku.Shizuku
 import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.InetAddress
+import java.net.ServerSocket
 import java.security.Key
 import java.security.KeyStoreSpi
 import java.security.Provider
@@ -41,6 +54,7 @@ import java.util.Date
 import java.util.Enumeration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -56,6 +70,40 @@ class FakeWorld(
 
     val prefs = FakePrefs()
     val adbd = FakeAdbd(onShell = { serverUp() })
+
+    // Wireless debugging and Wi-Fi as the system runs them (AOSP AdbDebuggingManager): adbd's TLS
+    // port is announced by mDNS only while adb_wifi_enabled is 1 on a connected, trusted Wi-Fi; the
+    // system writes adb_wifi_enabled back to 0 without Wi-Fi, and on an untrusted network after
+    // raising "Allow wireless debugging on this network?" ([trustPrompts]). The manager's key is
+    // authorised there already (paired, or "Always allow" in adb_keys), and "tcpip:<port>" makes
+    // adbd listen on that port ([tcpAdbd]).
+    val wirelessAdbd = FakeAdbd(onShell = { serverUp() }, authorized = true, onTcpip = { openTcpPort(it) })
+
+    /** adbd's classic TCP port once something has opened it; null while closed, as after a reboot. */
+    @Volatile
+    var tcpAdbd: FakeAdbd? = null
+        private set
+
+    /** A loopback port nothing listens on: the TCP-mode port a reboot (or adb usb) closed. */
+    val closedTcpPort: Int = ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { it.localPort }
+
+    class Wifi(
+        val network: Network,
+        val trusted: Boolean,
+    )
+
+    @Volatile
+    var wifi: Wifi? = null
+        private set
+
+    /** Wireless debugging is on but announces nothing until it is next turned off. */
+    @Volatile
+    var staleWirelessDebugging = false
+
+    private val trustPromptCount = AtomicInteger()
+    val trustPrompts: Int get() = trustPromptCount.get()
+    private val discoveries = CopyOnWriteArrayList<(Int) -> Unit>()
+    private var nextNetId = 100
 
     /** Input of every AdbStartWorker WorkManager ran, oldest first: what a rerun repeats. */
     val startInputs = CopyOnWriteArrayList<Data>()
@@ -94,6 +142,26 @@ class FakeWorld(
         HeadlessLogger.init(app)
 
         shadowOf(app).grantPermissions(Manifest.permission.WRITE_SECURE_SETTINGS)
+        // A trusted Wi-Fi is connected and wireless debugging is off.
+        shadowOf(cm).clearAllNetworks()
+        addWifi(trusted = true)
+        Settings.Global.putInt(app.contentResolver, ADB_WIFI, 0)
+        app.contentResolver.registerContentObserver(Settings.Global.getUriFor(ADB_WIFI), false, adbWifiObserver)
+        WirelessDebugging.discovery =
+            WirelessDebugging.PortDiscovery { _, onPort ->
+                discoveries += onPort
+                announce()
+                val stop: () -> Unit = { discoveries -= onPort }
+                stop
+            }
+        WirelessDebugging.wifiWaitMs = 10_000
+        WirelessDebugging.userWaitMs = 10_000
+        WirelessDebugging.discoveryMs = 3_000
+        WirelessDebugging.pollMs = 20
+        WirelessDebugging.toggleGapMs = 20
+        WirelessDebugging.wifiSettleMs = 20
+        // Robolectric's SystemClock stands still unless the main looper is idled.
+        WirelessDebugging.elapsedMs = { System.nanoTime() / 1_000_000 }
         // Skips the worker's post-boot settling delay.
         Settings.Global.putInt(app.contentResolver, Settings.Global.ADB_ENABLED, 1)
         // A saved port that answers the starter's probe routes the worker straight to adbd, with
@@ -143,6 +211,96 @@ class FakeWorld(
         timers.removeAll(due.toSet())
         due.filterNot { it.cancelled }.forEach { it.task() }
     }
+
+    private val cm: ConnectivityManager get() = app.getSystemService(ConnectivityManager::class.java)
+
+    val adbWifiEnabled: Int get() = Settings.Global.getInt(app.contentResolver, ADB_WIFI, 0)
+
+    private fun setAdbWifi(value: Int) = Settings.Global.putInt(app.contentResolver, ADB_WIFI, value)
+
+    private val adbWifiObserver =
+        object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) = systemReactsToAdbWifi()
+        }
+
+    private fun systemReactsToAdbWifi() {
+        if (adbWifiEnabled != 1) {
+            staleWirelessDebugging = false
+            return
+        }
+        val w = wifi
+        when {
+            w == null -> setAdbWifi(0)
+            !w.trusted -> {
+                trustPromptCount.incrementAndGet()
+                setAdbWifi(0)
+            }
+            else -> announce()
+        }
+    }
+
+    private fun announce() {
+        if (adbWifiEnabled == 1 && wifi?.trusted == true && !staleWirelessDebugging) discoveries.forEach { it(wirelessAdbd.port) }
+    }
+
+    // Wi-Fi with no internet and metered (neither VALIDATED nor NOT_METERED): enough for wireless debugging.
+    private fun addWifi(trusted: Boolean): Network {
+        val network = ShadowNetwork.newInstance(nextNetId++)
+        val caps = ShadowNetworkCapabilities.newInstance()
+        shadowOf(caps).addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+        @Suppress("DEPRECATION")
+        shadowOf(cm).addNetwork(
+            network,
+            ShadowNetworkInfo.newInstance(NetworkInfo.DetailedState.CONNECTED, ConnectivityManager.TYPE_WIFI, 0, true, NetworkInfo.State.CONNECTED),
+        )
+        shadowOf(cm).setNetworkCapabilities(network, caps)
+        wifi = Wifi(network, trusted)
+        return network
+    }
+
+    /** Wi-Fi connects (replacing any other): network callbacks and their PendingIntents fire. */
+    fun connectWifi(trusted: Boolean) {
+        dropWifi()
+        val network = addWifi(trusted)
+        shadowOf(cm).networkCallbacks.toList().forEach { it.onAvailable(network) }
+        // The system sends a PendingIntent callback to its explicit receiver.
+        shadowOf(cm).networkCallbackPendingIntents.toList().forEach { pi ->
+            val intent = Intent(shadowOf(pi).savedIntent).putExtra(ConnectivityManager.EXTRA_NETWORK, network)
+            val receiver = Class.forName(checkNotNull(intent.component).className).getDeclaredConstructor().newInstance() as BroadcastReceiver
+            receiver.onReceive(app, intent)
+        }
+        settle()
+    }
+
+    /** Wi-Fi disconnects; the system turns wireless debugging off with it. */
+    fun dropWifi() {
+        val w = wifi ?: return
+        wifi = null
+        shadowOf(cm).removeNetwork(w.network)
+        if (adbWifiEnabled == 1) setAdbWifi(0)
+        shadowOf(cm).networkCallbacks.toList().forEach { it.onLost(w.network) }
+    }
+
+    /** The user answers "Always allow on this network": it is trusted and wireless debugging comes on. */
+    fun allowWirelessDebuggingOnThisNetwork() {
+        val w = checkNotNull(wifi) { "no Wi-Fi to allow" }
+        wifi = Wifi(w.network, trusted = true)
+        setAdbWifi(1)
+    }
+
+    /** Wireless debugging is on but its mDNS announcement has gone stale. */
+    fun staleWirelessDebuggingOn() {
+        setAdbWifi(1)
+        staleWirelessDebugging = true
+    }
+
+    /** adbd listens on [port] (tcpip, or something outside the manager did it). */
+    fun openTcpPort(port: Int) {
+        tcpAdbd?.close()
+        tcpAdbd = FakeAdbd(onShell = { serverUp() }, port = port, authorized = true)
+    }
+
+    fun awaitWifiWait() = waitUntil({ "a start to wait for Wi-Fi" }) { shadowOf(cm).networkCallbacks.isNotEmpty() }
 
     fun serverUp() = setShizukuBinder(Binder())
 
@@ -224,9 +382,13 @@ class FakeWorld(
 
     override fun close() {
         adbd.close()
+        wirelessAdbd.close()
+        tcpAdbd?.close()
         runCatching { awaitStartWork() }
         runCatching { settle() }
         workExecutor.shutdownNow()
+        app.contentResolver.unregisterContentObserver(adbWifiObserver)
+        WirelessDebugging.resetForTesting()
         AdbAuthWait.clockMs = System::currentTimeMillis
         AdbAuthWait.elapsedMs = { android.os.SystemClock.elapsedRealtime() }
         AdbAuthWait.timeoutMs = AdbAuthWait.TIMEOUT_MS
@@ -241,6 +403,7 @@ class FakeWorld(
         // Real seconds: a denied or unanswered dialog ends only at AdbClient's deadline.
         const val AUTH_TIMEOUT_MS = 3_000
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        const val ADB_WIFI = "adb_wifi_enabled"
     }
 }
 

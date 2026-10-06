@@ -523,6 +523,10 @@
             android:exported="false" />
         <receiver android:name=".receiver.NotifCancelReceiver" />
         <receiver android:name=".receiver.NotifRestoreReceiver" />
+        <!-- Sent only by the system's network callback (WirelessDebugging.armResume). -->
+        <receiver
+            android:name=".receiver.WifiRestoreReceiver"
+            android:exported="false" />
 
         <!-- WorkManager is initialized manually via Configuration.Provider in ShizukuApplication.
              Removing WorkManagerInitializer here prevents the "already initialized" crash (#126). -->

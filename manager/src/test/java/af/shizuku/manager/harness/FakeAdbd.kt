@@ -18,6 +18,7 @@ import java.io.IOException
 import java.io.OutputStream
 import java.io.PushbackInputStream
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
@@ -43,10 +44,19 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class FakeAdbd(
     private val onShell: (String) -> Unit = {},
+    port: Int = 0,
+    authorized: Boolean = false,
+    // "tcpip:<port>": adbd restarts listening on that port (the caller opens it).
+    private val onTcpip: (Int) -> Unit = {},
 ) : Closeable {
     enum class Answer { ACCEPT, REJECT, SILENT }
 
-    private val server = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
+    // Bound with SO_REUSEADDR so a port a closed instance held can be listened on again.
+    private val server =
+        ServerSocket().apply {
+            reuseAddress = true
+            bind(InetSocketAddress(InetAddress.getLoopbackAddress(), port), 50)
+        }
     val port: Int get() = server.localPort
 
     private val offerCount = AtomicInteger(0)
@@ -62,7 +72,7 @@ class FakeAdbd(
 
     /** The key has been accepted once; adbd then answers its signature without a dialog. */
     @Volatile
-    var authorized = false
+    var authorized = authorized
 
     /** Runs on adbd's thread when a client says hello, before it can record or offer anything. */
     @Volatile
@@ -157,6 +167,7 @@ class FakeAdbd(
                 if (message.command != A_OPEN) continue
                 val command = message.data?.let { String(it).trimEnd('\u0000') }.orEmpty()
                 if (command.startsWith("shell:")) onShell(command)
+                if (command.startsWith("tcpip:")) onTcpip(command.removePrefix("tcpip:").toIntOrNull() ?: 0)
                 write(output, AdbMessage(A_OKAY, REMOTE_ID, message.arg0, ByteArray(0)))
                 write(output, AdbMessage(A_CLSE, REMOTE_ID, message.arg0, ByteArray(0)))
             }

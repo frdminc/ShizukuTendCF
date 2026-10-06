@@ -6,10 +6,11 @@ import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.adb.AdbAuthPendingException
 import af.shizuku.manager.adb.AdbAuthTimeoutException
 import af.shizuku.manager.adb.AdbAuthWait
-import af.shizuku.manager.adb.AdbMdns
 import af.shizuku.manager.adb.AdbPortProber
 import af.shizuku.manager.adb.AdbStarter
 import af.shizuku.manager.adb.StartNotificationState
+import af.shizuku.manager.adb.WirelessDebugging
+import af.shizuku.manager.adb.WirelessDebuggingBlockedException
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.settings.BugReportDialogActivity
 import af.shizuku.manager.starter.Starter
@@ -17,27 +18,17 @@ import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.ManagerActivityLog
 import af.shizuku.manager.utils.ShizukuStateMachine
-import android.app.KeyguardManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.database.ContentObserver
 import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import androidx.work.*
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import java.io.EOFException
 import java.util.concurrent.TimeoutException
 
@@ -98,10 +89,10 @@ class AdbStartWorker(
 
             val cr = applicationContext.contentResolver
 
-            // Give the system time to finish initializing after reboot before toggling ADB.
-            // Samsung One UI firmware takes longer to stabilize — give it an extra 1.5 s on top
-            // of the base 1.5 s delay to reduce the chance the firmware immediately resets
-            // adb_wifi_enabled after our first write.
+            // Give the system time to finish initializing after reboot before enabling ADB, longer
+            // on Samsung One UI (#545). Its other part, a Samsung reset of adb_wifi_enabled, was
+            // never confirmed: the system turns wireless debugging off without Wi-Fi or on an
+            // untrusted network, which WirelessDebugging handles (no rewrite loop).
             if (runAttemptCount == 0) {
                 if (!EnvironmentUtils.isAdbEnabled()) {
                     val baseDelay =
@@ -120,8 +111,10 @@ class AdbStartWorker(
             Settings.Global.putInt(cr, Settings.Global.ADB_ENABLED, 1)
             Settings.Global.putLong(cr, "adb_allowed_connection_time", 0L)
 
-            // Fast path: if TCP mode is on and the port is already listening, connect directly —
-            // no Wireless Debugging or Wi-Fi required.
+            // TCP mode: when the port is listening, connect to it directly (no Wireless Debugging or
+            // Wi-Fi required). When it is not (a reboot or `adb usb` closed it), open it again
+            // through wireless debugging in this same attempt. Dialling the closed port (eight
+            // connects, ~12 s) and a WorkManager backoff before that cost ~40 s on a Samsung S24.
             if (ShizukuSettings.getTcpMode()) {
                 val desiredPort = ShizukuSettings.getTcpPort()
                 if (desiredPort in 1..65535) {
@@ -134,9 +127,11 @@ class AdbStartWorker(
                             applicationContext,
                             "Service started via direct TCP port $desiredPort (no Wi-Fi required)",
                         )
+                        WirelessDebugging.clearBlock(applicationContext)
                         note("SUCCESS via tcp fast path on port $desiredPort (attempt=$runAttemptCount)")
                         return Result.success()
                     }
+                    return restoreTcpPort(desiredPort)
                 } else {
                     warn("tcp mode on but tcp port $desiredPort is invalid; skipping the fast path")
                 }
@@ -178,155 +173,11 @@ class AdbStartWorker(
                 when {
                     tcpPort > 0 && isWifiOk -> tcpPort.also { note("using adbd's tcp port $it") }
                     savedPort > 0 && isWifiOk && runAttemptCount == 0 -> savedPort.also { note("using the saved port $it (first attempt)") }
-                    else ->
-                        callbackFlow {
-                            note("discovering the wireless debugging port by mDNS (sys_tcp_port=$tcpPort saved_port=$savedPort wifi_ok=$isWifiOk)")
-                            val adbMdns =
-                                AdbMdns(applicationContext, AdbMdns.TLS_CONNECT) { p ->
-                                    if (p > 0) {
-                                        note("mDNS found port $p")
-                                        trySend(p)
-                                    }
-                                }
-
-                            var awaitingAuth = false
-                            var timeoutJob: Job? = null
-                            var unlockReceiver: BroadcastReceiver? = null
-                            // Samsung firmware aggressively resets adb_wifi_enabled to 0 on boot
-                            // (observed on One UI 6/7/8). Track how many times we've re-enabled it
-                            // so we don't loop forever — after MAX_SAMSUNG_RESETS we fall through to
-                            // the normal handleAuth() path.
-                            var samsungResetCount = 0
-                            val maxSamsungResets =
-                                if (
-                                    Build.MANUFACTURER.equals("samsung", ignoreCase = true)
-                                ) {
-                                    4
-                                } else {
-                                    0
-                                }
-
-                            fun startDiscoveryWithTimeout() {
-                                adbMdns.start()
-                                timeoutJob?.cancel()
-                                timeoutJob =
-                                    launch {
-                                        delay(15_000)
-                                        warn("mDNS discovery timed out after 15 s (adb_wifi_enabled=${wifiSetting(cr)})")
-                                        close(TimeoutException("Timed out during mDNS port discovery"))
-                                    }
-                            }
-
-                            fun handleAuth() {
-                                val km = applicationContext.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-                                if (km.isKeyguardLocked) {
-                                    note("wireless debugging went off while locked; waiting for an unlock to turn it on again")
-                                    val notification = ShizukuReceiverStarter.buildForegroundNotification(applicationContext)
-                                    // On Android 14+ (API 34), ForegroundInfo must declare a foreground
-                                    // service type (one the manifest lists for SystemForegroundService) or
-                                    // the OS throws InvalidForegroundServiceTypeException. specialUse, not
-                                    // shortService: the OS stops a shortService after about 3 minutes, and
-                                    // this run may wait for the unlock and then up to 5 minutes for the
-                                    // adbd dialog.
-                                    val foregroundInfo =
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                                            ForegroundInfo(
-                                                ShizukuReceiverStarter.FOREGROUND_NOTIFICATION_ID,
-                                                notification,
-                                                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-                                            )
-                                        } else {
-                                            ForegroundInfo(ShizukuReceiverStarter.FOREGROUND_NOTIFICATION_ID, notification)
-                                        }
-                                    // Only once the foreground notification is really up does this
-                                    // run's identical progress step aside; if promotion fails, the
-                                    // progress stays the one visible sign of the start.
-                                    launch {
-                                        try {
-                                            setForeground(foregroundInfo)
-                                            setProgress(workDataOf(KEY_STEP to StartNotificationState.Step.FOREGROUND.name))
-                                        } catch (e: CancellationException) {
-                                            throw e
-                                        } catch (e: Exception) {
-                                            timber.log.Timber
-                                                .tag("AdbStartWorker")
-                                                .w(e, "doWork: foreground promotion failed")
-                                            warn("foreground promotion failed: ${HeadlessLogger.brief(e)}")
-                                        }
-                                    }
-
-                                    val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
-                                    unlockReceiver =
-                                        object : BroadcastReceiver() {
-                                            override fun onReceive(
-                                                context: Context,
-                                                intent: Intent,
-                                            ) {
-                                                if (intent.action == Intent.ACTION_USER_PRESENT) {
-                                                    context.unregisterReceiver(this)
-                                                    unlockReceiver = null
-                                                    Settings.Global.putInt(cr, "adb_wifi_enabled", 1)
-                                                    note("unlocked; turned wireless debugging on (adb_wifi_enabled=${wifiSetting(cr)})")
-                                                }
-                                            }
-                                        }
-                                    ContextCompat.registerReceiver(
-                                        applicationContext,
-                                        unlockReceiver,
-                                        filter,
-                                        ContextCompat.RECEIVER_NOT_EXPORTED,
-                                    )
-                                } else {
-                                    note("wireless debugging went off while unlocked; waiting for the network to be authorised")
-                                    awaitingAuth = true
-                                }
-                                timeoutJob?.cancel()
-                                adbMdns.stop()
-                            }
-
-                            val observer =
-                                object : ContentObserver(null) {
-                                    override fun onChange(selfChange: Boolean) {
-                                        when (Settings.Global.getInt(cr, "adb_wifi_enabled", 0)) {
-                                            0 ->
-                                                if (awaitingAuth) {
-                                                    warn("adb_wifi_enabled is 0 again: network not authorised for wireless debugging")
-                                                    close(SecurityException("Network is not authorized for wireless debugging"))
-                                                } else if (samsungResetCount < maxSamsungResets) {
-                                                    // Samsung firmware reset detected — re-enable wireless
-                                                    // debugging with brief exponential backoff rather than
-                                                    // falling through to handleAuth() (which stops discovery).
-                                                    samsungResetCount++
-                                                    warn("adb_wifi_enabled reset to 0; turning it on again ($samsungResetCount/$maxSamsungResets)")
-                                                    launch {
-                                                        delay(300L * samsungResetCount)
-                                                        Settings.Global.putInt(cr, "adb_wifi_enabled", 1)
-                                                    }
-                                                } else {
-                                                    warn("adb_wifi_enabled went to 0")
-                                                    handleAuth()
-                                                }
-                                            1 -> {
-                                                note("adb_wifi_enabled is 1; discovering")
-                                                startDiscoveryWithTimeout()
-                                            }
-                                        }
-                                    }
-                                }
-
-                            val wifiBefore = wifiSetting(cr)
-                            Settings.Global.putInt(cr, "adb_wifi_enabled", 1)
-                            note("turning wireless debugging on: adb_wifi_enabled $wifiBefore -> ${wifiSetting(cr)}")
-                            cr.registerContentObserver(Settings.Global.getUriFor("adb_wifi_enabled"), false, observer)
-                            startDiscoveryWithTimeout()
-
-                            awaitClose {
-                                adbMdns.stop()
-                                timeoutJob?.cancel()
-                                cr.unregisterContentObserver(observer)
-                                unlockReceiver?.let { applicationContext.unregisterReceiver(it) }
-                            }
-                        }.first()
+                    else -> {
+                        note("discovering the wireless debugging port by mDNS (sys_tcp_port=$tcpPort saved_port=$savedPort wifi_ok=$isWifiOk)")
+                        // Wireless debugging is the transport here, so it stays on afterwards.
+                        wirelessSession().findPort()
+                    }
                 }
 
             timber.log.Timber
@@ -336,6 +187,7 @@ class AdbStartWorker(
             AdbStarter.startAdb(applicationContext, port)
             Starter.waitForBinder()
             ManagerActivityLog.log(applicationContext, "Service started via background ADB worker on port $port")
+            WirelessDebugging.clearBlock(applicationContext)
             note("SUCCESS on port $port (attempt=$runAttemptCount)")
             timber.log.Timber
                 .tag("AdbStartWorker")
@@ -359,6 +211,16 @@ class AdbStartWorker(
                 .tag("AdbStartWorker")
                 .i("doWork: stood down: %s", e.message)
             note("FAILURE stood down (attempt=$runAttemptCount): ${e.message}")
+            return Result.failure()
+        } catch (e: WirelessDebuggingBlockedException) {
+            // Only Wi-Fi, another network or the user can change this; a WorkManager retry would
+            // wait (or raise the system's network prompt) again. The notice says what to do, and
+            // the network callback starts again when Wi-Fi connects or the network changes.
+            warn("FAILURE (attempt=$runAttemptCount): ${e.message}; not retrying until Wi-Fi connects, the network changes or a start by hand")
+            WirelessDebugging.armResume(applicationContext)
+            if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
+                ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
+            }
             return Result.failure()
         } catch (e: AdbAuthTimeoutException) {
             // Retrying (WorkManager backoff) would open a new connection and raise a new dialog.
@@ -419,6 +281,96 @@ class AdbStartWorker(
                 }
                 return Result.retry()
             }
+        }
+    }
+
+    /**
+     * TCP mode with its port closed. adbd may still listen on another TCP port (`adb tcpip`), which
+     * AdbStarter moves; otherwise wireless debugging is turned on, its TLS port found by mDNS, and
+     * AdbStarter sends `tcpip:<port>` there and connects to the reopened port. Wireless debugging
+     * is then put back as this start found it: the TCP port stays open until the next reboot.
+     */
+    private suspend fun restoreTcpPort(desiredPort: Int): Result {
+        val sysPort = EnvironmentUtils.getAdbTcpPort()
+        if (sysPort in 1..65535 && sysPort != desiredPort && AdbPortProber.isPortOpen(sysPort, 600)) {
+            note("adbd listens on tcp port $sysPort; moving it to $desiredPort")
+            return startOn(sysPort)
+        }
+        note("tcp port $desiredPort closed; restoring it through wireless debugging in this attempt")
+        val session = wirelessSession()
+        try {
+            val port = session.findPort()
+            note("starting adb on wireless debugging port $port to reopen tcp port $desiredPort")
+            return startOn(port)
+        } finally {
+            session.restore()
+        }
+    }
+
+    private suspend fun startOn(port: Int): Result {
+        AdbStarter.startAdb(applicationContext, port)
+        Starter.waitForBinder()
+        ManagerActivityLog.log(applicationContext, "Service started via background ADB worker on port $port")
+        WirelessDebugging.clearBlock(applicationContext)
+        note("SUCCESS on port $port (attempt=$runAttemptCount)")
+        return Result.success()
+    }
+
+    /**
+     * This run's use of wireless debugging. A start nobody made by hand stands down while what
+     * stopped the last restore still holds (still no Wi-Fi; still the untrusted network), so the
+     * watchdog and the boot retry neither wait nor prompt again; a start by hand always tries.
+     */
+    private fun wirelessSession(): WirelessDebugging.Session {
+        val blocked = WirelessDebugging.blocked()
+        if (blocked != null) {
+            if (inputData.getBoolean(KEY_EXPLICIT, false)) {
+                note("a start by hand: trying wireless debugging again despite the last restore's ${blocked.name}")
+            } else {
+                WirelessDebugging.standDownReason(applicationContext)?.let { throw WirelessDebuggingBlockedException(blocked, it) }
+            }
+            WirelessDebugging.clearBlock(applicationContext)
+        }
+        return WirelessDebugging.Session(applicationContext, ::note, ::warn, ::promoteToForeground)
+    }
+
+    private var promoted = false
+
+    /**
+     * Waiting for Wi-Fi, an unlock or the user can outlast what a background job is allowed, so the
+     * run becomes a foreground worker for it. Only once the foreground notification is really up
+     * does this run's identical progress step aside; if promotion fails, the progress stays the
+     * one visible sign of the start.
+     */
+    private suspend fun promoteToForeground() {
+        if (promoted) return
+        promoted = true
+        val notification = ShizukuReceiverStarter.buildForegroundNotification(applicationContext)
+        // On Android 14+ (API 34), ForegroundInfo must declare a foreground service type (one the
+        // manifest lists for SystemForegroundService) or the OS throws
+        // InvalidForegroundServiceTypeException. specialUse, not shortService: the OS stops a
+        // shortService after about 3 minutes, and this run may wait for Wi-Fi, an unlock or the
+        // user and then up to 5 minutes for the adbd dialog.
+        val foregroundInfo =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ForegroundInfo(
+                    ShizukuReceiverStarter.FOREGROUND_NOTIFICATION_ID,
+                    notification,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                )
+            } else {
+                ForegroundInfo(ShizukuReceiverStarter.FOREGROUND_NOTIFICATION_ID, notification)
+            }
+        try {
+            setForeground(foregroundInfo)
+            setProgress(workDataOf(KEY_STEP to StartNotificationState.Step.FOREGROUND.name))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            timber.log.Timber
+                .tag("AdbStartWorker")
+                .w(e, "doWork: foreground promotion failed")
+            warn("foreground promotion failed: ${HeadlessLogger.brief(e)}")
         }
     }
 

@@ -916,6 +916,12 @@
     <string name="wadb_permission_error_notification_title">Permission Error</string>
     <string name="wadb_permission_error_notification_content">Shizuku needs WRITE_SECURE_SETTINGS to start on boot. Tap to learn how to grant it.</string>
     <string name="wadb_notification_channel">ADB auto-start service</string>
+    <!-- Restoring the ADB TCP port through wireless debugging (after a reboot or anything that closed it). -->
+    <string name="wadb_restore_no_wifi_title">Waiting for Wi-Fi</string>
+    <string name="wadb_restore_no_wifi_text">Connect to Wi-Fi once so Shizuku can restore its ADB connection. It continues by itself when Wi-Fi connects.</string>
+    <string name="wadb_restore_untrusted_title">Allow wireless debugging on this network</string>
+    <string name="wadb_restore_untrusted_text">Open Wireless debugging and choose \"Always allow on this network\" once. Shizuku then restores its ADB connection by itself, now and after each restart.</string>
+    <string name="wadb_restore_open_wireless_debugging">Open Wireless debugging</string>
 
     <!-- Watchdog -->
     <string name="watchdog_running">Watchdog is running</string>

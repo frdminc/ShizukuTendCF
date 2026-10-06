@@ -1,6 +1,7 @@
 package af.shizuku.manager.harness
 
 import af.shizuku.manager.adb.AdbAuthWait
+import af.shizuku.manager.adb.WirelessDebugging
 import af.shizuku.manager.receiver.BootCompleteReceiver
 import af.shizuku.manager.receiver.HeadlessStartStopReceiver
 import af.shizuku.manager.receiver.NotifAttemptReceiver
@@ -94,6 +95,36 @@ class Scenario(
         world.settle()
         return Headless(receiver.resultCode, receiver.resultData, receiver.getResultExtras(false))
     }
+
+    /** A start nobody made by hand: the watchdog's, or the boot retry's. */
+    fun backgroundStart() {
+        ShizukuReceiverStarter.start(app)
+        world.settle()
+    }
+
+    // Wi-Fi and wireless debugging (see FakeWorld).
+
+    fun wifiConnects(trusted: Boolean = true) = world.connectWifi(trusted)
+
+    fun wifiDrops() {
+        world.dropWifi()
+        world.settle()
+    }
+
+    /** The user answers the system's prompt with "Always allow on this network". */
+    fun userAllowsThisNetwork() {
+        world.allowWirelessDebuggingOnThisNetwork()
+        world.settle()
+    }
+
+    /** A start is waiting for Wi-Fi (its network callback is registered). */
+    fun startWaitsForWifi() = world.awaitWifiWait()
+
+    /** The restore has asked the user to allow wireless debugging on this network. */
+    fun startAsksToAllowNetwork() =
+        world.waitUntil({ "the notice asking to allow this network (notice: $restoreNoticeTitle)" }) {
+            restoreNoticeTitle == string(af.shizuku.manager.R.string.wadb_restore_untrusted_title)
+        }
 
     // adbd's dialog. As on a device, a rejection and a dialog nobody answers look the same to the
     // manager: adbd sends nothing and keeps the connection open, so both end at AdbClient's
@@ -197,6 +228,35 @@ class Scenario(
             startNotification?.extras?.let {
                 (it.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: it.getCharSequence(Notification.EXTRA_TEXT))?.toString()
             }
+
+    private val restoreNotice: Notification?
+        get() =
+            (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .activeNotifications
+                .firstOrNull { it.id == WirelessDebugging.NOTICE_ID }
+                ?.notification
+
+    /** The title of the restore's own notice (no Wi-Fi, or a network to allow); null: none showing. */
+    val restoreNoticeTitle: String? get() = restoreNotice?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()
+
+    val restoreNoticeText: String?
+        get() =
+            restoreNotice?.extras?.let {
+                (it.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: it.getCharSequence(Notification.EXTRA_TEXT))?.toString()
+            }
+
+    val adbWifiEnabled: Int get() = world.adbWifiEnabled
+
+    /** "Allow wireless debugging on this network?" prompts the system has raised. */
+    val trustPrompts: Int get() = world.trustPrompts
+
+    val tcpPortOpen: Boolean get() = world.tcpAdbd != null
+
+    /** Key offers on every adbd (classic, wireless and TCP): each would be a dialog. */
+    val allOffers: Int get() = adbd.offers + world.wirelessAdbd.offers + (world.tcpAdbd?.offers ?: 0)
+
+    /** The start log as HEADLESS_LOG returns it. */
+    fun log(): String = headlessLog().data.orEmpty()
 
     /** [wallMs] as the device shows a time of day: hours, minutes and seconds in its locale and 12/24-hour setting. */
     fun clock(wallMs: Long): String {
