@@ -97,6 +97,34 @@ class TcpRestoreScenariosTest {
             }
         }
 
+    // HEADLESS_STATUS reported "ADB: USB:on" right after this restore although adbd was listening
+    // on the TCP port again: it named a Wi-Fi port only while wireless debugging was on, and the
+    // restore turns wireless debugging back off. The port that is listening is what counts.
+    @Test
+    fun `tcp-port-restored-shows-in-headless-status`() =
+        scenario {
+            boot()
+            awaitStartWork()
+            val status = headlessStatus()
+            check {
+                assertRestored()
+                assertEquals("wireless debugging back off, as the start found it", 0, adbWifiEnabled)
+                assertTrue("status names the listening TCP port: ${status.data}", "ADB: USB:on WiFi:$tcpPort" in status.data.orEmpty())
+                assertEquals("adb_tcp_listening_port extra", tcpPort, status.extras?.getInt("adb_tcp_listening_port"))
+            }
+        }
+
+    @Test
+    fun `tcp-port-closed-shows-no-port-in-headless-status`() =
+        scenario {
+            val status = headlessStatus()
+            check {
+                assertFalse("tcp port closed", tcpPortOpen)
+                assertTrue("status names no Wi-Fi port: ${status.data}", "ADB: USB:on," in status.data.orEmpty())
+                assertEquals("adb_tcp_listening_port extra", -1, status.extras?.getInt("adb_tcp_listening_port"))
+            }
+        }
+
     @Test
     fun `tcp-port-closed-waits-for-wifi-without-internet`() =
         scenario {
