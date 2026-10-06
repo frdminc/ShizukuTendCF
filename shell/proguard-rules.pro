@@ -2,12 +2,12 @@
     public static void main(java.lang.String[]);
 }
 
-# dev.rikka.hidden:compat classes extend hidden framework stubs (IProcessObserver$Stub,
-# IUidObserver$Stub, IPackageManager.Stub, etc.). R8 + -repackageclasses rewrites their class
-# hierarchy in a way ART 16 rejects at class-definition time (VerifyError). Keeping the whole
-# package (not just adapter.**) ensures we catch any hidden-stub subclass in the library,
-# regardless of which subpackage it lives in.
--keep class rikka.hidden.compat.** { *; }
-
 -allowaccessmodification
--repackageclasses
+
+# Every class R8 renames goes into the loader's own package, not the default package. The app's
+# R8 pass names its classes a, b, ... a0 in the default package too, and before #28 the loader
+# handed its class loader to the app's code as the parent, so a shared name resolved to the
+# loader's class there and ART rejected the app's (VerifyError). The loader no longer does that,
+# and no longer bundles rikka.hidden.compat (whose keep rules lived here for #537/#544, VerifyErrors
+# that may have been the same clash); this keeps the two dex files' names apart all the same.
+-repackageclasses rikka.shizuku.shell

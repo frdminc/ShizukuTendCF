@@ -57,7 +57,9 @@ android.applicationVariants.all { variant ->
     }
 }
 
+// No runtime libraries: the loader dex must hold nothing but rikka.shizuku.shell classes, so it can
+// never define a class the app also defines (#28; manager/rish-dex-check.gradle checks it).
+// rikka.hidden.compat brought androidx.core and its manifest-kept classes with it.
 dependencies {
-    implementation libs.hidden.compat
     compileOnly libs.hidden.stub
 }

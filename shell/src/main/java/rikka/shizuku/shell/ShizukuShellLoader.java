@@ -3,6 +3,8 @@ package rikka.shizuku.shell;
 import android.app.ActivityManagerNative;
 import android.app.IActivityManager;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.IPackageManager;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
@@ -17,12 +19,13 @@ import android.text.TextUtils;
 
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import dalvik.system.BaseDexClassLoader;
-import rikka.hidden.compat.PackageManagerApis;
 import stub.dalvik.system.VMRuntimeHidden;
 
 public class ShizukuShellLoader {
@@ -66,13 +69,44 @@ public class ShizukuShellLoader {
     // present (rish then just times out after 15s with a misleading "connection may be blocked"
     // message).
     private static String resolveManagerPackageName() {
-        if (PackageManagerApis.getApplicationInfoNoThrow(PLUS_APPLICATION_ID, 0, 0) != null) {
+        if (getApplicationInfoNoThrow(PLUS_APPLICATION_ID) != null) {
             return PLUS_APPLICATION_ID;
         }
-        if (PackageManagerApis.getApplicationInfoNoThrow(DROPIN_APPLICATION_ID, 0, 0) != null) {
+        if (getApplicationInfoNoThrow(DROPIN_APPLICATION_ID) != null) {
             return DROPIN_APPLICATION_ID;
         }
         return PLUS_APPLICATION_ID;
+    }
+
+    // Package manager calls made directly, not through rikka.hidden.compat: this dex holds no
+    // library classes at all, so it cannot share a class name with the app (#28; see onBinderReceived).
+    private static IPackageManager packageManager() {
+        return IPackageManager.Stub.asInterface(ServiceManager.getService("package"));
+    }
+
+    private static ApplicationInfo getApplicationInfoNoThrow(String packageName) {
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                return packageManager().getApplicationInfo(packageName, 0L, 0);
+            }
+            return packageManager().getApplicationInfo(packageName, 0, 0);
+        } catch (Throwable e) {
+            return null;
+        }
+    }
+
+    private static List<String> getPackagesForUidNoThrow(int uid) {
+        List<String> packages = new ArrayList<>();
+        try {
+            String[] names = packageManager().getPackagesForUid(uid);
+            if (names != null) {
+                for (String name : names) {
+                    if (name != null) packages.add(name);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return packages;
     }
 
     private static void requestForBinder() throws RemoteException {
@@ -149,7 +183,16 @@ public class ShizukuShellLoader {
         }
 
         try {
-            var classLoader = new BaseDexClassLoader(sourceDir, null, librarySearchPath, ClassLoader.getSystemClassLoader());
+            // The parent is the boot class loader, as for the app's own class loader, NOT the
+            // system class loader: in this app_process the system class loader is this loader dex
+            // (rish_shizuku.dex, on java.class.path), and parent-first delegation then resolved
+            // any class name the two dex files shared to the loader's class inside the app's code.
+            // Both are R8-obfuscated separately into short default-package names (a, b, ... a0),
+            // so the app's Shell failed verification ("VerifyError: Verifier rejected class sw1"),
+            // in whichever build the names happened to clash (#28). Shell.main takes only framework
+            // types, so the app needs nothing from this dex.
+            ClassLoader bootClassLoader = ClassLoader.getSystemClassLoader().getParent();
+            var classLoader = new BaseDexClassLoader(sourceDir, null, librarySearchPath, bootClassLoader);
             String className = "plus".equals(System.getProperty("shizuku.cmd")) 
                 ? "af.shizuku.manager.shell.PlusShell" 
                 : "af.shizuku.manager.shell.Shell";
@@ -170,7 +213,7 @@ public class ShizukuShellLoader {
         ShizukuShellLoader.args = args;
 
         String packageName = System.getenv("RISH_APPLICATION_ID");
-        var pkg = PackageManagerApis.getPackagesForUidNoThrow(Os.getuid());
+        var pkg = getPackagesForUidNoThrow(Os.getuid());
         if (TextUtils.isEmpty(packageName) || "PKG".equals(packageName)) {
             if (pkg != null && !pkg.isEmpty()) {
                 if (pkg.contains("com.termux")) {
