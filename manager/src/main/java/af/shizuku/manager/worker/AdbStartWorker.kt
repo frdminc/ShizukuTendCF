@@ -128,6 +128,7 @@ class AdbStartWorker(
                             "Service started via direct TCP port $desiredPort (no Wi-Fi required)",
                         )
                         WirelessDebugging.clearNoWifi(applicationContext)
+                        WirelessDebugging.succeeded(applicationContext)
                         WirelessDebugging.afterTcpStart(applicationContext, ::note)
                         note("SUCCESS via tcp fast path on port $desiredPort (attempt=$runAttemptCount)")
                         return Result.success()
@@ -189,6 +190,7 @@ class AdbStartWorker(
             Starter.waitForBinder()
             ManagerActivityLog.log(applicationContext, "Service started via background ADB worker on port $port")
             WirelessDebugging.clearNoWifi(applicationContext)
+            WirelessDebugging.succeeded(applicationContext)
             note("SUCCESS on port $port (attempt=$runAttemptCount)")
             timber.log.Timber
                 .tag("AdbStartWorker")
@@ -215,16 +217,19 @@ class AdbStartWorker(
             return Result.failure()
         } catch (e: WirelessDebuggingBlockedException) {
             // Only Wi-Fi, another network or the user can change this; a WorkManager retry would
-            // wait (or raise the system's network prompt) again. The notice says what to do, and
-            // the network callback starts again when Wi-Fi connects or the network changes.
+            // wait (or raise the system's network prompt) again. The notice says what to do; Wi-Fi
+            // connecting resumes a start that had none, and wireless debugging coming on (or, after
+            // a silent refusal, an unlock) one stopped for an untrusted network.
             when (e.reason) {
                 WirelessDebugging.Blocked.NO_WIFI -> {
                     warn("FAILURE (attempt=$runAttemptCount): ${e.message}; not retrying until Wi-Fi connects or a start by hand")
                     // Not after this boot's prompt: that one never resumes by itself.
                     WirelessDebugging.armResume(applicationContext)
                 }
-                WirelessDebugging.Blocked.UNTRUSTED_NETWORK ->
-                    warn("FAILURE (attempt=$runAttemptCount): ${e.message}; not retrying this boot until a start by hand or wireless debugging is turned on")
+                WirelessDebugging.Blocked.UNTRUSTED_NETWORK -> {
+                    warn("FAILURE (attempt=$runAttemptCount): ${e.message}; no WorkManager retry")
+                    WirelessDebugging.watch(applicationContext)
+                }
             }
             if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
                 ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
@@ -275,6 +280,7 @@ class AdbStartWorker(
                 // A server is up despite the exception (e.g. the connection dropped after the
                 // starter command ran). That does not show the key was accepted, so the
                 // unanswered marker is left to AdbClient, which clears it on acceptance.
+                WirelessDebugging.succeeded(applicationContext)
                 warn("SUCCESS (attempt=$runAttemptCount): the server is running despite ${HeadlessLogger.brief(e)}")
                 return Result.success()
             } else {
@@ -333,6 +339,7 @@ class AdbStartWorker(
         ManagerActivityLog.log(applicationContext, "Service started via background ADB worker on port $port")
         // This boot's network prompt stays: a later restore the same boot must not ask again.
         WirelessDebugging.clearNoWifi(applicationContext)
+        WirelessDebugging.succeeded(applicationContext)
         note("SUCCESS on port $port (attempt=$runAttemptCount)")
         return Result.success()
     }
@@ -343,18 +350,22 @@ class AdbStartWorker(
      * Wi-Fi after a no-Wi-Fi stop, so the watchdog, the boot retry and WorkManager's re-runs
      * neither wait nor prompt again. A start by hand made after the prompt may ask once more; a
      * re-run of one made before it may not (its requested-at, as the unanswered marker does).
+     * The quiet retry (One UI, locked, after a silent refusal) may write while locked.
      */
     private fun wirelessSession(restoresState: Boolean = false): WirelessDebugging.Session {
         val explicit = inputData.getBoolean(KEY_EXPLICIT, false)
-        WirelessDebugging.standDownReason(applicationContext, explicit, inputData.getLong(KEY_REQUESTED_AT, 0L))?.let { (reason, why) ->
+        val quiet = inputData.getBoolean(KEY_QUIET, false)
+        WirelessDebugging.standDownReason(applicationContext, explicit, inputData.getLong(KEY_REQUESTED_AT, 0L), quiet)?.let { (reason, why) ->
             throw WirelessDebuggingBlockedException(reason, why)
         }
+        if (quiet) note("the quiet retry: turning wireless debugging on while locked, in case this access point is allowed")
+        WirelessDebugging.pauseWatch(applicationContext)
         if (explicit && WirelessDebugging.promptedAt(applicationContext) != null) {
             note("a start by hand made after this boot's network prompt: it may ask once more")
             WirelessDebugging.clearPrompted(applicationContext)
         }
         WirelessDebugging.clearNoWifi(applicationContext)
-        return WirelessDebugging.Session(applicationContext, ::note, ::warn, ::promoteToForeground, restoresState)
+        return WirelessDebugging.Session(applicationContext, ::note, ::warn, ::promoteToForeground, restoresState, quiet)
     }
 
     private var promoted = false
@@ -507,6 +518,7 @@ class AdbStartWorker(
         fun enqueue(
             context: Context,
             explicit: Boolean = false,
+            quiet: Boolean = false,
         ) {
             // An early out only: enqueueStart decides again, as one step with the enqueue.
             if (AdbAuthWait.isWaiting()) {
@@ -530,7 +542,7 @@ class AdbStartWorker(
             val request =
                 OneTimeWorkRequestBuilder<AdbStartWorker>()
                     .setConstraints(cb.build())
-                    .setInputData(workDataOf(KEY_EXPLICIT to explicit, KEY_REQUESTED_AT to AdbAuthWait.clockMs()))
+                    .setInputData(workDataOf(KEY_EXPLICIT to explicit, KEY_REQUESTED_AT to AdbAuthWait.clockMs(), KEY_QUIET to quiet))
                     .build()
             ShizukuReceiverStarter.enqueueStart(context, request, explicit)
         }
@@ -552,6 +564,9 @@ class AdbStartWorker(
         // The request came from the user's own hand (or a path that deliberately allows a new dialog).
         private const val KEY_EXPLICIT = "explicit"
         private const val KEY_REQUESTED_AT = "requested_at"
+
+        // WirelessDebugging's quiet retry while locked (One UI): no wait, no notice.
+        private const val KEY_QUIET = "quiet"
         const val CHANNEL_ID = "AdbStartWorker"
         const val NOTIFICATION_ID = 1448
         private const val NOTIFICATION_ID_MDNS_BLOCKED = 1449

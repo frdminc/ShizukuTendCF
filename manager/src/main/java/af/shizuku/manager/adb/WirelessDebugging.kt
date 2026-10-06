@@ -3,9 +3,12 @@ package af.shizuku.manager.adb
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.receiver.NotifAttemptActivity
+import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.receiver.WifiRestoreReceiver
 import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.SettingsPage
+import af.shizuku.manager.utils.ShizukuStateMachine
+import af.shizuku.manager.worker.WirelessDebuggingWatchWorker
 import android.app.KeyguardManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -23,18 +26,26 @@ import android.os.SystemClock
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Wireless debugging cannot come up without the user: there is no Wi-Fi, or the Wi-Fi network is
  * not trusted for it. Retrying would only repeat the same wait (or the system's "Allow wireless
  * debugging on this network?" prompt), so the start stops. Wi-Fi connecting resumes a start that
- * had none ([WirelessDebugging.armResume]); a refused network gets one automatic prompt per boot.
- * A start by hand always tries again.
+ * had none ([WirelessDebugging.armResume]); a refused network gets one automatic prompt per boot,
+ * and wireless debugging coming on continues the start ([WirelessDebugging.watch]). A start by hand
+ * always tries again.
  */
 class WirelessDebuggingBlockedException(
     val reason: WirelessDebugging.Blocked,
@@ -57,6 +68,14 @@ class WirelessDebuggingBlockedException(
  * made after it, HEADLESS_START with force, the user turning wireless debugging on, or the next
  * boot write 1 again. Without location permission no Wi-Fi network has a stable identity (each
  * connection gets a new handle, and handles restart with every boot), so the record is per boot.
+ *
+ * One UI shows no prompt while the keyguard is locked: an untrusted network's write is refused in
+ * silence (s24: "startConfirmationForNetwork: isLockScreenMode", no WifiDebuggingActivity). Trust is
+ * per access point (BSSID), so on a mesh the same network can be allowed on one node and not the
+ * next. Such a refusal is no prompt: the next unlock writes once more, which the user sees, and
+ * that is this boot's prompt; until then a quiet retry every [QUIET_RETRY_MIN] minutes finds an
+ * allowed node. AOSP queues its dialog for the unlock, so elsewhere a locked refusal stays the
+ * prompt and the unlock only checks whether it was allowed.
  */
 object WirelessDebugging {
     private const val LOG = "WirelessDebugging"
@@ -84,6 +103,18 @@ object WirelessDebugging {
     // When WifiRestoreReceiver resumed a restore on Wi-Fi that had just connected (elapsedMs).
     private const val KEY_WIFI_SEEN_AT = "wadb_restore_wifi_seen_at"
     private const val KEY_WIFI_SEEN_BOOT = "wadb_restore_wifi_seen_boot"
+
+    // A write refused while locked with no prompt shown (One UI) this boot: the next unlock may
+    // write once more, and that write is this boot's prompt.
+    private const val KEY_SILENT_BOOT = "wadb_restore_silent_refusal_boot"
+
+    // A restore stopped for an untrusted network this boot and is watching (see [watch]).
+    private const val KEY_WATCH_BOOT = "wadb_restore_watch_boot"
+
+    // The watch's unique works: adb_wifi_enabled changing, and the quiet retry while locked.
+    const val WATCH_WORK = "wadb_restore_watch"
+    const val QUIET_WORK = "wadb_restore_quiet_retry"
+    const val QUIET_RETRY_MIN = 20L
 
     // Earlier builds' keys, forgotten at boot.
     private val OLD_KEYS = listOf("wadb_restore_blocked", "wadb_restore_blocked_boot", "wadb_restore_blocked_network")
@@ -160,6 +191,7 @@ object WirelessDebugging {
     internal var uptimeMs: () -> Long = { SystemClock.elapsedRealtime() }
 
     internal fun resetForTesting() {
+        unlockWatch.set(null)
         discovery = PortDiscovery(::startMdns)
         wifiWaitMs = 120_000L
         userWaitMs = 300_000L
@@ -198,6 +230,15 @@ object WirelessDebugging {
         context: Context,
         key: String,
     ): Boolean = runCatching { prefs().getInt(key, -1) == bootCount(context) }.getOrDefault(false)
+
+    fun locked(context: Context): Boolean = (context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.isKeyguardLocked == true
+
+    /**
+     * One UI refuses an untrusted network's write in silence while the keyguard is locked (no
+     * WifiDebuggingActivity, so nothing to answer after the unlock either). AOSP shows its dialog
+     * once the keyguard goes.
+     */
+    fun silentWhenLocked(): Boolean = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
 
     // Wi-Fi.
 
@@ -293,9 +334,23 @@ object WirelessDebugging {
                 .remove(KEY_PROMPTED_BOOT)
                 .remove(KEY_PROMPTED_AT)
                 .remove(KEY_WRITE_PENDING_BOOT)
+                .remove(KEY_SILENT_BOOT)
                 .commit()
         }
         cancelNotice(context)
+    }
+
+    /** This boot's writes were refused in silence while locked, and none has prompted since. */
+    fun silentRefusalPending(context: Context): Boolean = thisBoot(context, KEY_SILENT_BOOT) && promptedAt(context) == null
+
+    private fun markSilentRefusal(context: Context) {
+        runCatching {
+            prefs()
+                .edit()
+                .putInt(KEY_SILENT_BOOT, bootCount(context))
+                .remove(KEY_WRITE_PENDING_BOOT)
+                .commit()
+        }
     }
 
     private fun setWritePending(
@@ -341,11 +396,24 @@ object WirelessDebugging {
     fun onBoot(context: Context) {
         runCatching {
             val edit = prefs().edit()
-            (OLD_KEYS + listOf(KEY_PROMPTED_BOOT, KEY_PROMPTED_AT, KEY_WRITE_PENDING_BOOT, KEY_NO_WIFI_BOOT, KEY_WIFI_SEEN_AT, KEY_WIFI_SEEN_BOOT))
-                .forEach { edit.remove(it) }
+            (
+                OLD_KEYS +
+                    listOf(
+                        KEY_PROMPTED_BOOT,
+                        KEY_PROMPTED_AT,
+                        KEY_WRITE_PENDING_BOOT,
+                        KEY_NO_WIFI_BOOT,
+                        KEY_WIFI_SEEN_AT,
+                        KEY_WIFI_SEEN_BOOT,
+                        KEY_SILENT_BOOT,
+                        KEY_WATCH_BOOT,
+                    )
+            ).forEach { edit.remove(it) }
             edit.apply()
         }
         disarmResume(context)
+        // Every watch also checks the boot count, so one that outlives this changes nothing.
+        cancelWatch(context)
         cancelNotice(context)
     }
 
@@ -353,6 +421,7 @@ object WirelessDebugging {
     fun blocked(context: Context): Blocked? =
         when {
             promptedAt(context) != null && setting(context) != 1 -> Blocked.UNTRUSTED_NETWORK
+            silentRefusalPending(context) && setting(context) != 1 -> Blocked.UNTRUSTED_NETWORK
             noWifiThisBoot(context) -> Blocked.NO_WIFI
             else -> null
         }
@@ -362,11 +431,14 @@ object WirelessDebugging {
      * ([explicit] false) stand down after this boot's prompt while wireless debugging is still off,
      * and while there is still no Wi-Fi after a no-Wi-Fi stop. A start by hand may ask again,
      * unless it is a WorkManager re-run of a request made before the prompt ([requestedAt]).
+     * After a silent refusal (One UI, locked) unattended starts stand down while still locked; the
+     * unlock, or any start made unlocked, may write once more. Only the [quiet] retry writes locked.
      */
     fun standDownReason(
         context: Context,
         explicit: Boolean,
         requestedAt: Long,
+        quiet: Boolean = false,
     ): Pair<Blocked, String>? {
         val prompted = promptedAt(context)
         if (prompted != null && setting(context) != 1) {
@@ -380,10 +452,188 @@ object WirelessDebugging {
                     "this start by hand was requested before this boot's network prompt and has asked already; waiting for a new start by hand"
             }
         }
+        if (!explicit && !quiet && silentRefusalPending(context) && setting(context) != 1 && locked(context)) {
+            return Blocked.UNTRUSTED_NETWORK to
+                "wireless debugging was refused while locked, when this phone shows no prompt; " +
+                "waiting for an unlock (one more try, which the system shows), the quiet retry, or wireless debugging turned on"
+        }
         if (!explicit && noWifiThisBoot(context) && wifiNetwork(context) == null) {
             return Blocked.NO_WIFI to "still no Wi-Fi; waiting for Wi-Fi to connect before turning wireless debugging on"
         }
         return null
+    }
+
+    // The watch: a start that stopped for an untrusted network continues by itself when wireless
+    // debugging comes on (the user's "Allow", the Settings switch, a shell), and after a silent
+    // refusal when the phone is unlocked. Per boot; a success ends it.
+
+    /** A start stopped for an untrusted network (or stood down for one): watch for what ends it. */
+    fun watch(context: Context) {
+        val started = !thisBoot(context, KEY_WATCH_BOOT)
+        if (started) runCatching { prefs().edit().putInt(KEY_WATCH_BOOT, bootCount(context)).commit() }
+        enqueueWatch(context, ExistingWorkPolicy.KEEP)
+        val silent = silentRefusalPending(context)
+        val locked = locked(context)
+        if (silent || (locked && promptedAt(context) != null)) watchUnlock(context)
+        val quiet = silent && locked && silentWhenLocked()
+        if (quiet) enqueueQuiet(context, ExistingWorkPolicy.KEEP)
+        if (started) {
+            HeadlessLogger.i(
+                LOG,
+                "continuing by itself when wireless debugging is turned on" +
+                    (
+                        if (silent) {
+                            "; one more try after the next unlock"
+                        } else if (locked) {
+                            "; checking again after the next unlock (no new write)"
+                        } else {
+                            ""
+                        }
+                    ) +
+                    (if (quiet) "; meanwhile a quiet retry every $QUIET_RETRY_MIN min while locked" else ""),
+            )
+        }
+    }
+
+    /** A start succeeded (or the server is up): nothing left to watch for. */
+    fun succeeded(context: Context) {
+        unwatchUnlock(context)
+        val watching = runCatching { prefs().contains(KEY_WATCH_BOOT) || prefs().contains(KEY_SILENT_BOOT) }.getOrDefault(false)
+        if (!watching) return
+        runCatching {
+            prefs()
+                .edit()
+                .remove(KEY_WATCH_BOOT)
+                .remove(KEY_SILENT_BOOT)
+                .commit()
+        }
+        cancelWatch(context)
+    }
+
+    private fun watchRequest(): androidx.work.OneTimeWorkRequest =
+        OneTimeWorkRequestBuilder<WirelessDebuggingWatchWorker>()
+            // JobScheduler runs it once after adb_wifi_enabled changes (ContentObserverController,
+            // as AOSP's own ProvisionObserver does for Settings.Global.DEVICE_PROVISIONED).
+            .setConstraints(Constraints.Builder().addContentUriTrigger(Settings.Global.getUriFor(SETTING), false).build())
+            .setInputData(workDataOf(WirelessDebuggingWatchWorker.KEY_KIND to WirelessDebuggingWatchWorker.KIND_WATCH))
+            .build()
+
+    private fun enqueueWatch(
+        context: Context,
+        policy: ExistingWorkPolicy,
+    ) {
+        runCatching { WorkManager.getInstance(context).enqueueUniqueWork(WATCH_WORK, policy, watchRequest()) }
+            .onFailure { HeadlessLogger.w(LOG, "cannot watch wireless debugging: ${HeadlessLogger.brief(it)}") }
+    }
+
+    private fun enqueueQuiet(
+        context: Context,
+        policy: ExistingWorkPolicy,
+    ) {
+        val request =
+            OneTimeWorkRequestBuilder<WirelessDebuggingWatchWorker>()
+                .setInitialDelay(QUIET_RETRY_MIN, TimeUnit.MINUTES)
+                .setInputData(workDataOf(WirelessDebuggingWatchWorker.KEY_KIND to WirelessDebuggingWatchWorker.KIND_QUIET))
+                .build()
+        runCatching { WorkManager.getInstance(context).enqueueUniqueWork(QUIET_WORK, policy, request) }
+            .onFailure { HeadlessLogger.w(LOG, "cannot queue the quiet retry: ${HeadlessLogger.brief(it)}") }
+    }
+
+    private fun cancelQuiet(context: Context) {
+        runCatching { WorkManager.getInstance(context).cancelUniqueWork(QUIET_WORK) }
+    }
+
+    private fun cancelWatch(context: Context) {
+        runCatching { WorkManager.getInstance(context).cancelUniqueWork(WATCH_WORK) }
+        cancelQuiet(context)
+    }
+
+    private fun watching(context: Context): Boolean = thisBoot(context, KEY_WATCH_BOOT)
+
+    // True (and the watch ended) if the server is up.
+    private fun runningNow(context: Context): Boolean {
+        ShizukuStateMachine.update()
+        if (!ShizukuStateMachine.isRunning()) return false
+        succeeded(context)
+        return true
+    }
+
+    /** adb_wifi_enabled changed. Content-trigger work runs once, so it queues the next watch. */
+    internal fun onWatchFired(context: Context) {
+        if (!watching(context) || runningNow(context)) return
+        // Queued first, behind this run, so a start that succeeds at once cancels it too.
+        enqueueWatch(context, ExistingWorkPolicy.APPEND_OR_REPLACE)
+        if (setting(context) == 1) {
+            HeadlessLogger.i(LOG, "wireless debugging was turned on; continuing the ADB restore")
+            ShizukuReceiverStarter.start(context)
+        }
+    }
+
+    /**
+     * A start is about to use wireless debugging itself: its own writes are no news. It watches
+     * again if it stops for an untrusted network ([watch]); the quiet retry keeps its turn.
+     */
+    fun pauseWatch(context: Context) {
+        if (watching(context)) runCatching { WorkManager.getInstance(context).cancelUniqueWork(WATCH_WORK) }
+    }
+
+    /**
+     * One UI only, after a silent refusal: while still locked, write again in case the phone has
+     * moved to an access point that is allowed (on one that is not, the write is refused in
+     * silence again). Unlocked, the unlock's one visible write is due instead.
+     */
+    internal fun onQuietRetry(context: Context) {
+        if (!watching(context) || !silentRefusalPending(context) || !silentWhenLocked() || runningNow(context)) return
+        if (!locked(context)) {
+            HeadlessLogger.i(LOG, "quiet retry: unlocked since the silent refusal; trying once more, which the system shows")
+            ShizukuReceiverStarter.start(context)
+            return
+        }
+        HeadlessLogger.i(LOG, "quiet retry while locked: turning wireless debugging on again (refused in silence again unless this access point is allowed)")
+        enqueueQuiet(context, ExistingWorkPolicy.APPEND_OR_REPLACE)
+        ShizukuReceiverStarter.start(context, quiet = true)
+    }
+
+    // ACTION_USER_PRESENT cannot be declared in the manifest, so the unlock is watched only while
+    // this process lives; any start made unlocked later does the same.
+    private val unlockWatch = AtomicReference<BroadcastReceiver?>()
+
+    private fun watchUnlock(context: Context) {
+        val app = context.applicationContext ?: context
+        val receiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(
+                    context: Context,
+                    intent: Intent,
+                ) {
+                    if (intent.action != Intent.ACTION_USER_PRESENT) return
+                    unwatchUnlock(app)
+                    onUnlock(app)
+                }
+            }
+        if (!unlockWatch.compareAndSet(null, receiver)) return
+        runCatching { ContextCompat.registerReceiver(app, receiver, IntentFilter(Intent.ACTION_USER_PRESENT), ContextCompat.RECEIVER_NOT_EXPORTED) }
+            .onFailure { unlockWatch.compareAndSet(receiver, null) }
+    }
+
+    private fun unwatchUnlock(context: Context) {
+        val receiver = unlockWatch.getAndSet(null) ?: return
+        runCatching { (context.applicationContext ?: context).unregisterReceiver(receiver) }
+    }
+
+    private fun onUnlock(context: Context) {
+        HeadlessLogger.init(context)
+        if (!watching(context)) return
+        if (silentRefusalPending(context)) {
+            cancelQuiet(context)
+            HeadlessLogger.i(LOG, "unlocked after a silent refusal; trying once more: the system shows its prompt now, and it is this boot's one")
+            ShizukuReceiverStarter.start(context)
+        } else if (setting(context) == 1) {
+            HeadlessLogger.i(LOG, "unlocked, and wireless debugging is on; continuing the ADB restore")
+            ShizukuReceiverStarter.start(context)
+        } else {
+            HeadlessLogger.i(LOG, "unlocked; wireless debugging is still off: the system's prompt is the user's to answer, nothing is written again")
+        }
     }
 
     /**
@@ -503,6 +753,18 @@ object WirelessDebugging {
             SettingsPage.InternetPanel.buildIntent(context),
         )
 
+    /** After a silent refusal while locked (One UI): the unlock tries once more. */
+    fun notifyLocked(context: Context) {
+        val wireless = SettingsPage.Developer.WirelessDebugging.buildIntent(context)
+        postNotice(
+            context,
+            R.string.wadb_restore_locked_title,
+            R.string.wadb_restore_locked_text,
+            wireless,
+            R.string.wadb_restore_open_wireless_debugging to wireless,
+        )
+    }
+
     fun notifyUntrusted(context: Context) {
         val wireless = SettingsPage.Developer.WirelessDebugging.buildIntent(context)
         postNotice(
@@ -530,6 +792,8 @@ object WirelessDebugging {
         private val warn: (String) -> Unit,
         private val foreground: suspend () -> Boolean,
         private val restoresState: Boolean = false,
+        // The quiet retry: writes while locked, and stops at a silent refusal without waiting.
+        private val quiet: Boolean = false,
     ) {
         // adb_wifi_enabled before this start (or a run of it that died) first touched it.
         private var initial: Int? = null
@@ -638,6 +902,8 @@ object WirelessDebugging {
         private suspend fun requireWifi(): Network {
             val network =
                 wifiNetwork(context) ?: run {
+                    // Nothing to post or wait for on the quiet retry's account: the next one looks again.
+                    if (quiet) throw untrustedStop("no Wi-Fi for the quiet retry")
                     val waitMs = minOf(wifiWaitMs, remaining())
                     note("no Wi-Fi; waiting up to ${waitMs / 1000} s for Wi-Fi (metered or without internet is fine)")
                     goForeground()
@@ -724,8 +990,28 @@ object WirelessDebugging {
                             }
                             return Round.NetworkChanged
                         }
-                        // The same, settled Wi-Fi: the system refused (and asked, if the user can
-                        // see it). Recorded before anything else, so no run asks again this boot.
+                        // The same, settled Wi-Fi: the system refused. Locked on One UI it asked
+                        // nobody: not this boot's prompt, and the unlock may write once more.
+                        if (wroteThisRound && promptedAt(context) == null && silentWhenLocked() && locked()) {
+                            markSilentRefusal(context)
+                            warn(
+                                "adb_wifi_enabled went back to 0 while locked: this network (or access point) is not allowed for wireless debugging, " +
+                                    "and this phone shows no prompt while locked; not this boot's network prompt",
+                            )
+                            if (quiet) throw untrustedStop("refused in silence while locked (quiet retry)")
+                            awaitSilentUnlock()
+                            if (!isConnectedWifi(context, network)) {
+                                note("the Wi-Fi network changed while waiting for an unlock")
+                                return Round.NetworkChanged
+                            }
+                            turnOn()
+                            note("unlocked; turning wireless debugging on once more, which the system shows: adb_wifi_enabled=${setting(context)}")
+                            deadline = elapsedMs() + discoveryMs
+                            delay(pollMs)
+                            continue
+                        }
+                        // Otherwise the system asked (or will once unlocked). Recorded before
+                        // anything else, so no run asks again this boot.
                         if (promptedAt(context) == null) {
                             markPrompted(context)
                             warn("adb_wifi_enabled went back to 0 with Wi-Fi connected: this network is not trusted for wireless debugging; this boot's one network prompt")
@@ -764,10 +1050,25 @@ object WirelessDebugging {
             notifyUntrusted(context)
             goForeground()
             if (!awaitUnlock(waitMs)) {
-                warn("not unlocked within ${waitMs / 1000} s; not trying again this boot until a start by hand or wireless debugging is turned on")
+                warn(
+                    "not unlocked within ${waitMs / 1000} s; the system's prompt waits for the unlock, and no second one is raised this boot; " +
+                        "continuing when wireless debugging is turned on, or on a start by hand",
+                )
                 throw untrustedStop("locked while the system asked to allow wireless debugging on this network")
             }
             note("unlocked; waiting for the system's prompt to be answered")
+        }
+
+        // Refused in silence while locked (One UI): no prompt exists. The unlock writes once more.
+        private suspend fun awaitSilentUnlock() {
+            val waitMs = userRemaining()
+            note("waiting up to ${waitMs / 1000} s for an unlock, then turning wireless debugging on once more")
+            notifyLocked(context)
+            goForeground()
+            if (!awaitUnlock(waitMs)) {
+                warn("not unlocked within ${waitMs / 1000} s; trying once more after the next unlock")
+                throw untrustedStop("refused in silence while locked")
+            }
         }
 
         // Waits for the user to allow wireless debugging on this network (the prompt was raised by
@@ -791,11 +1092,14 @@ object WirelessDebugging {
                 }
                 delay(pollMs)
             }
-            warn("the network was not allowed within ${waitMs / 1000} s; not trying again this boot until a start by hand or wireless debugging is turned on")
+            warn(
+                "the network was not allowed within ${waitMs / 1000} s; no second prompt this boot: " +
+                    "continuing when wireless debugging is turned on, or on a start by hand",
+            )
             throw untrustedStop("this Wi-Fi network is not trusted for wireless debugging")
         }
 
-        private fun locked(): Boolean = (context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.isKeyguardLocked == true
+        private fun locked(): Boolean = WirelessDebugging.locked(context)
 
         private suspend fun awaitUnlock(waitMs: Long): Boolean {
             val unlocked = CompletableDeferred<Unit>()

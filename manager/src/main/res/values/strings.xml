@@ -920,7 +920,9 @@
     <string name="wadb_restore_no_wifi_title">Waiting for Wi-Fi</string>
     <string name="wadb_restore_no_wifi_text">Connect to Wi-Fi once so Shizuku can restore its ADB connection. It continues by itself when Wi-Fi connects.</string>
     <string name="wadb_restore_untrusted_title">Allow wireless debugging on this network</string>
-    <string name="wadb_restore_untrusted_text">Open Wireless debugging, choose \"Always allow on this network\" once, then tap Attempt now. If this network is already allowed, just tap Attempt now. After that Shizuku restores its ADB connection by itself after each restart.</string>
+    <string name="wadb_restore_untrusted_text">Open Wireless debugging, choose \"Always allow on this network\" once, then tap Attempt now. If this network is already allowed, just tap Attempt now. Shizuku also continues by itself as soon as wireless debugging is turned on. After that Shizuku restores its ADB connection by itself after each restart.</string>
+    <string name="wadb_restore_locked_title">Unlock to restore Shizuku\'s ADB connection</string>
+    <string name="wadb_restore_locked_text">Wireless debugging went off while the phone was locked: this Wi-Fi network or access point is not allowed for it yet, and this phone asks only while unlocked. After the next unlock Shizuku tries once more; choose \"Always allow on this network\" when the system asks. Until then it retries quietly in case the phone moves to an access point that is allowed.</string>
     <string name="wadb_restore_open_wireless_debugging">Open Wireless debugging</string>
 
     <!-- Watchdog -->

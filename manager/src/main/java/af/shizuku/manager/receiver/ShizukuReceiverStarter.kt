@@ -78,6 +78,9 @@ object ShizukuReceiverStarter {
     fun start(
         context: Context,
         forceStart: Boolean = false,
+        // WirelessDebugging's quiet retry: a background start that may turn wireless debugging on
+        // while locked.
+        quiet: Boolean = false,
     ) {
         if (!forceStart &&
             (
@@ -121,8 +124,8 @@ object ShizukuReceiverStarter {
             rootStart(context)
         } else if (ShizukuSettings.getLastLaunchMode() == LaunchMethod.ADB) {
             if (context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
-                HeadlessLogger.i(LOG, "start: adb, queueing the start worker (explicit=$forceStart)")
-                AdbStartWorker.enqueue(context, explicit = forceStart)
+                HeadlessLogger.i(LOG, "start: adb, queueing the start worker (explicit=$forceStart${if (quiet) ", quiet" else ""})")
+                AdbStartWorker.enqueue(context, explicit = forceStart, quiet = quiet)
             } else {
                 HeadlessLogger.w(LOG, "start: adb, but WRITE_SECURE_SETTINGS is not granted")
                 showPermissionErrorNotification(context)

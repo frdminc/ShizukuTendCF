@@ -150,7 +150,7 @@ class TcpRestoreScenariosTest {
                 assertEquals(string(R.string.wadb_restore_untrusted_text), restoreNoticeText)
                 assertLogHas(
                     "StartWorker: adb_wifi_enabled went back to 0 with Wi-Fi connected: this network is not trusted for wireless debugging",
-                    "not trying again this boot",
+                    "no second prompt this boot",
                     "StartWorker: FAILURE",
                 )
                 assertLogLacks("RETRY")
