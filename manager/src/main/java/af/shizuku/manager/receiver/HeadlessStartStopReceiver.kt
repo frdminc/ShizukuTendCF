@@ -6,6 +6,7 @@ import af.shizuku.manager.BuildConfig
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.ShizukuSettings.LaunchMethod
 import af.shizuku.manager.adb.AdbAuthWait
+import af.shizuku.manager.adb.AdbPortProber
 import af.shizuku.manager.adb.WirelessDebugging
 import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.ShizukuStateMachine
@@ -138,11 +139,13 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                         if (ManagerEnvironmentUtils.isAdbEnabled()) 1 else 0
                     }.getOrDefault(0)
 
-                val adbParts = mutableListOf<String>()
-                if (adbUsb != 0) adbParts.add("USB:on")
-                if (adbWifi != 0) adbParts.add("WiFi:${if (adbTcpPort > 0) adbTcpPort else "?"}")
-                if (adbParts.isEmpty()) adbParts.add("off")
-                val adbSummary = adbParts.joinToString(" ")
+                // The TCP port adbd is listening on, if any: the one adbd reports, else the
+                // configured one. `adb tcpip` and the start worker's restore open it with wireless
+                // debugging off (the restore turns it back off), so adb_wifi_enabled says nothing
+                // about it, and the property alone may be stale or unreadable.
+                val configuredTcpPort = ShizukuSettings.getTcpPort()
+                val listeningTcpPort = AdbPortProber.firstListening(listOf(adbTcpPort, configuredTcpPort))
+                val adbSummary = adbSummary(adbUsb != 0, adbWifi != 0, listeningTcpPort)
 
                 val authUnanswered = AdbAuthWait.isUnanswered()
                 val summary =
@@ -156,7 +159,8 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                         putBoolean("binder_alive", binderAlive)
                         putBoolean("auth_unanswered", authUnanswered)
                         putInt("adb_tcp_port", adbTcpPort)
-                        putInt("configured_tcp_port", ShizukuSettings.getTcpPort())
+                        putInt("adb_tcp_listening_port", listeningTcpPort)
+                        putInt("configured_tcp_port", configuredTcpPort)
                         putInt("adb_wifi_enabled", adbWifi)
                         putInt("adb_enabled", adbUsb)
                         putString("version_name", BuildConfig.VERSION_NAME)
@@ -205,5 +209,26 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
 
         /** HEADLESS_LOG result code when there is no log to read. */
         const val RESULT_NO_LOG = 2
+
+        /**
+         * HEADLESS_STATUS's "ADB:" field. "WiFi:<port>" names the TCP port adbd is listening on
+         * ([listeningTcpPort], -1 for none), whether or not wireless debugging is on; "WiFi:?" is
+         * wireless debugging on with no TCP port listening (its own port is not known here).
+         */
+        fun adbSummary(
+            usb: Boolean,
+            wirelessDebugging: Boolean,
+            listeningTcpPort: Int,
+        ): String {
+            val parts = mutableListOf<String>()
+            if (usb) parts.add("USB:on")
+            if (listeningTcpPort in 1..65535) {
+                parts.add("WiFi:$listeningTcpPort")
+            } else if (wirelessDebugging) {
+                parts.add("WiFi:?")
+            }
+            if (parts.isEmpty()) parts.add("off")
+            return parts.joinToString(" ")
+        }
     }
 }

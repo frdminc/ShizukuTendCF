@@ -7,6 +7,8 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
 
 object AdbPortProber {
     /**
@@ -27,6 +29,26 @@ object AdbPortProber {
             false
         } catch (_: Exception) {
             false
+        }
+    }
+
+    /**
+     * The first of [ports] that accepts a loopback connection, or -1. Safe on the main thread (a
+     * broadcast receiver's): the connects run on a thread of their own, since a socket opened on
+     * the main thread throws NetworkOnMainThreadException in a release build.
+     */
+    fun firstListening(
+        ports: Iterable<Int>,
+        timeoutMs: Int = 150,
+    ): Int {
+        val candidates = ports.filter { it in 1..65535 }.distinct()
+        if (candidates.isEmpty()) return -1
+        val probe = FutureTask { candidates.firstOrNull { isPortOpen(it, timeoutMs) } ?: -1 }
+        Thread(probe, "AdbPortProber").apply { isDaemon = true }.start()
+        return try {
+            probe.get(timeoutMs.toLong() * candidates.size + 500, TimeUnit.MILLISECONDS)
+        } catch (_: Exception) {
+            -1
         }
     }
 
