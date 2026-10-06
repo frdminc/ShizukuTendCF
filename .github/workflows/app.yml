@@ -64,6 +64,9 @@ jobs:
       - name: Run Unit Tests
         run: ./gradlew --continue :manager:testShizukuplusDebugUnitTest :server:testDebugUnitTest :database:testDebugUnitTest
 
+      - name: Check Unit Test Counts
+        run: python3 scripts/dev/check-test-counts.py
+
   build:
     needs: [pre-push-guard]
     runs-on: ubuntu-latest
