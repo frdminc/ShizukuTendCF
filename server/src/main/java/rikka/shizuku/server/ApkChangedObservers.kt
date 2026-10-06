@@ -13,41 +13,55 @@ private val observers = Collections.synchronizedMap(HashMap<String, ApkChangedOb
 
 object ApkChangedObservers {
 
+    // start() and stop() run on binder threads and, through a listener that re-registers (see
+    // ShizukuUserServiceManager), on the FileObserver thread. The map is a synchronizedMap, but
+    // that only makes single calls atomic: iterating it, or getOrPut's check-then-put, still
+    // races with a concurrent put (ConcurrentModificationException in the server, or two
+    // observers for one path). So each operation holds the map's own lock for its whole body.
+
     @JvmStatic
     fun start(apkPath: String, listener: ApkChangedListener) {
         // inotify watchs inode, if the there are still processes holds the file, DELTE_SELF will not be triggered
         // so we need to watch the parent folder
 
         val path = File(apkPath).parent ?: return
-        val observer = observers.getOrPut(path) {
-            ApkChangedObserver(path).apply {
-                startWatching()
+        synchronized(observers) {
+            val observer = observers.getOrPut(path) {
+                ApkChangedObserver(path).apply {
+                    startWatching()
+                }
             }
+            observer.addListener(listener)
         }
-        observer.addListener(listener)
     }
 
     @JvmStatic
     fun stop(listener: ApkChangedListener) {
-        val pathToRemove = mutableListOf<String>()
+        synchronized(observers) {
+            val pathToRemove = mutableListOf<String>()
 
-        for ((path, observer) in observers) {
-            observer.removeListener(listener)
+            for ((path, observer) in observers) {
+                observer.removeListener(listener)
 
-            if (!observer.hasListeners()) {
-                pathToRemove.add(path)
+                if (!observer.hasListeners()) {
+                    pathToRemove.add(path)
+                }
+            }
+
+            for (path in pathToRemove) {
+                observers.remove(path)?.stopWatching()
             }
         }
-
-        for (path in pathToRemove) {
-            observers.remove(path)?.stopWatching()
-        }
     }
+
+    @JvmStatic
+    internal fun observerCountForTest(): Int = observers.size
 }
 
 class ApkChangedObserver(private val path: String) : FileObserver(path, DELETE) {
 
-    private val listeners = mutableSetOf<ApkChangedListener>()
+    // Changed under ApkChangedObservers' lock, but read by onEvent on the FileObserver thread.
+    private val listeners = Collections.synchronizedSet(mutableSetOf<ApkChangedListener>())
 
     fun addListener(listener: ApkChangedListener): Boolean {
         return listeners.add(listener)
@@ -70,7 +84,9 @@ class ApkChangedObserver(private val path: String) : FileObserver(path, DELETE) 
 
         if (path == "base.apk") {
             stopWatching()
-            ArrayList(listeners).forEach { it.onApkChanged() }
+            // Copy under the set's lock, then call outside it: a listener may call start()/stop().
+            val snapshot = synchronized(listeners) { ArrayList(listeners) }
+            snapshot.forEach { it.onApkChanged() }
         }
     }
 
