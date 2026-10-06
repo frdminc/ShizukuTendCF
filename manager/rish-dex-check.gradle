@@ -1,0 +1,103 @@
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.charset.StandardCharsets
+import java.util.zip.ZipFile
+
+// The rish loader (assets/rish_shizuku.dex, built by :shell) loads the app's Shell class from
+// base.apk. Before #28 it gave that class loader the loader dex as its parent, so a class name the
+// two dex files shared resolved to the loader's class inside the app's code, and ART rejected the
+// app's class (VerifyError: "Verifier rejected class sw1"). Both are R8-obfuscated separately into
+// short names, so which names collided changed from build to build. The loader now uses the boot
+// class loader as the parent, and keeps every class of its own under rikka.shizuku.shell; this
+// check fails a release assemble when the two dex files share any class name all the same.
+//
+// Runs on every release assemble. To check an APK built elsewhere (a CI release):
+//   ./gradlew :manager:checkRishDexCollisionsInApk -PrishDexCheckApk=/path/to/app.apk
+
+abstract class CheckRishDexCollisions extends DefaultTask {
+    @InputFiles
+    abstract ConfigurableFileCollection getApks()
+
+    @OutputFile
+    abstract RegularFileProperty getReport()
+
+    static final String LOADER = "assets/rish_shizuku.dex"
+
+    @TaskAction
+    void check() {
+        def apks = getApks().files.findAll { it.name.endsWith(".apk") }
+        if (apks.isEmpty()) throw new GradleException("checkRishDexCollisions: no APK in ${getApks().files}")
+        def lines = []
+        apks.each { File apk ->
+            Set<String> app = new TreeSet<>()
+            Set<String> loader = null
+            new ZipFile(apk).withCloseable { zip ->
+                zip.entries().each { entry ->
+                    if (entry.name ==~ /classes\d*\.dex/) {
+                        app.addAll(classNames(zip.getInputStream(entry).bytes))
+                    } else if (entry.name == LOADER) {
+                        loader = classNames(zip.getInputStream(entry).bytes)
+                    }
+                }
+            }
+            if (loader == null) throw new GradleException("checkRishDexCollisions: ${apk.name} has no $LOADER")
+            def shared = loader.findAll { app.contains(it) }.sort()
+            if (!shared.isEmpty()) {
+                throw new GradleException(
+                    "checkRishDexCollisions: $LOADER and the app dex in ${apk.name} share " +
+                        "${shared.size()} class name(s), so rish can load the wrong class (#28): " +
+                        shared.take(20).join(" ") + (shared.size() > 20 ? " ..." : ""),
+                )
+            }
+            lines << "${apk.name}: loader ${loader.size()} classes, app ${app.size()} classes, none shared"
+        }
+        getReport().get().asFile.text = lines.join("\n") + "\n"
+        lines.each { logger.lifecycle("checkRishDexCollisions: $it") }
+    }
+
+    // The class descriptors a dex file defines (header -> class_defs -> type_ids -> string_ids).
+    static Set<String> classNames(byte[] dex) {
+        if (dex.length < 0x70 || new String(dex, 0, 4, StandardCharsets.ISO_8859_1) != "dex\n") {
+            throw new GradleException("checkRishDexCollisions: not a dex file")
+        }
+        def b = ByteBuffer.wrap(dex).order(ByteOrder.LITTLE_ENDIAN)
+        int stringIdsOff = b.getInt(0x3C)
+        int typeIdsOff = b.getInt(0x44)
+        int classDefsSize = b.getInt(0x60)
+        int classDefsOff = b.getInt(0x64)
+        Set<String> names = new HashSet<>()
+        for (int i = 0; i < classDefsSize; i++) {
+            int typeIdx = b.getInt(classDefsOff + i * 32)
+            int stringIdx = b.getInt(typeIdsOff + typeIdx * 4)
+            int p = b.getInt(stringIdsOff + stringIdx * 4)
+            while ((dex[p++] & 0x80) != 0) { } // uleb128 utf16 length
+            int end = p
+            while (dex[end] != 0) end++
+            names.add(new String(dex, p, end - p, StandardCharsets.UTF_8))
+        }
+        return names
+    }
+}
+
+afterEvaluate {
+    android.productFlavors.each { flavor ->
+        def variant = "${flavor.name.capitalize()}Release"
+        def packageTask = tasks.findByName("package$variant")
+        if (packageTask == null) return
+        def check = tasks.register("checkRishDexCollisions$variant", CheckRishDexCollisions) {
+            group = "verification"
+            description = "Fails if the rish loader dex and the $variant app dex share a class name (#28)."
+            apks.from(packageTask.outputDirectory.asFileTree.matching { include "*.apk" })
+            report.set(layout.buildDirectory.file("reports/rish-dex-check/${variant}.txt"))
+        }
+        tasks.named("assemble$variant").configure { dependsOn check }
+    }
+}
+
+tasks.register("checkRishDexCollisionsInApk", CheckRishDexCollisions) {
+    group = "verification"
+    description = "Fails if the rish loader dex and the app dex share a class name (#28); -PrishDexCheckApk=<apk>."
+    def apk = providers.gradleProperty("rishDexCheckApk")
+    apks.from(apk.map { file(it) })
+    report.set(layout.buildDirectory.file("reports/rish-dex-check/apk.txt"))
+}

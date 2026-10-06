@@ -368,3 +368,4 @@ sentry {
 
 apply from: rootProject.file("signing.gradle")
 apply from: "tendcf-branding.gradle"
+apply from: "rish-dex-check.gradle"
