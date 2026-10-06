@@ -1098,4 +1098,67 @@ class TcpRestoreScenariosTest {
                 assertEquals(string(R.string.wadb_restore_locked_title), restoreNoticeTitle)
             }
         }
+
+    // The unlock's write never reached the system's judgement (Wi-Fi dropped first): no dialog, so
+    // the next locked refusal is still silent and the next unlock still asks once.
+    @Test
+    fun `samsung-unlock-write-lost-with-wifi-is-not-the-prompt`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            WirelessDebugging.wifiWaitMs = 1_000
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            world.wifiDropsOnNextWrite = true
+            unlockScreen()
+            awaitStarts(2)
+            awaitStartWork()
+            assertEquals("no dialog", 0, trustPrompts)
+            // Wi-Fi comes back while locked: the resumed start is refused in silence, or stands down.
+            lockScreen()
+            wifiConnects(trusted = false)
+            awaitStarts(3)
+            awaitStartWork()
+            WirelessDebugging.userWaitMs = 10_000
+            unlockScreen()
+            world.waitUntil({ "the system's prompt (raised $trustPrompts)" }) { trustPrompts == 1 }
+            userAllowsThisNetwork()
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(1, trustPrompts)
+            }
+        }
+
+    // A quiet write made locked meets a Wi-Fi reconnect (a new network handle): the system judged
+    // it locked, so nobody was asked, and the unlock still asks once.
+    @Test
+    fun `samsung-quiet-write-meeting-a-wifi-change-is-not-the-prompt`() =
+        scenario {
+            WirelessDebugging.userWaitMs = 1_500
+            world.samsung()
+            wifiConnects(trusted = false)
+            lockScreen()
+            boot()
+            awaitStartWork()
+            world.switchOnNextWrite = false
+            quietRetryDue()
+            awaitStarts(2)
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals(0, trustPrompts)
+            }
+            WirelessDebugging.userWaitMs = 10_000
+            unlockScreen()
+            world.waitUntil({ "the system's prompt (raised $trustPrompts)" }) { trustPrompts == 1 }
+            userAllowsThisNetwork()
+            awaitStartWork()
+            check {
+                assertRestored()
+                assertEquals(1, trustPrompts)
+            }
+        }
 }

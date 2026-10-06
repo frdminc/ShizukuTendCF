@@ -130,6 +130,10 @@ class FakeWorld(
     @Volatile
     var switchOnNextWrite: Boolean? = null
 
+    /** Wi-Fi disconnects at the next write of adb_wifi_enabled=1, before the system has judged it. */
+    @Volatile
+    var wifiDropsOnNextWrite = false
+
     /**
      * For this long after Wi-Fi connects WifiManager has no BSSID for it, and the system undoes a
      * write of adb_wifi_enabled=1 without a prompt.
@@ -308,8 +312,16 @@ class FakeWorld(
         // Wi-Fi moves to another network just as the manager writes: the system checks that one.
         switchOnNextWrite?.let { trusted ->
             switchOnNextWrite = null
-            wifi?.let { shadowOf(cm).removeNetwork(it.network) }
+            wifi?.let { removeNetwork(it.network) }
             addWifi(trusted)
+        }
+        if (wifiDropsOnNextWrite) {
+            wifiDropsOnNextWrite = false
+            wifi?.let { gone ->
+                wifi = null
+                removeNetwork(gone.network)
+                shadowOf(cm).networkCallbacks.toList().forEach { it.onLost(gone.network) }
+            }
         }
         val w = wifi
         when {
@@ -384,6 +396,13 @@ class FakeWorld(
         return network
     }
 
+    // The shadow keeps a removed network's capabilities, so getNetworkCapabilities would still call
+    // it Wi-Fi; ConnectivityManager returns null for a network that is gone.
+    private fun removeNetwork(network: Network) {
+        shadowOf(cm).removeNetwork(network)
+        shadowOf(cm).setNetworkCapabilities(network, null)
+    }
+
     /** Wi-Fi connects (replacing any other): network callbacks and their PendingIntents fire. */
     fun connectWifi(trusted: Boolean) {
         dropWifi()
@@ -408,7 +427,7 @@ class FakeWorld(
     fun dropWifi() {
         val w = wifi ?: return
         wifi = null
-        shadowOf(cm).removeNetwork(w.network)
+        removeNetwork(w.network)
         if (adbWifiEnabled == 1) setAdbWifi(0)
         shadowOf(cm).networkCallbacks.toList().forEach { it.onLost(w.network) }
     }
