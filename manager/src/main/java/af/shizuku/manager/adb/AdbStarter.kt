@@ -75,7 +75,7 @@ object AdbStarter {
         // Another start is holding adbd's authorisation dialog open; a second connection would
         // raise a second dialog. Throw rather than return: a silent return looked like success,
         // and the caller's next step (a 20 s waitForBinder) then timed out while the pending
-        // start was still legitimately waiting its 150 s.
+        // start was still legitimately waiting its 300 s.
         if (AdbAuthWait.isWaiting()) {
             Timber.tag(TAG).i("startAdb stood down: waiting for the adbd authorisation dialog")
             log?.invoke(context.getString(R.string.wadb_notification_awaiting_auth) + "\n")

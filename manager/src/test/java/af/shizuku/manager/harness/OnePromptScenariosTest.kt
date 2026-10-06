@@ -10,6 +10,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -328,6 +329,108 @@ class OnePromptScenariosTest {
                 expectOffers(2)
             }
         }
+
+    // Toasts may be suppressed (seen on a Samsung S24), so the prompt itself says where the user
+    // stands. Before the re-offer is available: from when "Ask again" works, and when the wait ends,
+    // as times of day. The text turns at that boundary without a tap (a scheduled refresh), and the
+    // refresh is cancelled once the wait ends.
+    @Test
+    fun `ask-again-text-before-reoffer`() =
+        scenario {
+            authTimeout(REOFFER_AUTH_TIMEOUT_MS)
+            val t0 = now
+            boot()
+            keyOffered()
+            waitHeld()
+            awaitNotificationText(
+                string(R.string.wadb_notification_awaiting_auth),
+                string(R.string.wadb_notification_ask_again_from, clock(t0 + AdbAuthWait.REOFFER_MIN_AGE_MS)),
+                string(R.string.wadb_notification_wait_ends, clock(t0 + REOFFER_AUTH_TIMEOUT_MS)),
+            )
+            check { assertEquals("the boundary refresh is scheduled", 1, world.pendingTimers) }
+            dialogAccepted()
+            check {
+                assertEquals(WorkInfo.State.SUCCEEDED, lastWork)
+                assertEquals("the boundary refresh is cancelled with the wait", 0, world.pendingTimers)
+            }
+        }
+
+    @Test
+    fun `ask-again-text-ready-at-boundary`() =
+        scenario {
+            authTimeout(REOFFER_AUTH_TIMEOUT_MS)
+            val t0 = now
+            boot()
+            keyOffered()
+            waitHeld()
+            awaitNotificationText(string(R.string.wadb_notification_ask_again_from, clock(t0 + AdbAuthWait.REOFFER_MIN_AGE_MS)))
+            // No tap: only the passing of time.
+            advanceTime(AdbAuthWait.REOFFER_MIN_AGE_MS.toLong())
+            awaitNotificationText(
+                string(R.string.wadb_notification_ask_again_ready),
+                string(R.string.wadb_notification_wait_ends, clock(t0 + REOFFER_AUTH_TIMEOUT_MS)),
+            )
+            dialogAccepted()
+            check { assertEquals(WorkInfo.State.SUCCEEDED, lastWork) }
+        }
+
+    // After the re-offer: this dialog is the last for the wait, which ends at the renewed deadline.
+    @Test
+    fun `ask-again-text-after-reoffer-used`() =
+        scenario {
+            authTimeout(REOFFER_AUTH_TIMEOUT_MS)
+            val t0 = now
+            boot()
+            keyOffered()
+            waitHeld()
+            adbd.reject()
+            advanceTime(AdbAuthWait.REOFFER_MIN_AGE_MS + 1L)
+            attemptNow()
+            keyOffered()
+            awaitNotificationText(
+                string(R.string.wadb_notification_ask_again_used, clock(t0 + AdbAuthWait.REOFFER_MIN_AGE_MS + 1L + REOFFER_AUTH_TIMEOUT_MS)),
+            )
+            check {
+                val text = notificationText.orEmpty()
+                assertTrue("says last: $text", "last" in text)
+                assertFalse("no longer offers Ask again: $text", string(R.string.wadb_notification_ask_again_ready) in text)
+            }
+            dialogAccepted()
+            check { assertEquals(WorkInfo.State.SUCCEEDED, lastWork) }
+        }
+
+    // A tap that does not re-offer keeps its toast and also re-posts the notification, whose text
+    // says when "Ask again" will work.
+    @Test
+    fun `ask-again-too-soon-tap-refreshes-notification`() =
+        scenario {
+            authTimeout(REOFFER_AUTH_TIMEOUT_MS)
+            val t0 = now
+            boot()
+            keyOffered()
+            waitHeld()
+            val fromText = string(R.string.wadb_notification_ask_again_from, clock(t0 + AdbAuthWait.REOFFER_MIN_AGE_MS))
+            awaitNotificationText(fromText)
+            val before = startNotification
+            advanceTime(5_000)
+            attemptNow()
+            check {
+                assertEquals(string(R.string.wadb_notification_awaiting_auth), lastToast)
+                assertNotNull("still showing", startNotification)
+                assertNotSame("the tap re-posted the notification", before, startNotification)
+                assertTrue("says when Ask again works: $notificationText", fromText in notificationText.orEmpty())
+                expectOffers(1)
+            }
+            dialogAccepted()
+            check { assertEquals(WorkInfo.State.SUCCEEDED, lastWork) }
+        }
+
+    // On a Samsung S24 an Allow came 16 s after a 150 s deadline and that start failed; a wait now
+    // lasts five minutes from each offer. The scenarios shorten it; the shipped default is this.
+    @Test
+    fun `auth-wait-default-is-five-minutes`() {
+        assertEquals(300_000, AdbAuthWait.TIMEOUT_MS)
+    }
 
     private companion object {
         // Real milliseconds: long enough that the deadline cannot fire between a scenario's taps on

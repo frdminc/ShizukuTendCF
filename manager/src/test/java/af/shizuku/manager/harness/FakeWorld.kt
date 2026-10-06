@@ -73,6 +73,16 @@ class FakeWorld(
         AdbAuthWait.clockMs = { clock.get() }
         AdbAuthWait.elapsedMs = { clock.get() }
         AdbAuthWait.timeoutMs = AUTH_TIMEOUT_MS
+        timers.clear()
+        AdbAuthWait.schedule = { delayMs, task ->
+            val timer = VirtualTimer(clock.get() + delayMs, task)
+            timers += timer
+            val cancel: () -> Unit = {
+                timer.cancelled = true
+                timers.remove(timer)
+            }
+            cancel
+        }
         serverDown()
         // Robolectric reuses one sandbox (and so every app singleton) across the tests of a class.
         ShizukuReceiverStarter.resetForTesting()
@@ -109,8 +119,25 @@ class FakeWorld(
         WorkManagerTestInitHelper.initializeTestWorkManager(app, config, WorkManagerTestInitHelper.ExecutorsMode.PRESERVE_EXECUTORS)
     }
 
+    private class VirtualTimer(
+        val dueAt: Long,
+        val task: () -> Unit,
+    ) {
+        @Volatile
+        var cancelled = false
+    }
+
+    private val timers = CopyOnWriteArrayList<VirtualTimer>()
+
+    /** Tasks the manager has scheduled (AdbAuthWait.schedule) that have neither run nor been cancelled. */
+    val pendingTimers: Int get() = timers.count { !it.cancelled }
+
+    /** Moves the wall and monotonic clocks on, running every scheduled task that falls due. */
     fun advanceTime(ms: Long) {
-        clock.addAndGet(ms)
+        val now = clock.addAndGet(ms)
+        val due = timers.filter { it.dueAt <= now }.sortedBy { it.dueAt }
+        timers.removeAll(due.toSet())
+        due.filterNot { it.cancelled }.forEach { it.task() }
     }
 
     fun serverUp() = setShizukuBinder(Binder())
@@ -199,6 +226,8 @@ class FakeWorld(
         AdbAuthWait.clockMs = System::currentTimeMillis
         AdbAuthWait.elapsedMs = { android.os.SystemClock.elapsedRealtime() }
         AdbAuthWait.timeoutMs = AdbAuthWait.TIMEOUT_MS
+        AdbAuthWait.schedule = AdbAuthWait.realSchedule
+        timers.clear()
         serverDown()
     }
 

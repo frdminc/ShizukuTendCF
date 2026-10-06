@@ -319,7 +319,7 @@ Reports were in the session scratchpad and are summarised here because that is v
    d. Not tested: the root silent-install path (no rooted device in the fleet), and the release job's
       `SHA256SUMS` step (runs only on a published release).
 2. **Single ADB authorisation prompt (follow-up 7).** One connection is held for up to 150 s after
-   the key is offered; other start paths stand down; nothing retries after a timeout or rejection;
+   the key is offered (300 s since 2026-10-05: on a Samsung S24 an Allow came 16 s too late); other start paths stand down; nothing retries after a timeout or rejection;
    the boot retry loop stops after one unanswered dialog per boot. The waiting text shows the app's
    key fingerprint (MD5, the form the system dialog shows).
    a. **Device result, SM-S921U1, Drop-In r2772, 2026-10-03:** after "Revoke USB debugging

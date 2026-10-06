@@ -6,16 +6,19 @@ import af.shizuku.manager.receiver.HeadlessStartStopReceiver
 import af.shizuku.manager.receiver.NotifAttemptReceiver
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.worker.AdbStartWorker
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.text.format.DateFormat
 import androidx.work.ListenableWorker
 import androidx.work.WorkInfo
 import org.junit.Assert.assertEquals
 import org.robolectric.shadows.ShadowToast
 import rikka.shizuku.Shizuku
+import java.util.Locale
 
 /**
  * One-prompt scenarios in the event vocabulary of the scenario catalogue (A2 §2). Each event drives
@@ -166,6 +169,41 @@ class Scenario(
                 ?.toString()
 
     fun string(id: Int): String = app.getString(id)
+
+    fun string(
+        id: Int,
+        vararg args: Any,
+    ): String = app.getString(id, *args)
+
+    /** The start notification as posted (null: none showing). */
+    val startNotification: Notification?
+        get() =
+            (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .activeNotifications
+                .firstOrNull { it.id == ShizukuReceiverStarter.NOTIFICATION_ID }
+                ?.notification
+
+    /** The start notification's full (expanded) text. */
+    val notificationText: String?
+        get() =
+            startNotification?.extras?.let {
+                (it.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: it.getCharSequence(Notification.EXTRA_TEXT))?.toString()
+            }
+
+    /** [wallMs] as the device shows a time of day: hours, minutes and seconds in its locale and 12/24-hour setting. */
+    fun clock(wallMs: Long): String {
+        val pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), if (DateFormat.is24HourFormat(app)) "Hms" else "hms")
+        return DateFormat.format(pattern, wallMs).toString()
+    }
+
+    /** Waits until the start notification's text contains every one of [parts]. */
+    fun awaitNotificationText(vararg parts: String) {
+        world.settle()
+        world.waitUntil({ "the start notification to say ${parts.toList()} (it says: $notificationText)" }) {
+            val text = notificationText
+            text != null && parts.all { it in text }
+        }
+    }
 
     fun expectOffers(n: Int) = assertEquals("key offers (adbd dialogs raised)", n, adbd.offers)
 
