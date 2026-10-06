@@ -129,6 +129,12 @@ class Scenario(
     /** The restore's quiet retry comes due (see [FakeWorld.quietRetryDue]). */
     fun quietRetryDue() = world.quietRetryDue()
 
+    /** The next recheck of the TCP port after a no-Wi-Fi stop comes due (see [FakeWorld.portRecheckDue]). */
+    fun portRecheckDue() = world.portRecheckDue()
+
+    /** adbd's TCP port listens again (adbd finished restarting, or `adb tcpip` from a computer). */
+    fun tcpPortOpens(port: Int) = world.openTcpPort(port)
+
     fun lockScreen() = world.lockScreen()
 
     fun unlockScreen() = world.unlockScreen()
@@ -282,6 +288,8 @@ class Scenario(
     val watchingWirelessDebugging: Boolean get() = world.watchingWirelessDebugging
 
     val quietRetryQueued: Boolean get() = world.quietRetryQueued
+
+    val portRecheckQueued: Boolean get() = world.portRecheckQueued
 
     /** Key offers on every adbd (classic, wireless and TCP): each would be a dialog. */
     val allOffers: Int get() = adbd.offers + world.wirelessAdbd.offers + (world.tcpAdbd?.offers ?: 0)

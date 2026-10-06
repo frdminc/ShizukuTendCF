@@ -459,17 +459,34 @@ class FakeWorld(
     val quietRetryQueued: Boolean get() = pendingWork(QUIET_WORK).isNotEmpty()
 
     /** The quiet retry's delay has passed: it runs, and so does any start it queues. */
-    fun quietRetryDue() {
+    fun quietRetryDue() = delayedWorkDue(QUIET_WORK, "quiet retry")
+
+    /** A recheck of the TCP port after a no-Wi-Fi stop is queued. */
+    val portRecheckQueued: Boolean get() = pendingWork(PORT_RECHECK_WORK).isNotEmpty()
+
+    /** The next recheck of the TCP port comes due: it runs, and so does any start it queues. */
+    fun portRecheckDue() = delayedWorkDue(PORT_RECHECK_WORK, "TCP port recheck")
+
+    /**
+     * adbd reports [port] as its TCP port (service.adb.tcp.port), as it does while `adb tcpip` is in
+     * effect, whether or not anything listens there right now.
+     */
+    fun adbdReportsTcpPort(port: Int) = ShadowSystemProperties.override("service.adb.tcp.port", port.toString())
+
+    private fun delayedWorkDue(
+        name: String,
+        what: String,
+    ) {
         settle()
         var work: WorkInfo? = null
-        // A retry queued behind the last one is BLOCKED until that one has finished.
-        waitUntil({ "a quiet retry to be queued" }) {
-            work = workManager.getWorkInfosForUniqueWork(QUIET_WORK).get().firstOrNull { it.state == WorkInfo.State.ENQUEUED }
+        // A run queued behind the last one is BLOCKED until that one has finished.
+        waitUntil({ "a $what to be queued" }) {
+            work = workManager.getWorkInfosForUniqueWork(name).get().firstOrNull { it.state == WorkInfo.State.ENQUEUED }
             work != null
         }
         val id = checkNotNull(work).id
         checkNotNull(getTestDriver(app)).setInitialDelayMet(id)
-        waitUntil({ "the quiet retry to run" }) {
+        waitUntil({ "the $what to run" }) {
             workManager
                 .getWorkInfoById(id)
                 .get()
@@ -659,6 +676,9 @@ class FakeWorld(
         // The restore's unique works (WirelessDebugging): its watch on adb_wifi_enabled, and the quiet retry.
         const val WATCH_WORK = "wadb_restore_watch"
         const val QUIET_WORK = "wadb_restore_quiet_retry"
+
+        // The bounded recheck of the TCP port after a no-Wi-Fi stop.
+        const val PORT_RECHECK_WORK = "tcp_port_recheck"
 
         // A system API constant (NetworkCapabilities.NET_CAPABILITY_NOT_VCN_MANAGED) that requests carry by default.
         const val NET_CAPABILITY_NOT_VCN_MANAGED = 28
