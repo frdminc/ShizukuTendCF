@@ -32,7 +32,9 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -51,6 +53,12 @@ class WirelessDebuggingBlockedException(
     val reason: WirelessDebugging.Blocked,
     message: String,
 ) : Exception(message)
+
+/**
+ * A TCP-mode restore waiting for Wi-Fi found the TCP port it was reopening listening again (adbd
+ * restarted, or `adb tcpip` from a computer): the start goes through it instead, with no Wi-Fi.
+ */
+class TcpPortOpenAgainException : Exception("the tcp port is open again")
 
 /**
  * Brings wireless debugging up for a background start and finds its TLS port, the order a user
@@ -124,6 +132,17 @@ object WirelessDebugging {
     const val QUIET_WORK = "wadb_restore_quiet_retry"
     const val QUIET_RETRY_MIN = 20L
 
+    // After a no-Wi-Fi stop in TCP mode, the TCP port is probed again a few times: adbd may listen
+    // again without Wi-Fi (it was restarting, or `adb tcpip` from a computer). Armed once per stop
+    // (this boot's record), ended by a success, a start that has Wi-Fi, or the next boot.
+    const val PORT_RECHECK_WORK = "tcp_port_recheck"
+    private const val KEY_PORT_RECHECK_BOOT = "tcp_port_recheck_boot"
+
+    // Seconds before each recheck: about 0.5, 1.5, 3.5, 7.5 and 13.5 minutes after the stop. After
+    // the last, Wi-Fi connecting, the watchdog, the boot retry and a start by hand remain.
+    private val PORT_RECHECK_DELAYS_S = longArrayOf(30, 60, 120, 240, 360)
+    val PORT_RECHECKS: Int get() = PORT_RECHECK_DELAYS_S.size
+
     // Earlier builds' keys, forgotten at boot.
     private val OLD_KEYS = listOf("wadb_restore_blocked", "wadb_restore_blocked_boot", "wadb_restore_blocked_network")
 
@@ -188,6 +207,10 @@ object WirelessDebugging {
     @Volatile
     internal var pollMs = 250L
 
+    /** How often a TCP-mode restore waiting for Wi-Fi probes the TCP port again. */
+    @Volatile
+    internal var portRecheckMs = 3_000L
+
     @Volatile
     internal var toggleGapMs = 500L
 
@@ -208,6 +231,7 @@ object WirelessDebugging {
         discoveryMs = 15_000L
         wifiSettleMs = 5_000L
         pollMs = 250L
+        portRecheckMs = 3_000L
         toggleGapMs = 500L
         elapsedMs = { SystemClock.elapsedRealtime() }
         uptimeMs = { SystemClock.elapsedRealtime() }
@@ -309,10 +333,15 @@ object WirelessDebugging {
             .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
 
-    /** Waits up to [timeoutMs] for Wi-Fi with a network callback; null if none connected. */
+    /**
+     * Waits up to [timeoutMs] for Wi-Fi with a network callback; null if none connected. While it
+     * waits, [check] runs every [checkEveryMs] (not at the end) and may end the wait by throwing.
+     */
     suspend fun awaitWifi(
         context: Context,
         timeoutMs: Long,
+        checkEveryMs: Long = 0L,
+        check: (suspend () -> Unit)? = null,
     ): Network? {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return null
         val available = CompletableDeferred<Network>()
@@ -326,7 +355,14 @@ object WirelessDebugging {
         try {
             // Registered first, so a network that connects in between is not missed.
             wifiNetwork(context)?.let { return it }
-            return withTimeoutOrNull(timeoutMs.coerceAtLeast(0L)) { available.await() }
+            if (check == null || checkEveryMs <= 0L) return withTimeoutOrNull(timeoutMs.coerceAtLeast(0L)) { available.await() }
+            val deadline = elapsedMs() + timeoutMs
+            while (true) {
+                val left = deadline - elapsedMs()
+                if (left <= 0L) return null
+                withTimeoutOrNull(minOf(left, checkEveryMs)) { available.await() }?.let { return it }
+                if (elapsedMs() < deadline) check()
+            }
         } finally {
             runCatching { cm.unregisterNetworkCallback(callback) }
         }
@@ -434,7 +470,89 @@ object WirelessDebugging {
             }
             disarmResume(context)
         }
+        endPortRecheck(context)
         if (!keepNotice) cancelNotice(context)
+    }
+
+    // The TCP port's rechecks after a no-Wi-Fi stop (see PORT_RECHECK_WORK).
+
+    /**
+     * A TCP-mode start stopped for want of Wi-Fi: probe [port] again a few times, in case adbd
+     * listens on it again without Wi-Fi. Once per stop: a stand-down while there is still no Wi-Fi
+     * (the watchdog, the boot retry) arms nothing new.
+     */
+    fun armPortRecheck(
+        context: Context,
+        port: Int,
+    ) {
+        if (port !in 1..65535 || thisBoot(context, KEY_PORT_RECHECK_BOOT)) return
+        runCatching { prefs().edit().putInt(KEY_PORT_RECHECK_BOOT, bootCount(context)).commit() }
+        enqueuePortRecheck(context, port, 0, ExistingWorkPolicy.REPLACE)
+        HeadlessLogger.i(
+            LOG,
+            "probing tcp port $port again $PORT_RECHECKS times over the next ${PORT_RECHECK_DELAYS_S.sum() / 60} min, " +
+                "in case adbd listens on it again without Wi-Fi",
+        )
+    }
+
+    private fun enqueuePortRecheck(
+        context: Context,
+        port: Int,
+        done: Int,
+        policy: ExistingWorkPolicy,
+    ) {
+        val request =
+            OneTimeWorkRequestBuilder<WirelessDebuggingWatchWorker>()
+                .setInitialDelay(PORT_RECHECK_DELAYS_S[done], TimeUnit.SECONDS)
+                .setInputData(
+                    workDataOf(
+                        WirelessDebuggingWatchWorker.KEY_KIND to WirelessDebuggingWatchWorker.KIND_PORT,
+                        WirelessDebuggingWatchWorker.KEY_PORT to port,
+                        WirelessDebuggingWatchWorker.KEY_CHECK to done + 1,
+                    ),
+                ).build()
+        runCatching { WorkManager.getInstance(context).enqueueUniqueWork(PORT_RECHECK_WORK, policy, request) }
+            .onFailure { HeadlessLogger.w(LOG, "cannot queue the tcp port recheck: ${HeadlessLogger.brief(it)}") }
+    }
+
+    /** A success, a start that goes ahead with Wi-Fi, or a new boot: no more rechecks. */
+    private fun endPortRecheck(context: Context) {
+        if (!runCatching { prefs().contains(KEY_PORT_RECHECK_BOOT) }.getOrDefault(false)) return
+        runCatching { prefs().edit().remove(KEY_PORT_RECHECK_BOOT).commit() }
+        runCatching { WorkManager.getInstance(context).cancelUniqueWork(PORT_RECHECK_WORK) }
+    }
+
+    /**
+     * Recheck [check] of [port]: if it listens, an ordinary background start (every one-prompt and
+     * single-start guard applies) goes through it; the next recheck is queued either way, so a start
+     * that fails is tried again, and a success cancels it.
+     */
+    internal suspend fun onPortRecheck(
+        context: Context,
+        port: Int,
+        check: Int,
+    ) {
+        // Ended (a success, a start with Wi-Fi) or left over from an earlier boot.
+        if (!thisBoot(context, KEY_PORT_RECHECK_BOOT)) return
+        ShizukuStateMachine.update()
+        if (ShizukuStateMachine.isRunning() || !ShizukuSettings.getTcpMode() || ShizukuSettings.getTcpPort() != port) {
+            runCatching { prefs().edit().remove(KEY_PORT_RECHECK_BOOT).commit() }
+            return
+        }
+        val open = withContext(Dispatchers.IO) { AdbPortProber.isPortOpen(port, 600) }
+        if (check < PORT_RECHECKS) enqueuePortRecheck(context, port, check, ExistingWorkPolicy.APPEND_OR_REPLACE)
+        when {
+            open -> {
+                HeadlessLogger.i(LOG, "tcp port $port is open again; starting through it (recheck $check of $PORT_RECHECKS)")
+                ShizukuReceiverStarter.start(context)
+            }
+            check < PORT_RECHECKS -> HeadlessLogger.i(LOG, "tcp port $port still closed (recheck $check of $PORT_RECHECKS)")
+            else ->
+                HeadlessLogger.i(
+                    LOG,
+                    "tcp port $port still closed after $PORT_RECHECKS checks; waiting for Wi-Fi to connect, the watchdog, or a start by hand",
+                )
+        }
     }
 
     /** BOOT_COMPLETED: everything here is per boot. */
@@ -454,11 +572,13 @@ object WirelessDebugging {
                         KEY_UNLOCK_WRITE_BOOT,
                         KEY_WRITE_PENDING_LOCKED,
                         KEY_WATCH_BOOT,
+                        KEY_PORT_RECHECK_BOOT,
                     )
             ).forEach { edit.remove(it) }
             edit.apply()
         }
         disarmResume(context)
+        runCatching { WorkManager.getInstance(context).cancelUniqueWork(PORT_RECHECK_WORK) }
         // Every watch also checks the boot count, so one that outlives this changes nothing.
         cancelWatch(context)
         cancelNotice(context)
@@ -833,7 +953,9 @@ object WirelessDebugging {
      * One background start's use of wireless debugging. [foreground] tries to make the worker a
      * foreground one while it waits for Wi-Fi or the user, and says whether it is. With
      * [restoresState], [restore] puts adb_wifi_enabled back as this start found it (TCP mode);
-     * without, wireless debugging is the transport and stays on.
+     * without, wireless debugging is the transport and stays on. [tcpPortOpen], for a restore of the
+     * TCP port, probes that port while the start waits for Wi-Fi: once it listens again, [findPort]
+     * throws [TcpPortOpenAgainException] and the start goes through it instead.
      */
     class Session(
         private val context: Context,
@@ -843,6 +965,7 @@ object WirelessDebugging {
         private val restoresState: Boolean = false,
         // The quiet retry: writes while locked, and stops at a silent refusal without waiting.
         private val quiet: Boolean = false,
+        private val tcpPortOpen: (suspend () -> Boolean)? = null,
     ) {
         // adb_wifi_enabled before this start (or a run of it that died) first touched it.
         private var initial: Int? = null
@@ -967,10 +1090,15 @@ object WirelessDebugging {
                     // Nothing to post or wait for on the quiet retry's account: the next one looks again.
                     if (quiet) throw untrustedStop("no Wi-Fi for the quiet retry")
                     val waitMs = minOf(wifiWaitMs, remaining())
-                    note("no Wi-Fi; waiting up to ${waitMs / 1000} s for Wi-Fi (metered or without internet is fine)")
+                    note(
+                        "no Wi-Fi; waiting up to ${waitMs / 1000} s for Wi-Fi (metered or without internet is fine)" +
+                            if (tcpPortOpen != null) ", probing the tcp port every ${portRecheckMs / 1000} s meanwhile" else "",
+                    )
                     goForeground()
-                    val connected = awaitWifi(context, waitMs)
+                    val connected = awaitWifi(context, waitMs, portRecheckMs) { stopIfTcpPortOpen() }
                     if (connected == null) {
+                        // Once more before giving up: the wait's last probe may be seconds old.
+                        stopIfTcpPortOpen()
                         warn("no Wi-Fi after ${waitMs / 1000} s; wireless debugging cannot come up without it")
                         markNoWifi(context)
                         notifyNoWifi(context)
@@ -993,6 +1121,12 @@ object WirelessDebugging {
                 delay(wifiSettleMs - age)
             }
             return network
+        }
+
+        // Before the first round nothing has been written (no prompt, no turned-on or write-pending
+        // record); after a later round's write, [restore] puts back what this start changed.
+        private suspend fun stopIfTcpPortOpen() {
+            if (tcpPortOpen?.invoke() == true) throw TcpPortOpenAgainException()
         }
 
         private fun turnOn() {

@@ -9,6 +9,7 @@ import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.adb.AdbPortProber
 import af.shizuku.manager.adb.AdbStarter
 import af.shizuku.manager.adb.StartNotificationState
+import af.shizuku.manager.adb.TcpPortOpenAgainException
 import af.shizuku.manager.adb.WirelessDebugging
 import af.shizuku.manager.adb.WirelessDebuggingBlockedException
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
@@ -28,7 +29,9 @@ import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.work.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.io.EOFException
 import java.util.concurrent.TimeoutException
 
@@ -124,20 +127,28 @@ class AdbStartWorker(
             if (ShizukuSettings.getTcpMode()) {
                 val desiredPort = ShizukuSettings.getTcpPort()
                 if (desiredPort in 1..65535) {
-                    val open = AdbPortProber.isPortOpen(desiredPort, 600)
+                    val open = tcpPortOpen(desiredPort)
                     note("tcp fast path: port $desiredPort ${if (open) "open" else "closed"}")
-                    if (open) {
-                        AdbStarter.startAdb(applicationContext, desiredPort)
-                        Starter.waitForBinder()
-                        ManagerActivityLog.log(
-                            applicationContext,
-                            "Service started via direct TCP port $desiredPort (no Wi-Fi required)",
+                    if (open) return startThroughTcp(desiredPort)
+                    // adbd still says it listens there (service.adb.tcp.port): closed only for a
+                    // moment while adbd restarts (t2e, 2026-10-06: the end of a fleet deploy), which
+                    // is no reason to wait for Wi-Fi and turn wireless debugging on. The property
+                    // itself, not the old-TV fallback that assumes the configured port.
+                    if (af.shizuku.common.util.EnvironmentUtils
+                            .getAdbTcpPort() == desiredPort
+                    ) {
+                        note(
+                            "tcp port $desiredPort closed although adbd reports it as its tcp port; " +
+                                "probing again for up to ${TRANSIENT_PROBES * TRANSIENT_PROBE_GAP_MS / 1000} s (adbd may be restarting)",
                         )
-                        WirelessDebugging.clearNoWifi(applicationContext)
-                        WirelessDebugging.succeeded(applicationContext)
-                        WirelessDebugging.afterTcpStart(applicationContext, ::note)
-                        note("SUCCESS via tcp fast path on port $desiredPort (attempt=$runAttemptCount)")
-                        return Result.success()
+                        repeat(TRANSIENT_PROBES) {
+                            delay(TRANSIENT_PROBE_GAP_MS)
+                            if (tcpPortOpen(desiredPort)) {
+                                note("tcp port $desiredPort is open again; starting through it")
+                                return startThroughTcp(desiredPort)
+                            }
+                        }
+                        note("tcp port $desiredPort still closed after ${TRANSIENT_PROBES * TRANSIENT_PROBE_GAP_MS / 1000} s")
                     }
                     return restoreTcpPort(desiredPort)
                 } else {
@@ -232,6 +243,9 @@ class AdbStartWorker(
                     warn("FAILURE (attempt=$runAttemptCount): ${e.message}; not retrying until Wi-Fi connects or a start by hand")
                     // Not after this boot's prompt: that one never resumes by itself.
                     WirelessDebugging.armResume(applicationContext)
+                    // adbd may listen on the TCP port again without Wi-Fi (it was restarting, or
+                    // `adb tcpip` from a computer): probed a few more times (once per stop).
+                    if (ShizukuSettings.getTcpMode()) WirelessDebugging.armPortRecheck(applicationContext, ShizukuSettings.getTcpPort())
                 }
                 WirelessDebugging.Blocked.UNTRUSTED_NETWORK -> {
                     warn("FAILURE (attempt=$runAttemptCount): ${e.message}; no WorkManager retry")
@@ -324,7 +338,8 @@ class AdbStartWorker(
             return Result.retry()
         }
         note("tcp port $desiredPort closed; restoring it through wireless debugging in this attempt")
-        val session = wirelessSession(restoresState = true)
+        // While it waits for Wi-Fi the port is probed again: adbd may listen there again by itself.
+        val session = wirelessSession(restoresState = true, tcpPortOpen = { tcpPortOpen(desiredPort) })
         // A start that stood down for another (one holding adbd's dialog, or an interactive start)
         // leaves wireless debugging to it, as AdbStarter does.
         var stoodDown = false
@@ -335,10 +350,30 @@ class AdbStartWorker(
         } catch (e: AdbAuthPendingException) {
             stoodDown = true
             throw e
+        } catch (_: TcpPortOpenAgainException) {
+            // Falls through to start through the port once the session has put back what it
+            // changed (nothing, if it was still waiting for its first Wi-Fi).
         } finally {
             if (!stoodDown) session.restore()
         }
+        note("tcp port $desiredPort is open again; starting through it")
+        return startThroughTcp(desiredPort)
     }
+
+    /** The TCP-mode fast path: adbd listens on [port], so connect to it directly, no Wi-Fi needed. */
+    private suspend fun startThroughTcp(port: Int): Result {
+        AdbStarter.startAdb(applicationContext, port)
+        Starter.waitForBinder()
+        ManagerActivityLog.log(applicationContext, "Service started via direct TCP port $port (no Wi-Fi required)")
+        WirelessDebugging.clearNoWifi(applicationContext)
+        WirelessDebugging.succeeded(applicationContext)
+        WirelessDebugging.afterTcpStart(applicationContext, ::note)
+        note("SUCCESS via tcp fast path on port $port (attempt=$runAttemptCount)")
+        return Result.success()
+    }
+
+    // A loopback connect, off the worker's dispatcher threads.
+    private suspend fun tcpPortOpen(port: Int): Boolean = withContext(Dispatchers.IO) { AdbPortProber.isPortOpen(port, 600) }
 
     private suspend fun startOn(port: Int): Result {
         AdbStarter.startAdb(applicationContext, port)
@@ -359,7 +394,10 @@ class AdbStartWorker(
      * re-run of one made before it may not (its requested-at, as the unanswered marker does).
      * The quiet retry (One UI, locked, after a silent refusal) may write while locked.
      */
-    private fun wirelessSession(restoresState: Boolean = false): WirelessDebugging.Session {
+    private fun wirelessSession(
+        restoresState: Boolean = false,
+        tcpPortOpen: (suspend () -> Boolean)? = null,
+    ): WirelessDebugging.Session {
         val explicit = inputData.getBoolean(KEY_EXPLICIT, false)
         // Quiet only while that still holds: a quiet request run later (WorkManager's retry, or
         // after an unlock) is an ordinary start, which may wait for Wi-Fi and ask.
@@ -377,7 +415,7 @@ class AdbStartWorker(
         }
         // The unlock notice stays while an unlock is what helps.
         WirelessDebugging.clearNoWifi(applicationContext, keepNotice = quiet || WirelessDebugging.silentRefusalPending(applicationContext))
-        return WirelessDebugging.Session(applicationContext, ::note, ::warn, ::promoteToForeground, restoresState, quiet)
+        return WirelessDebugging.Session(applicationContext, ::note, ::warn, ::promoteToForeground, restoresState, quiet, tcpPortOpen)
     }
 
     private var promoted = false
@@ -573,6 +611,11 @@ class AdbStartWorker(
 
         // HeadlessLogger component.
         private const val LOG = "StartWorker"
+
+        // TCP mode, the port closed although adbd reports it: probed this many more times, this
+        // far apart, before the restore through wireless debugging.
+        private const val TRANSIENT_PROBES = 5
+        private const val TRANSIENT_PROBE_GAP_MS = 1_000L
 
         // The progress key a running worker publishes its StartNotificationState.Step under.
         internal const val KEY_STEP = "step"
