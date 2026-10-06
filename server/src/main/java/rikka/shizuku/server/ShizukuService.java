@@ -2662,12 +2662,21 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             reply.writeNoException();
             reply.writeInt(version);
             return true;
-        } else if (code == IBinder.FIRST_CALL_TRANSACTION + 16 /* shouldShowRequestPermissionRationale; the switch runs attachApplication */) {
+        } else if (code == IBinder.FIRST_CALL_TRANSACTION + 16 /* 17: two different calls share this code */) {
             data.enforceInterface(ShizukuApiConstants.BINDER_DESCRIPTOR);
-            boolean rationale = shouldShowRequestPermissionRationale();
-            reply.writeNoException();
-            reply.writeInt(rationale ? 1 : 0);
-            return true;
+            // Told apart by the parcel, never by the caller. The generated
+            // shouldShowRequestPermissionRationale() of every client library sends 17 with no
+            // arguments. The ShizukuPlus client library's attachApplication sends a bare 17 with
+            // (binder, int, Bundle) (api Shizuku.java attachApplicationV13): that one falls through
+            // to Service.onTransact, which rewinds the parcel and attaches. Answering it as the
+            // rationale left every ShizukuPlus-library client, this manager and its rish shell
+            // included, unattached.
+            if (data.dataAvail() == 0) {
+                boolean rationale = shouldShowRequestPermissionRationale();
+                reply.writeNoException();
+                reply.writeInt(rationale ? 1 : 0);
+                return true;
+            }
         } else if (code == IBinder.FIRST_CALL_TRANSACTION + 13 /* attachApplication(IBinder, String) from API <= 12; the switch runs requestPermission */) {
             data.enforceInterface(ShizukuApiConstants.BINDER_DESCRIPTOR);
             IBinder application = data.readStrongBinder();
