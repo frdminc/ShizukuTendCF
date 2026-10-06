@@ -5,6 +5,7 @@ import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.utils.ShizukuStateMachine.State
 import android.app.Application
+import android.os.Looper
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -14,6 +15,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -67,6 +69,28 @@ class ServerStartedBuildScenariosTest {
 
         assertEquals(BuildConfig.VERSION_CODE, ShizukuSettings.getServerStartedBuild())
         assertFalse(ShizukuStateMachine.isServerVersionSkewed())
+    }
+
+    // HomeActivity's RUNNING listener runs the version-skew check. On the main thread (where the
+    // binder-received callback sets RUNNING) listeners are called inline, so they must run after
+    // the build is recorded, or the check offers a "restart" that stops the new server.
+    @Test
+    fun `running-listener-sees-the-restart-recorded`() {
+        olderServerRunning()
+        val skewSeenByListener = mutableListOf<Boolean>()
+        val listener: (State) -> Unit = { if (it == State.RUNNING) skewSeenByListener += ShizukuStateMachine.isServerVersionSkewed() }
+        ShizukuStateMachine.addListener(listener)
+        try {
+            skewSeenByListener.clear()
+            ShizukuStateMachine.set(State.STARTING)
+            world.serverDown()
+            world.serverUp()
+            ShizukuStateMachine.set(State.RUNNING)
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals("the listener saw RUNNING once, after the build was recorded", listOf(false), skewSeenByListener)
+        } finally {
+            ShizukuStateMachine.removeListener(listener)
+        }
     }
 
     @Test

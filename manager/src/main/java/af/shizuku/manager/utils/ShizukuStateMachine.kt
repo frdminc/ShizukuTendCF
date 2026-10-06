@@ -122,9 +122,6 @@ object ShizukuStateMachine {
         val oldState = state.getAndUpdate { current -> transform(current).also { computed = it } }
         val newState = computed ?: error("getAndUpdate lambda must always execute synchronously")
         if (oldState != newState) {
-            // Each listener is isolated: one that throws must not abort the transition's side
-            // effects below (the persisted state, the STATE_CHANGED broadcast) or the caller's start.
-            deliver(newState)
             Timber.tag("ShizukuStateMachine").d(newState.toString())
 
             // Which app build started the running server is recorded when a start succeeds, not
@@ -139,6 +136,12 @@ object ShizukuStateMachine {
                 pendingStart.set(PendingStart(currentBinder()))
             }
             if (newState == State.RUNNING) recordIfNewServer()
+
+            // After the bookkeeping above: a RUNNING listener (HomeActivity's version-skew check)
+            // must see the build this start recorded, or it offers a "restart" that stops the new
+            // server. Each listener is isolated: one that throws must not abort the side effects
+            // below (the persisted state, the STATE_CHANGED broadcast) or the caller's start.
+            deliver(newState)
 
             if (newState == State.RUNNING || newState == State.STOPPED || newState == State.CRASHED) {
                 try {
