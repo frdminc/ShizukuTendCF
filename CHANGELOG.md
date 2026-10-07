@@ -12,6 +12,9 @@ All notable changes to ShizukuPlus are documented here. See [AI_ATTRIBUTIONS.md]
 #### Server / Binder
 - **Fixed manual `pm revoke` being silently overridden on every server restart** — `migratePermissionGrants()` was designed as a one-time backfill for apps that had a ConfigManager authorization entry but no OS-level runtime permission grant (a side-effect of a silent bug in versions prior to 2026-07-19). Running it unconditionally on startup meant that any permission manually revoked with `pm revoke <pkg> af.shizuku.plus.permission.API_V23` was re-granted moments later when the server started. The migration is now gated by a `permGrantMigrationDone` flag persisted in `shizuku.json`; it runs exactly once, marks the flag, and skips on all subsequent starts. New grants continue to be issued at connect time in `attachApplication`. ([#568](https://github.com/thejaustin/ShizukuPlus/issues/568))
 
+#### Manager App (Settings)
+- **Fixed TCP mode preference icon disappearing when no restart is pending** — `maybeGetRestartIcon()` returns `null` when Shizuku doesn't need a restart, and the call-sites in `BehaviorSettingsFragment` assigned it directly to `icon`, wiping the static XML-defined icon. TCP mode now falls back to `ic_wadb_24` (wireless ADB) and TCP port to `ic_lan_24` when no restart icon is needed.
+
 ---
 
 ## [v13.7.0.r2737 — Stable Release]
