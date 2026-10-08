@@ -5,6 +5,7 @@ import static rikka.shizuku.server.ServerConstants.PERMISSION;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.os.Build;
 import android.os.SystemClock;
 import android.system.ErrnoException;
@@ -240,6 +241,17 @@ public class ShizukuConfigManager extends ConfigManager {
                 LOGGER.i("remove config for uid %d since the packages for it changed", entry.uid);
                 config.packages.remove(entry);
                 changed = true;
+                continue;
+            }
+
+            List<String> signers = currentSigners(uid, packages);
+            if (GrantSigners.revoked(entry.signers, signers)) {
+                LOGGER.w("remove config for uid %d since its packages are no longer signed by the key it was granted to", uid);
+                config.packages.remove(entry);
+                changed = true;
+            } else if (signers != null && !signers.isEmpty() && !signers.equals(entry.signers)) {
+                entry.signers = signers;
+                changed = true;
             }
         }
 
@@ -267,7 +279,8 @@ public class ShizukuConfigManager extends ConfigManager {
                 if (allowed) {
                     List<String> packages = new ArrayList<>();
                     packages.add(pi.packageName);
-                    updateLocked(uid, packages, ConfigManager.MASK_PERMISSION, ConfigManager.FLAG_ALLOWED);
+                    updateLocked(uid, packages, ConfigManager.MASK_PERMISSION, ConfigManager.FLAG_ALLOWED,
+                            currentSigners(uid, packages));
                     changed = true;
                 }
         }
@@ -529,7 +542,52 @@ public class ShizukuConfigManager extends ConfigManager {
         }
     }
 
+    /**
+     * SHA-256 digests (lowercase hex) of every signer of {@code names}, the packages installed
+     * under {@code uid}: the APK's signers plus, for a single-signer APK, the earlier certificates
+     * of its signing lineage, so a rotated key still matches the digest recorded before it.
+     * Null when they cannot be read completely (below API 28, a package missing or not installed
+     * under that uid, any error): unknown, never "no signer".
+     */
+    @Nullable
+    private static List<String> currentSigners(int uid, @Nullable List<String> names) {
+        if (names == null || names.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            return null;
+        }
+        try {
+            int userId = UserHandleCompat.getUserId(uid);
+            Set<String> digests = new LinkedHashSet<>();
+            for (String packageName : names) {
+                PackageInfo pi = Android17Compat.getPackageInfo(
+                        packageName, PackageManager.GET_SIGNING_CERTIFICATES, userId);
+                if (!isInstalledUnderUid(pi, uid) || pi.signingInfo == null) {
+                    return null;
+                }
+                List<Signature> signatures = new ArrayList<>();
+                Collections.addAll(signatures, pi.signingInfo.getApkContentsSigners());
+                if (!pi.signingInfo.hasMultipleSigners() && pi.signingInfo.hasPastSigningCertificates()) {
+                    Collections.addAll(signatures, pi.signingInfo.getSigningCertificateHistory());
+                }
+                for (Signature signature : signatures) {
+                    String digest = signature == null ? null : TrustedSigners.sha256Hex(signature.toByteArray());
+                    if (digest == null) {
+                        return null;
+                    }
+                    digests.add(digest);
+                }
+            }
+            return digests.isEmpty() ? null : new ArrayList<>(digests);
+        } catch (Throwable t) {
+            LOGGER.w(t, "signer lookup failed for uid %d", uid);
+            return null;
+        }
+    }
+
     private void updateLocked(int uid, List<String> packages, int mask, int values) {
+        updateLocked(uid, packages, mask, values, null);
+    }
+
+    private void updateLocked(int uid, List<String> packages, int mask, int values, @Nullable List<String> signers) {
         ShizukuConfig.PackageEntry entry = findLocked(uid);
         if (entry == null) {
             entry = new ShizukuConfig.PackageEntry(uid, mask & values);
@@ -548,6 +606,9 @@ public class ShizukuConfigManager extends ConfigManager {
                 }
                 entry.packages.add(packageName);
             }
+        }
+        if (signers != null && !signers.isEmpty()) {
+            entry.signers = signers;
         }
         scheduleWriteLocked();
     }
@@ -569,8 +630,13 @@ public class ShizukuConfigManager extends ConfigManager {
                 return;
             }
         }
+        // Read outside the lock (package manager IPC); only a grant records them.
+        List<String> signers = (mask & values & ConfigManager.FLAG_ALLOWED) != 0
+                ? currentSigners(uid, packages != null && !packages.isEmpty()
+                        ? packages : PackageManagerApis.getPackagesForUidNoThrow(uid))
+                : null;
         synchronized (this) {
-            updateLocked(uid, packages, mask, values);
+            updateLocked(uid, packages, mask, values, signers);
         }
     }
 

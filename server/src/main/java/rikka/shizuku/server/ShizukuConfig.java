@@ -28,6 +28,13 @@ public class ShizukuConfig {
         @SerializedName("packages")
         public List<String> packages;
 
+        /**
+         * SHA-256 digests of the signing certificates of the UID's packages when the grant was
+         * recorded; null for an entry written before they were. See {@link GrantSigners}.
+         */
+        @SerializedName("signers")
+        public List<String> signers;
+
         public PackageEntry(int uid, int flags) {
             this.uid = uid;
             this.flags = flags;
