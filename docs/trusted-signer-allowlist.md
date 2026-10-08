@@ -18,6 +18,13 @@ if (packagesChanged) {
 }
 ```
 
+Since r2851 the same pass also compares signers: each entry stores the SHA-256
+digests of its packages' signing certificates (`signers`, written when the grant
+is recorded; an older entry is given the current ones on its first reconcile),
+and the entry is dropped when the uid's installed packages share none of them
+(`GrantSigners.revoked`). An unreadable or incomplete signer read keeps the
+grant, and a rotated signing key still matches through its lineage.
+
 In practice this means an app's Shizuku permission can silently disappear
 with **no user-visible cause** — not just on uninstall/reinstall (which is
 arguably correct), but from anything that makes
