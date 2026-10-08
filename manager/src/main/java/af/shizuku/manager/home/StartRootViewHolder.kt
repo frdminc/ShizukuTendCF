@@ -7,6 +7,7 @@ import af.shizuku.manager.databinding.HomeStartRootBinding
 import af.shizuku.manager.ktx.startWithSceneTransition
 import af.shizuku.manager.ktx.toHtml
 import af.shizuku.manager.starter.StarterActivity
+import af.shizuku.manager.utils.HapticUtils
 import af.shizuku.manager.utils.IconStyleHelper
 import af.shizuku.manager.utils.MotionUtils.applySpringTouch
 import android.content.Intent
@@ -63,6 +64,7 @@ class StartRootViewHolder(
     }
 
     private fun onStartClicked(v: View) {
+        HapticUtils.tap(v)
         val activity = v.context.asActivity<android.app.Activity>() ?: return
         val isRooted =
             af.shizuku.manager.utils.EnvironmentUtils

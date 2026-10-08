@@ -670,6 +670,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         } catch (Throwable e) {
             LOGGER.w(e, "Failed to add %s to power save temp whitelist before bindApplication", requestPackageName);
         }
+        if (!isManager) dispatchLog(requestPackageName, "Connected to Shizuku");
         try {
             // Normal path: IShizukuApplication is now moe.shizuku.server.IShizukuApplication, matching
             // what rikka clients implement, so this transacts under the descriptor they expect.
@@ -1027,6 +1028,11 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         enforceManagerPermission("setPlusSetting");
         LOGGER.i("Plus Setting Update: " + key + " -> " + value);
         plusSettingsMap.put(key, value);
+    }
+
+    @Override
+    protected void onClientEvent(String packageName, String action) {
+        dispatchLog(packageName, action);
     }
 
     private void dispatchLog(String packageName, String action) {

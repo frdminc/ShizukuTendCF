@@ -7,6 +7,7 @@ import af.shizuku.manager.databinding.HomeStartAdbBinding
 import af.shizuku.manager.ktx.toHtml
 import af.shizuku.manager.model.ServiceStatus
 import af.shizuku.manager.starter.Starter
+import af.shizuku.manager.utils.HapticUtils
 import af.shizuku.manager.utils.IconStyleHelper
 import af.shizuku.manager.utils.MotionUtils.applySpringTouch
 import android.content.Intent
@@ -42,6 +43,7 @@ class StartAdbViewHolder(
             true
         }
         binding.button1.setOnClickListener { v: View ->
+            HapticUtils.tap(v)
             val context = v.context
             MaterialAlertDialogBuilder(context)
                 .setTitle(R.string.home_adb_button_view_command)

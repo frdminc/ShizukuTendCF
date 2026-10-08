@@ -1069,6 +1069,13 @@
     <string name="empty_state_description_no_plus_features">You\'ve disabled all Shizuku+ features. Enable features to see them here.</string>
     <string name="empty_state_title_activity_log_empty">No activity recorded</string>
     <string name="empty_state_description_activity_log_empty">Shizuku API calls and events will appear here when activity logging is enabled.</string>
+    <string name="activity_log_type_start">Start</string>
+    <string name="activity_log_type_stop">Stop</string>
+    <string name="activity_log_type_permission">Permission</string>
+    <string name="activity_log_type_app_mgmt">App</string>
+    <string name="activity_log_type_watchdog">Watchdog</string>
+    <string name="activity_log_type_system">System</string>
+    <string name="activity_log_type_other">Event</string>
     <string name="empty_state_title_hidden_apps">No hidden apps</string>
     <string name="empty_state_description_hidden_apps">Apps you hide from the management list will appear here.</string>
 

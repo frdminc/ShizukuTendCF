@@ -79,8 +79,10 @@ class ServerStatusViewHolder(
                 },
             )
 
-        // Pulse animation for Starting/Running state
-        if (state == af.shizuku.manager.utils.ShizukuStateMachine.State.STARTING || ok) {
+        // Pulse animation for Starting/Running state.
+        // Gated by expressive-animations preference to respect the user's motion settings.
+        val expressiveAnimations = af.shizuku.manager.ShizukuSettings.isExpressiveAnimationsEnabled()
+        if (expressiveAnimations && (state == af.shizuku.manager.utils.ShizukuStateMachine.State.STARTING || ok)) {
             val pulse =
                 android.view.animation.AlphaAnimation(0.4f, 1.0f).apply {
                     duration = if (ok) 1500 else 600
