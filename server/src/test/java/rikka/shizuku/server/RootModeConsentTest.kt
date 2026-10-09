@@ -259,6 +259,9 @@ class RootModeConsentTest {
         setField(Service::class.java, service, "configManager", configManager)
         setField(ShizukuService::class.java, service, "managerAppId", MANAGER_UID)
         setField(ShizukuService::class.java, service, "secondaryManagerAppId", -1)
+        // attachApplication logs the connect through dispatchLog, which reads the feature map
+        // (empty here, so the activity log is off and nothing is posted to the main handler).
+        setField(ShizukuService::class.java, service, "featureEnabledMap", java.util.concurrent.ConcurrentHashMap<String, Boolean>())
         return service
     }
 
