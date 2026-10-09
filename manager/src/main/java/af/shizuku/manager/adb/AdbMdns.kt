@@ -99,7 +99,11 @@ class AdbMdns(
                 .Builder(serviceType)
                 .setFlags(DiscoveryRequest.FLAG_NO_PICKER)
                 .build()
-        // The main executor keeps the callbacks where the legacy overload delivered them.
+        // The discovery callbacks (found, lost, failed) run on the main thread here. The legacy
+        // overload below API 37 delivers them on NsdManager's own handler thread instead, so
+        // nothing they do may block, and anything that must be on main (a Toast) posts there
+        // itself. resolveService is asynchronous and its ResolveListener still uses NsdManager's
+        // thread, so isPortAvailable never runs on main.
         nsdManager.discoverServices(request, appContext.mainExecutor, listener)
     }
 
