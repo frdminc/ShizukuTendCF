@@ -83,6 +83,13 @@ class AdbMdns(
      * ACCESS_LOCAL_NETWORK, and a discovery nobody is watching (boot, the watchdog, a headless
      * start) would wait on a picker nobody sees. With the flag such a discovery fails with
      * [NsdManager.FAILURE_PERMISSION_DENIED], which [onDiscoveryFailed] reports.
+     *
+     * The flag covers discovery only, despite the commit that added it ("never show Android 17's
+     * device picker"). Connecting to a non-loopback [resolvedHost] without the permission may
+     * still bring up the picker (reported in thedjchi/Shizuku eea81ed7). The pairing paths connect
+     * there after a denial and can still hit it; the headless worker cannot while its pre-check
+     * stops a start that lacks the permission (LocalNetworkPermission.enforced). Not confirmed on
+     * a device.
      */
     private fun discover() {
         if (Build.VERSION.SDK_INT >= 37) {
