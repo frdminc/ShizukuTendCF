@@ -71,6 +71,19 @@ public final class SingleInstanceLock {
      */
     static final String LOCK_NAME = ServerConstants.SERVER_NAME + ".lock";
 
+    /**
+     * How long a new server waits for the lock before it stands down. A restart SIGKILLs the old
+     * server and forks the new one at once, and the kernel drops the old lock only when the old
+     * process has finished exiting (a big process tearing down its threads and binder, or one in D
+     * state, takes a while). One try would make the new server stand down, then the old one dies,
+     * and there is no server at all (review 6.1b). A real duplicate still stands down, a few
+     * seconds later.
+     */
+    static final long LOCK_WAIT_MS = 3_000;
+
+    /** How often the lock is retried within {@link #LOCK_WAIT_MS}. */
+    static final long LOCK_RETRY_MS = 100;
+
     /** Mode of the lock file: owner and group (shell) read/write, nothing for others (#419). */
     private static final int LOCK_MODE = 0660;
 
@@ -105,12 +118,22 @@ public final class SingleInstanceLock {
         FileChannel channel = null;
         try {
             channel = openNoFollow(file);
+            long deadline = System.nanoTime() + LOCK_WAIT_MS * 1_000_000L;
+            int attempts = 1;
             FileLock acquired = channel.tryLock();
+            while (acquired == null && System.nanoTime() < deadline) {
+                Thread.sleep(LOCK_RETRY_MS);
+                attempts++;
+                acquired = channel.tryLock();
+            }
             if (acquired == null) {
-                LOGGER.e("another %s already holds %s; standing down so the running one keeps its clients and its grant table",
-                        ServerConstants.SERVER_NAME, file);
+                LOGGER.e("another %s has held %s for %d ms; standing down so the running one keeps its clients and its grant table",
+                        ServerConstants.SERVER_NAME, file, LOCK_WAIT_MS);
                 closeQuietly(channel);
                 return false;
+            }
+            if (attempts > 1) {
+                LOGGER.i("single-instance lock freed after %d tries (the previous server finished exiting)", attempts);
             }
 
             lockChannel = channel;
@@ -121,6 +144,11 @@ public final class SingleInstanceLock {
             // Only reachable if this JVM already holds it through another channel, which main()
             // cannot do twice.
             LOGGER.w("single-instance lock already held by this process");
+            closeQuietly(channel);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.w("interrupted waiting for the single-instance lock at %s; starting unlocked", file);
             closeQuietly(channel);
             return true;
         } catch (Throwable tr) {

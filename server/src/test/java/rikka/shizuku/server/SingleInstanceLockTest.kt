@@ -128,6 +128,23 @@ class SingleInstanceLockTest {
         assertTrue(mode.none { it in others }, "lock file is open to others: ${PosixFilePermissions.toString(mode)}")
     }
 
+    @Test
+    fun `a restart waits for the old server to finish exiting`() {
+        // 6.1b: the starter SIGKILLs the old server and forks the new one at once; the kernel drops
+        // the old lock only when the old process has finished exiting. The new server must wait for
+        // that rather than stand down and leave no server at all.
+        val file = File(dir, SingleInstanceLock.LOCK_NAME)
+        val holder = startHolder(file, exitAfterMs = 300)
+        assumeTrue(holder != null, "could not start a holder JVM")
+        try {
+            assertTrue(SingleInstanceLock.acquire(file), "the new server stood down while the old one was exiting")
+            assertTrue(SingleInstanceLock.isHeld())
+        } finally {
+            holder!!.destroyForcibly()
+            holder.waitFor(10, TimeUnit.SECONDS)
+        }
+    }
+
     /**
      * A JVM that holds [file]'s lock until killed (or, with [exitAfterMs], exits that long after it
      * took it), or null if one cannot be started here.
