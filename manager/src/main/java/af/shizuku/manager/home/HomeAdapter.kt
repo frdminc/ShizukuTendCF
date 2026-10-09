@@ -1,11 +1,13 @@
 package af.shizuku.manager.home
 
 import af.shizuku.common.util.UserHandleCompat
+import af.shizuku.manager.BuildConfig
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.management.AppsViewModel
 import af.shizuku.manager.model.ServiceStatus
 import af.shizuku.manager.utils.EnvironmentUtils
+import af.shizuku.manager.utils.StockShizukuCompat
 import android.os.Build
 import com.airbnb.mvrx.withState
 import kotlinx.coroutines.CoroutineScope
@@ -261,7 +263,12 @@ class HomeAdapter(
                     // on isCompanionModeEnabled() || needsAction, which made it disappear from
                     // the home screen as soon as the hub was successfully installed — users had
                     // no persistent status indicator and couldn't tell the hub was active.
-                    addItem(companionCreator, Pair(companionInstalled, compatHubInstalled), id)
+                    // Fork: the dropin flavor IS moe.shizuku.privileged.api, so it is its own
+                    // "hub" and the card has nothing to offer there; keep the old opt-in gating.
+                    val isDropIn = BuildConfig.APPLICATION_ID == StockShizukuCompat.PACKAGE
+                    if (!isDropIn || isEditMode || ShizukuSettings.isCompanionModeEnabled()) {
+                        addItem(companionCreator, Pair(companionInstalled, compatHubInstalled), id)
+                    }
                 }
             }
         }

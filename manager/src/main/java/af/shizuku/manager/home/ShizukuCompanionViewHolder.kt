@@ -327,7 +327,9 @@ class ShizukuCompanionViewHolder(
             binding.text1.setText(R.string.compat_hub_installed_desc)
             binding.button1.visibility = View.GONE
             binding.button2.setText(R.string.compat_hub_uninstall_btn)
-            binding.button2.visibility = View.VISIBLE
+            // Fork: in the dropin flavor the "hub" package is this app; never offer to uninstall it.
+            binding.button2.visibility =
+                if (itemView.context.packageName == StockShizukuCompat.PACKAGE) View.GONE else View.VISIBLE
         } else if (companionInstalled) {
             binding.title.setText(R.string.companion_conflict_title)
             binding.text1.setText(R.string.companion_conflict_description)
