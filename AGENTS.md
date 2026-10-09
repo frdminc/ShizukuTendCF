@@ -4,6 +4,16 @@ This file is the canonical entry point for AI coding agents. It points to
 the per-agent guides that already exist in this repo and lists the rules
 that apply to every agent regardless of vendor.
 
+> **Session logs (Tier 1 handoff pointer, 2026-10-09):** at session start, read
+> `~/.local/state/handoffs/ShizukuTendCF/<task>/SESSION_LOG.md` (`<task>` is
+> `root` in the `~/src/ShizukuTendCF` checkout, else the worktree's directory
+> name; its `redirect:` key names the canonical `chains/<chain-key>/SESSION_LOG.md`).
+> Compare each listed workspace's `head_sha` to `git rev-parse HEAD`, then state
+> a resume plan before acting. A missing pointer is a fresh start. Only the
+> owning session writes it; sub-agents report. Protocol: the `session-handoff`
+> skill (`~/src/djbclark-ade/skills/session-handoff/SKILL.md`); spec:
+> [`site-djbclark/docs/session-handoff-compaction-spec.md`](https://github.com/djbclark/site-djbclark/blob/master/docs/session-handoff-compaction-spec.md) §3.
+
 ## Per-agent guides
 
 `CLAUDE.md` and `GEMINI.md` are symlinks to this file, so every agent reads
