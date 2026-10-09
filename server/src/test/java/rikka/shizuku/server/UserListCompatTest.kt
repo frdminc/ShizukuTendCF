@@ -83,5 +83,36 @@ class UserListCompatTest {
         assertEquals(setOf(0), UserListCompat.getUserIdsNoThrow(um, true, true, true).toSet())
     }
 
+    @Test
+    fun `the one-argument call leaves out partial and pre-created users when asked to`() {
+        UserListCompat.sdkInt = 37
+        val um = mockk<IUserManager>()
+        val listed = listOf(user(0), FlaggedUser(10, partial = true), FlaggedUser(11, preCreated = true), user(12))
+        every { um.getUsers(any(), any(), any()) } throws NoSuchMethodError("No interface method getUsers(ZZZ)")
+        every { um.getUsers(any()) } returns listed
+
+        assertEquals(setOf(0, 12), UserListCompat.getUserIdsNoThrow(um, true, true, true).toSet())
+        // Only what the caller asked to exclude is left out.
+        assertEquals(setOf(0, 11, 12), UserListCompat.getUserIdsNoThrow(um, true, true, false).toSet())
+        assertEquals(setOf(0, 10, 11, 12), UserListCompat.getUserIdsNoThrow(um, false, true, false).toSet())
+    }
+
+    @Test
+    fun `the three-argument call's answer is passed through as the framework filtered it`() {
+        UserListCompat.sdkInt = 36
+        val um = mockk<IUserManager>()
+        val listed = listOf(user(0), FlaggedUser(10, partial = true))
+        every { um.getUsers(true, true, true) } returns listed
+
+        assertEquals(setOf(0, 10), UserListCompat.getUserIdsNoThrow(um, true, true, true).toSet())
+    }
+
     private fun user(id: Int): UserInfo = UserInfo().also { it.id = id }
+
+    /** UserInfo with the public fields API 30+ has but the hidden-api stub lacks. */
+    class FlaggedUser(id: Int, @JvmField var partial: Boolean = false, @JvmField var preCreated: Boolean = false) : UserInfo() {
+        init {
+            this.id = id
+        }
+    }
 }

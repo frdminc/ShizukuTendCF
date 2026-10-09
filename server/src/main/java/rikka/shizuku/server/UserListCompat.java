@@ -8,6 +8,7 @@ import android.os.RemoteException;
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -166,7 +167,8 @@ public final class UserListCompat {
                 list = um.getUsers(excludePartial, excludeDying, excludePreCreated);
                 break;
             case ONE_ARG:
-                list = um.getUsers(excludeDying);
+                // This form cannot exclude partial or pre-created users itself.
+                list = withoutExcluded(um.getUsers(excludeDying), excludePartial, excludePreCreated);
                 break;
             case REFLECTIVE:
                 Method m = reflective;
@@ -214,7 +216,9 @@ public final class UserListCompat {
         }
         try {
             Object result = m.invoke(um, args);
-            return result != null ? (List<UserInfo>) result : Collections.<UserInfo>emptyList();
+            List<UserInfo> list = result != null ? (List<UserInfo>) result : Collections.<UserInfo>emptyList();
+            // Fewer than three arguments: partial and pre-created users were not excluded.
+            return n < 3 ? withoutExcluded(list, excludePartial, excludePreCreated) : list;
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
             if (cause instanceof RemoteException) throw (RemoteException) cause;
@@ -223,6 +227,36 @@ public final class UserListCompat {
             throw new RuntimeException(cause);
         } catch (IllegalAccessException e) {
             throw new NoSuchMethodError("IUserManager.getUsers is not accessible: " + e);
+        }
+    }
+
+    /**
+     * The list without partial and pre-created users, when the caller asked to exclude them and the
+     * form called could not. {@code UserInfo.partial} and {@code UserInfo.preCreated} are public
+     * fields on API 30+ but not in the hidden-api stub, so they are read reflectively; a field this
+     * Android lacks counts as false.
+     */
+    @VisibleForTesting
+    @NonNull
+    static List<UserInfo> withoutExcluded(List<UserInfo> list, boolean excludePartial, boolean excludePreCreated) {
+        if (list == null) return Collections.emptyList();
+        if (!excludePartial && !excludePreCreated) return list;
+        List<UserInfo> kept = new ArrayList<>(list.size());
+        for (UserInfo ui : list) {
+            if (ui == null) continue;
+            if (excludePartial && booleanField(ui, "partial")) continue;
+            if (excludePreCreated && booleanField(ui, "preCreated")) continue;
+            kept.add(ui);
+        }
+        return kept;
+    }
+
+    private static boolean booleanField(UserInfo ui, String name) {
+        try {
+            Field f = ui.getClass().getField(name);
+            return f.getType() == boolean.class && f.getBoolean(ui);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return false;
         }
     }
 
