@@ -85,8 +85,16 @@ import rikka.shizuku.server.ClientRecord;
 public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuClientManager, ShizukuConfigManager> {
 
     public static void main(String[] args) {
-        DdmHandleAppName.setAppName("shizuku_plus_server", 0);
+        DdmHandleAppName.setAppName(ServerConstants.SERVER_NAME, 0);
         RishConfig.setLibraryPath(System.getProperty("shizuku.library.path"));
+
+        // Before anything else, and specifically before the constructor below can publish a binder
+        // to any client: two servers hand out divergent grant tables and make authorisation a coin
+        // toss for every app (#26). The loser of the race stands down; see SingleInstanceLock for
+        // why the starter's kill-then-fork sweep cannot close this by itself.
+        if (!SingleInstanceLock.acquire()) {
+            System.exit(ServerConstants.ALREADY_RUNNING);
+        }
 
         Looper.prepareMainLooper();
         new ShizukuService();

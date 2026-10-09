@@ -10,6 +10,8 @@
 #include <sys/system_properties.h>
 #include <cerrno>
 #include <string>
+#include <set>
+#include <vector>
 #include <termios.h>
 #include <poll.h>
 #include "android.h"
@@ -224,6 +226,13 @@ static int switch_cgroup() {
     return -1;
 }
 
+// foreach_proc takes a plain function pointer, so the sweep below cannot capture; these carry its
+// findings out. killed_servers is what makes the re-check trustworthy: SIGKILL returns at once while
+// the target lingers as a zombie until init reaps it, so a process we just killed is still
+// enumerable and would otherwise read as a live conflict.
+static std::set<pid_t> killed_servers;
+static std::vector<pid_t> surviving_servers;
+
 int main(int argc, char *argv[]) {
     std::string apk_path;
     for (int i = 0; i < argc; ++i) {
@@ -282,9 +291,10 @@ int main(int argc, char *argv[]) {
         if (strcmp(SERVER_NAME, name) != 0)
             return;
 
-        if (kill(pid, SIGKILL) == 0)
+        if (kill(pid, SIGKILL) == 0) {
+            killed_servers.insert(pid);
             printf("info: killed %d (%s)\n", pid, name);
-        else if (errno == EPERM) {
+        } else if (errno == EPERM) {
             perrorf("fatal: can't kill %d, please try to stop existing Shizuku from app first.\n", pid);
             exit(EXIT_FATAL_KILL);
         } else {
@@ -322,6 +332,42 @@ int main(int argc, char *argv[]) {
     if (access(apk_path.c_str(), R_OK) != 0) {
         perrorf("fatal: can't access manager %s\n", apk_path.c_str());
         exit(EXIT_FATAL_PM_PATH);
+    }
+
+    // Re-check immediately before forking (#26). The sweep above and start_server() below are not
+    // atomic with respect to each other, and the starter is run from several places (the boot
+    // receiver, the watchdog, the tile, a start by hand, adb shell): two starters running close
+    // together each sweep, each find nothing to kill because neither server exists yet, and each
+    // then forks one. A duplicate makes authorisation a coin toss for every client (see the
+    // server's SingleInstanceLock, which is what actually closes the window; this only narrows it
+    // and reports the common case instead of silently doubling up).
+    //
+    // A survivor the other starter forked is the server the user wanted, so this is not a failure:
+    // the manager's root path treats a non-zero exit as "failed to start" and would never wait
+    // for the binder that is already there.
+    surviving_servers.clear();
+    foreach_proc([](pid_t pid) {
+        if (pid == getpid()) return;
+
+        char name[1024];
+        if (get_proc_name(pid, name, 1024) != 0) return;
+
+        if (strcmp(SERVER_NAME, name) != 0)
+            return;
+
+        // Ours, already SIGKILLed and merely not yet reaped.
+        if (killed_servers.count(pid) != 0)
+            return;
+
+        surviving_servers.push_back(pid);
+    });
+
+    if (!surviving_servers.empty()) {
+        printf("info: %s is already running (pid %d), started meanwhile by another starter; not starting a second one\n",
+               SERVER_NAME, surviving_servers[0]);
+        printf("info: shizuku_starter exit with 0\n");
+        fflush(stdout);
+        exit(EXIT_SUCCESS);
     }
 
     printf("info: starting server...\n");
