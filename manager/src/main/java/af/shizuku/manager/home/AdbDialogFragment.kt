@@ -190,8 +190,14 @@ class AdbDialogFragment : DialogFragment() {
     private fun startDiscovery() {
         if (!isAdded) return
         adbMdns.onDiscoveryFailed = { code ->
-            if (code == NsdManager.FAILURE_PERMISSION_DENIED && isAdded) {
-                Toast.makeText(requireContext(), R.string.dialog_adb_local_network_needed, Toast.LENGTH_LONG).show()
+            if (code == NsdManager.FAILURE_PERMISSION_DENIED) {
+                // On main whatever thread NSD reported on: below API 37 that is NsdManager's own
+                // thread, and Toast.makeText off a Looper thread throws.
+                lifecycleScope.launch(Dispatchers.Main) {
+                    if (isAdded) {
+                        Toast.makeText(requireContext(), R.string.dialog_adb_local_network_needed, Toast.LENGTH_LONG).show()
+                    }
+                }
             }
         }
         adbMdns.start()
