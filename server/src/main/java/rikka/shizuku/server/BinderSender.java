@@ -20,7 +20,6 @@ import java.util.List;
 import kotlin.collections.ArraysKt;
 import rikka.hidden.compat.ActivityManagerApis;
 import rikka.hidden.compat.PackageManagerApis;
-import rikka.hidden.compat.UserManagerApis;
 import af.shizuku.common.compat.Android17Compat;
 import af.shizuku.common.compat.InstalledPackagesCompat;
 import rikka.hidden.compat.adapter.ProcessObserverAdapter;
@@ -272,7 +271,7 @@ public class BinderSender {
      */
     private static void catchUpAlreadyRunningClients() {
         try {
-            for (int userId : UserManagerApis.getUserIdsNoThrow()) {
+            for (int userId : UserListCompat.getUserIdsNoThrow()) {
                 // dev.rikka.hidden:compat's getPackageProcessState() only queries AMS for userId 0
                 // on API < 26 (Build.VERSION_CODES.O); for any other user on those versions it
                 // unconditionally returns PROCESS_STATE_TOP, which always passes the liveness check

@@ -2534,7 +2534,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         List<PackageInfo> list = new ArrayList<>();
         List<Integer> users = new ArrayList<>();
         if (userId == -1) {
-            users.addAll(UserManagerApis.getUserIdsNoThrow());
+            users.addAll(UserListCompat.getUserIdsNoThrow());
         } else {
             users.add(userId);
         }
@@ -2748,7 +2748,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     }
 
     void sendBinderToClient() {
-        for (int userId : UserManagerApis.getUserIdsNoThrow()) {
+        for (int userId : UserListCompat.getUserIdsNoThrow()) {
             sendBinderToClient(this, userId);
         }
     }
@@ -2817,7 +2817,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
     private static void sendBinderToManager(Binder binder) {
         java.util.List<Integer> failedUserIds = new java.util.ArrayList<>();
-        for (int userId : UserManagerApis.getUserIdsNoThrow()) {
+        for (int userId : UserListCompat.getUserIdsNoThrow()) {
             boolean success = sendBinderToUserApp(binder, MANAGER_APPLICATION_ID, userId);
             if (!success) {
                 failedUserIds.add(userId);

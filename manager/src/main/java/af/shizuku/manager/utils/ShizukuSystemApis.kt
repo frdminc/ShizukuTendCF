@@ -8,7 +8,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.RemoteException
 import rikka.hidden.compat.PermissionManagerApis
-import rikka.hidden.compat.UserManagerApis
+import rikka.shizuku.server.UserListCompat
 import rikka.hidden.compat.util.SystemServiceBinder
 import rikka.shizuku.ShizukuBinderWrapper
 
@@ -26,7 +26,7 @@ object ShizukuSystemApis {
             arrayListOf(UserInfoCompat(UserHandleCompat.myUserId(), "Owner", 0))
         } else {
             try {
-                val list = UserManagerApis.getUsers(true, true, true)
+                val list = UserListCompat.getUsers(true, true, true)
                 val users: MutableList<UserInfoCompat> = ArrayList<UserInfoCompat>()
                 for (ui in list) {
                     users.add(UserInfoCompat(ui.id, ui.name, 0))

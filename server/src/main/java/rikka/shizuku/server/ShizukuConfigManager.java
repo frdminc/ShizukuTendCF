@@ -38,7 +38,6 @@ import af.shizuku.common.compat.InstalledPackagesCompat;
 import af.shizuku.common.util.TrustedSigners;
 import af.shizuku.common.util.UserHandleCompat;
 import rikka.hidden.compat.PackageManagerApis;
-import rikka.hidden.compat.UserManagerApis;
 import rikka.shizuku.server.ktx.HandlerKt;
 
 public class ShizukuConfigManager extends ConfigManager {
@@ -156,7 +155,7 @@ public class ShizukuConfigManager extends ConfigManager {
         // a read that failed (the no-throw call answers a failure with an empty list).
         Set<Integer> readUsers = new HashSet<>();
 
-        for (int userId : UserManagerApis.getUserIdsNoThrow()) {
+        for (int userId : UserListCompat.getUserIdsNoThrow()) {
             List<PackageInfo> installed = InstalledPackagesCompat.getInstalledPackagesNoThrow(PackageManager.GET_PERMISSIONS, userId);
             if (!installed.isEmpty()) readUsers.add(userId);
             for (PackageInfo pi : installed) {
