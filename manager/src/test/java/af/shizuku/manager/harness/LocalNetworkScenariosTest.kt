@@ -58,8 +58,17 @@ class LocalNetworkScenariosTest {
         lines.forEach { assertTrue("headless log has \"$it\":\n$text", it in text) }
     }
 
-    private fun android17(granted: Boolean) {
+    /**
+     * Android 17 with an app that targets [targetSdk]. Enforcement applies to apps targeting 37 or
+     * higher; an app targeting less keeps an implicit grant (developer.android.com
+     * privacy-and-security/local-network-permission, "Split permission model").
+     */
+    private fun android17(
+        granted: Boolean,
+        targetSdk: Int = 37,
+    ) {
         LocalNetworkPermission.sdkInt = 37
+        world.app.applicationInfo.targetSdkVersion = targetSdk
         if (granted) shadowOf(world.app).grantPermissions(ACCESS_LOCAL_NETWORK) else shadowOf(world.app).denyPermissions(ACCESS_LOCAL_NETWORK)
         assertEquals(granted, LocalNetworkPermission.granted(world.app))
     }
@@ -96,6 +105,22 @@ class LocalNetworkScenariosTest {
                 assertTrue("server up", serverRunning)
                 assertNull("no notice", restoreNoticeTitle)
                 assertEquals(0, allOffers)
+            }
+        }
+
+    @Test
+    fun `android-17-headless-start-of-a-target-36-app-without-the-grant-still-tries`() =
+        scenario {
+            // 6.1c: the refusal is for apps targeting API 37+. This app targets 36, so a
+            // pre-check that stops here would turn a start that works into an outage.
+            android17(granted = false, targetSdk = 36)
+            headlessStart()
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.SUCCEEDED, lastWork)
+                assertTrue("server up", serverRunning)
+                assertNull("no notice", restoreNoticeTitle)
+                assertLogHas("StartWorker: local network access (android.permission.ACCESS_LOCAL_NETWORK) is not granted; mDNS discovery may find nothing")
             }
         }
 

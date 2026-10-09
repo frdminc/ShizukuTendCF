@@ -21,9 +21,9 @@ import androidx.activity.result.ActivityResultLauncher
  * Android 17 also shows a "Choose a device to connect" picker for a discovery made without the
  * permission unless the request carries [android.net.nsd.DiscoveryRequest.FLAG_NO_PICKER] (#25).
  * [AdbMdns] sets that flag on every discovery, so a start that runs where nobody can answer a picker
- * (boot, the watchdog, HEADLESS_START) never blocks on one; without the permission such a discovery
- * fails instead, and [WirelessDebugging] reports that rather than waiting for a port that cannot
- * come. The permission itself is requested on every interactive path that discovers: the start
+ * (boot, the watchdog, HEADLESS_START) never blocks on one; for an app targeting API 37+ without
+ * the permission such a discovery fails instead, and [WirelessDebugging] reports that rather than
+ * waiting for a port that cannot come (see [enforced]). The permission itself is requested on every interactive path that discovers: the start
  * dialog, both pairing flows.
  */
 object LocalNetworkPermission {
@@ -44,11 +44,23 @@ object LocalNetworkPermission {
         }
 
     /**
-     * Whether a discovery without the permission fails outright on this OS. Android 17 refuses a
-     * no-picker discovery made without ACCESS_LOCAL_NETWORK; Android 16's NEARBY_WIFI_DEVICES tier
-     * is best effort, so a discovery there is still attempted.
+     * Whether a discovery without the permission fails outright for this app on this OS. Android 17
+     * refuses a no-picker discovery made without ACCESS_LOCAL_NETWORK, but only for apps that target
+     * API 37 or higher: an app targeting less that holds INTERNET keeps an implicit grant until it
+     * raises its target (developer.android.com/privacy-and-security/local-network-permission, "Split
+     * permission model"; the SDK 37 javadoc of DiscoveryRequest.FLAG_NO_PICKER and NsdManager says
+     * the same). Below that, and on Android 16's best-effort NEARBY_WIFI_DEVICES tier, a discovery
+     * is still attempted and a real refusal surfaces through discovery itself (review 6.1c).
      */
-    fun enforced(): Boolean = sdkInt >= 37
+    fun enforced(context: Context): Boolean = sdkInt >= 37 && targetSdk(context) >= 37
+
+    /** The app's target SDK; if it cannot be read, assume the newest, which keeps the check. */
+    private fun targetSdk(context: Context): Int =
+        try {
+            context.applicationInfo.targetSdkVersion
+        } catch (_: Throwable) {
+            Int.MAX_VALUE
+        }
 
     fun granted(context: Context): Boolean {
         val permission = required() ?: return true

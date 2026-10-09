@@ -1076,13 +1076,14 @@ object WirelessDebugging {
                 }
             }
             // Android 16+ gate mDNS discovery behind local network access, and Android 17 refuses
-            // a discovery made without it (#25): a start that nobody can grant it from (boot, the
-            // watchdog, HEADLESS_START) stops here, before it turns wireless debugging on and
-            // spends this boot's one network prompt on a discovery that cannot find anything. The
-            // worker posts the notice. Android 16 is best effort: the discovery is still tried.
+            // a discovery made without it by an app targeting API 37+ (#25): such a start, which
+            // nobody can grant it from (boot, the watchdog, HEADLESS_START), stops here, before it
+            // turns wireless debugging on and spends this boot's one network prompt on a discovery
+            // that cannot find anything. The worker posts the notice. Android 16, and Android 17
+            // for an app targeting less (implicit grant), are best effort: the discovery is tried.
             if (!LocalNetworkPermission.granted(context)) {
                 val permission = LocalNetworkPermission.required()
-                if (LocalNetworkPermission.enforced()) {
+                if (LocalNetworkPermission.enforced(context)) {
                     throw permissionStop("local network access ($permission) is not granted; this Android refuses mDNS discovery without it")
                 }
                 warn("local network access ($permission) is not granted; mDNS discovery may find nothing")
