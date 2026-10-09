@@ -19,6 +19,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.Uri
+import android.net.nsd.NsdManager
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
@@ -151,6 +153,9 @@ object WirelessDebugging {
 
     enum class Blocked { NO_WIFI, UNTRUSTED_NETWORK }
 
+    /** What a [PortDiscovery] reports instead of a port when the system refused to discover (#25). */
+    const val PORT_PERMISSION_DENIED = -2
+
     /** Starts mDNS discovery of the wireless debugging TLS port; the returned function stops it. */
     fun interface PortDiscovery {
         fun start(
@@ -170,6 +175,11 @@ object WirelessDebugging {
         // No wireless debugging before Android 11: nothing to find.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return {}
         val mdns = AdbMdns(context, AdbMdns.TLS_CONNECT) { p -> if (p > 0) onPort(p) }
+        // Android 17 refuses a no-picker discovery made without local network access (#25):
+        // reported, so the round stops waiting for a port that cannot come.
+        mdns.onDiscoveryFailed = { code ->
+            if (code == NsdManager.FAILURE_PERMISSION_DENIED) onPort(PORT_PERMISSION_DENIED)
+        }
         mdns.start()
         return { mdns.stop() }
     }
@@ -945,6 +955,20 @@ object WirelessDebugging {
         )
     }
 
+    /** Android 17 refused discovery for want of local network access (#25): the user grants it. */
+    fun notifyLocalNetwork(context: Context) {
+        val appSettings =
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        postNotice(
+            context,
+            R.string.wadb_local_network_title,
+            R.string.wadb_local_network_text,
+            appSettings,
+            R.string.wadb_local_network_open_settings to appSettings,
+        )
+    }
+
     fun cancelNotice(context: Context) {
         runCatching { context.getSystemService(NotificationManager::class.java)?.cancel(NOTICE_ID) }
     }
@@ -1025,6 +1049,11 @@ object WirelessDebugging {
 
         private fun untrustedStop(why: String): WirelessDebuggingBlockedException = WirelessDebuggingBlockedException(Blocked.UNTRUSTED_NETWORK, why)
 
+        private fun permissionStop(why: String): LocalNetworkPermissionException {
+            warn(why)
+            return LocalNetworkPermissionException(why)
+        }
+
         /** The wireless debugging TLS port, or a [WirelessDebuggingBlockedException] / [TimeoutException]. */
         suspend fun findPort(): Int {
             // A run that wrote 1 this boot and died before it saw the outcome may have raised the
@@ -1045,6 +1074,18 @@ object WirelessDebugging {
                 } else {
                     setWritePending(context, false)
                 }
+            }
+            // Android 16+ gate mDNS discovery behind local network access, and Android 17 refuses
+            // a discovery made without it (#25): a start that nobody can grant it from (boot, the
+            // watchdog, HEADLESS_START) stops here, before it turns wireless debugging on and
+            // spends this boot's one network prompt on a discovery that cannot find anything. The
+            // worker posts the notice. Android 16 is best effort: the discovery is still tried.
+            if (!LocalNetworkPermission.granted(context)) {
+                val permission = LocalNetworkPermission.required()
+                if (LocalNetworkPermission.enforced()) {
+                    throw permissionStop("local network access ($permission) is not granted; this Android refuses mDNS discovery without it")
+                }
+                warn("local network access ($permission) is not granted; mDNS discovery may find nothing")
             }
             var network = requireWifi()
             repeat(MAX_ROUNDS) {
@@ -1176,6 +1217,11 @@ object WirelessDebugging {
                         setWritePending(context, false)
                         note("mDNS found port $port")
                         return Round.Found(port)
+                    }
+                    if (port == PORT_PERMISSION_DENIED) {
+                        // Whatever was written stays as it is: the port is not coming this run.
+                        if (setting(context) == 1) setWritePending(context, false)
+                        throw permissionStop("the system refused mDNS discovery: local network access is not granted")
                     }
                     if (setting(context) == 0) {
                         val wifi = wifiNetwork(context)

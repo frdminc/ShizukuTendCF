@@ -2,6 +2,7 @@ package af.shizuku.manager.adb
 
 import af.shizuku.manager.ShizukuSettings
 import android.content.Context
+import android.net.nsd.DiscoveryRequest
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
@@ -35,6 +36,17 @@ class AdbMdns(
     @Volatile
     var resolvedHost: String = "127.0.0.1"
         private set
+
+    /**
+     * Told the NSD error code when a discovery could not be started (#25). On Android 17 a
+     * discovery made without ACCESS_LOCAL_NETWORK fails with
+     * [NsdManager.FAILURE_PERMISSION_DENIED] instead of showing a picker; a consumer that would
+     * otherwise wait for a port that cannot come stops waiting on this.
+     */
+    @Volatile
+    var onDiscoveryFailed: ((Int) -> Unit)? = null
+
+    private val appContext = context.applicationContext
     private val listener = DiscoveryListener(this)
     private val nsdManager: NsdManager = context.getSystemService(NsdManager::class.java)
     private val mdnsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -46,7 +58,7 @@ class AdbMdns(
         if (running) return
         running = true
         if (!registered) {
-            nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
+            discover()
         }
     }
 
@@ -65,12 +77,46 @@ class AdbMdns(
         }
     }
 
+    /**
+     * Every discovery goes through here so each one carries the no-picker flag on Android 17 (#25):
+     * without it the system shows "Choose a device to connect" to an app that lacks
+     * ACCESS_LOCAL_NETWORK, and a discovery nobody is watching (boot, the watchdog, a headless
+     * start) would wait on a picker nobody sees. With the flag such a discovery fails with
+     * [NsdManager.FAILURE_PERMISSION_DENIED], which [onDiscoveryFailed] reports.
+     */
+    private fun discover() {
+        if (Build.VERSION.SDK_INT >= 37) {
+            discoverNoPicker()
+        } else {
+            nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
+        }
+    }
+
+    @RequiresApi(37)
+    private fun discoverNoPicker() {
+        val request =
+            DiscoveryRequest
+                .Builder(serviceType)
+                .setFlags(DiscoveryRequest.FLAG_NO_PICKER)
+                .build()
+        // The main executor keeps the callbacks where the legacy overload delivered them.
+        nsdManager.discoverServices(request, appContext.mainExecutor, listener)
+    }
+
     private fun onDiscoveryStart() {
         registered = true
     }
 
     private fun onDiscoveryStop() {
         registered = false
+    }
+
+    private fun onStartDiscoveryFailed(errorCode: Int) {
+        registered = false
+        if (errorCode == NsdManager.FAILURE_PERMISSION_DENIED) {
+            Timber.tag(TAG).w("discovery of $serviceType refused: local network access is not granted")
+        }
+        onDiscoveryFailed?.invoke(errorCode)
     }
 
     private fun onServiceFound(info: NsdServiceInfo) {
@@ -117,7 +163,7 @@ class AdbMdns(
                         }
                     }
                     delay(100L)
-                    if (!registered) nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
+                    if (!registered) discover()
                     restartScheduled = false
                 }
         }
@@ -175,6 +221,8 @@ class AdbMdns(
             errorCode: Int,
         ) {
             Timber.tag(TAG).v("onStartDiscoveryFailed: $serviceType, $errorCode")
+
+            adbMdns.onStartDiscoveryFailed(errorCode)
         }
 
         override fun onDiscoveryStopped(serviceType: String) {

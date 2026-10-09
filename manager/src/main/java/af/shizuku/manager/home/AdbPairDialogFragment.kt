@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
@@ -35,6 +36,10 @@ class AdbPairDialogFragment : DialogFragment() {
     private lateinit var binding: AdbPairDialogBinding
 
     private val viewModel: ViewModel by activityViewModels()
+
+    // Android 16+ gate the mDNS discovery of the pairing service behind local network access (#25).
+    private val localNetworkPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { viewModel.startDiscovery() }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val context = requireContext()
@@ -60,6 +65,8 @@ class AdbPairDialogFragment : DialogFragment() {
     }
 
     private fun onDialogShow(dialog: AlertDialog) {
+        if (!LocalNetworkPermission.requestIfNeeded(requireContext(), localNetworkPermissionLauncher)) viewModel.startDiscovery()
+
         val codeEditText = binding.pairingCode.editText
         codeEditText?.doAfterTextChanged {
             binding.pairingCode.error = null
@@ -237,7 +244,8 @@ class ViewModel(
             _port.postValue(it)
         }
 
-    init {
+    /** Discovery of the pairing service, once the dialog has asked for local network access (#25). */
+    fun startDiscovery() {
         adbMdns.start()
     }
 

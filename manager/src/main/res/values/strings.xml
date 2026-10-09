@@ -924,6 +924,11 @@
     <string name="wadb_restore_locked_title">Unlock to restore Shizuku\'s ADB connection</string>
     <string name="wadb_restore_locked_text">Wireless debugging went off while the phone was locked: this Wi-Fi network or access point is not allowed for it yet, and this phone asks only while unlocked. After the next unlock Shizuku tries once more; choose \"Always allow on this network\" when the system asks. Until then it retries quietly in case the phone moves to an access point that is allowed.</string>
     <string name="wadb_restore_open_wireless_debugging">Open Wireless debugging</string>
+    <!-- Android 17: local network access gates the mDNS discovery of wireless debugging (#25). -->
+    <string name="wadb_local_network_title">Allow local network access</string>
+    <string name="wadb_local_network_text">Android needs Shizuku to have local network access before it can find wireless debugging. Open the app\'s settings, allow Local network under Permissions, then tap Attempt now.</string>
+    <string name="wadb_local_network_open_settings">Open app settings</string>
+    <string name="dialog_adb_local_network_needed">Shizuku needs local network access to find wireless debugging. Allow it under the app\'s permissions.</string>
 
     <!-- Watchdog -->
     <string name="watchdog_running">Watchdog is running</string>

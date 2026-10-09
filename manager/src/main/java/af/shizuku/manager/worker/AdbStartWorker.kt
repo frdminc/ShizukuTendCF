@@ -8,6 +8,7 @@ import af.shizuku.manager.adb.AdbAuthTimeoutException
 import af.shizuku.manager.adb.AdbAuthWait
 import af.shizuku.manager.adb.AdbPortProber
 import af.shizuku.manager.adb.AdbStarter
+import af.shizuku.manager.adb.LocalNetworkPermissionException
 import af.shizuku.manager.adb.StartNotificationState
 import af.shizuku.manager.adb.TcpPortOpenAgainException
 import af.shizuku.manager.adb.WirelessDebugging
@@ -252,6 +253,15 @@ class AdbStartWorker(
                     WirelessDebugging.watch(applicationContext)
                 }
             }
+            if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
+                ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
+            }
+            return Result.failure()
+        } catch (e: LocalNetworkPermissionException) {
+            // Only the user can grant it (#25); a WorkManager retry would be refused the same way.
+            // The notice opens the app's permission settings, and "Attempt now" tries again.
+            warn("FAILURE (attempt=$runAttemptCount): ${e.message}; no WorkManager retry until local network access is granted")
+            WirelessDebugging.notifyLocalNetwork(applicationContext)
             if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
                 ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
             }

@@ -3,6 +3,7 @@ package af.shizuku.manager.home
 import af.shizuku.manager.R
 import af.shizuku.manager.adb.AdbMdns
 import af.shizuku.manager.adb.AdbPortProber
+import af.shizuku.manager.adb.LocalNetworkPermission
 import af.shizuku.manager.databinding.AdbDialogBinding
 import af.shizuku.manager.starter.StarterActivity
 import af.shizuku.manager.utils.EnvironmentUtils
@@ -13,9 +14,12 @@ import android.app.Dialog
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.nsd.NsdManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
@@ -37,6 +41,12 @@ class AdbDialogFragment : DialogFragment() {
     private lateinit var adbMdns: AdbMdns
     private val port = MutableLiveData<Int>()
     private var probeJob: Job? = null
+
+    // Android 16+ gate mDNS discovery behind local network access; asked here, where the user is
+    // (#25). Discovery starts either way: refused, it fails without a picker and the loopback probe
+    // and the pairing path remain.
+    private val localNetworkPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { startDiscovery() }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val context = requireContext()
@@ -84,8 +94,8 @@ class AdbDialogFragment : DialogFragment() {
     }
 
     private fun onDialogShow(dialog: AlertDialog) {
-        adbMdns.start()
         val context = dialog.context
+        if (!LocalNetworkPermission.requestIfNeeded(context, localNetworkPermissionLauncher)) startDiscovery()
         if (context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
             Settings.Global.putInt(context.contentResolver, "adb_wifi_enabled", 1)
         }
@@ -175,6 +185,16 @@ class AdbDialogFragment : DialogFragment() {
             probeJob?.cancel()
             startAndDismiss(it)
         }
+    }
+
+    private fun startDiscovery() {
+        if (!isAdded) return
+        adbMdns.onDiscoveryFailed = { code ->
+            if (code == NsdManager.FAILURE_PERMISSION_DENIED && isAdded) {
+                Toast.makeText(requireContext(), R.string.dialog_adb_local_network_needed, Toast.LENGTH_LONG).show()
+            }
+        }
+        adbMdns.start()
     }
 
     private fun startAndDismiss(port: Int) {
