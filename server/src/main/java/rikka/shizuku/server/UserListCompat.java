@@ -26,8 +26,9 @@ import rikka.shizuku.server.util.Logger;
  *
  * <p>{@code dev.rikka.hidden:compat}'s {@code UserManagerApis.getUsers} calls the three-argument
  * {@code getUsers(excludePartial, excludeDying, excludePreCreated)} on every API 30+ device. Android
- * 17 QPR1 (AOSP tag android-17.0.0_r1, {@code core/java/android/os/IUserManager.aidl}) went back
- * to the one-argument {@code getUsers(excludeDying)}, so on it that call ends in a
+ * 17 (API 37) went back to the one-argument {@code getUsers(excludeDying)} in its initial release
+ * (AOSP tag android-17.0.0_r1, {@code core/java/android/os/IUserManager.aidl}), so on it that call
+ * ends in a
  * {@link NoSuchMethodError} which {@code getUserIdsNoThrow} swallows, answering {@code [0]}. The
  * server then pushes its binder to user 0 only, and apps in work profiles and secondary users never
  * get one.
@@ -128,7 +129,7 @@ public final class UserListCompat {
         }
 
         // The form this API level is documented with first: API 30 to 16 have three arguments,
-        // Android 17 QPR1 and everything before API 30 have one.
+        // Android 17 (API 37, from its initial release) and everything before API 30 have one.
         int expected = sdkInt >= 30 && sdkInt < 37 ? THREE_ARGS : ONE_ARG;
         int other = expected == THREE_ARGS ? ONE_ARG : THREE_ARGS;
         IncompatibleClassChangeError missing = null;
