@@ -48,7 +48,18 @@ class AdbDialogFragment : DialogFragment() {
     private val localNetworkPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { startDiscovery() }
 
+    // Asked once per dialog session, kept across recreation: a rotation while the system
+    // permission dialog is up must not launch a second request, which the system answers "denied"
+    // at once. The pending answer still reaches the launcher above after the recreation.
+    private var askedLocalNetwork = false
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_ASKED_LOCAL_NETWORK, askedLocalNetwork)
+    }
+
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        askedLocalNetwork = savedInstanceState?.getBoolean(KEY_ASKED_LOCAL_NETWORK) ?: false
         val context = requireContext()
         binding = AdbDialogBinding.inflate(layoutInflater)
         adbMdns =
@@ -95,7 +106,11 @@ class AdbDialogFragment : DialogFragment() {
 
     private fun onDialogShow(dialog: AlertDialog) {
         val context = dialog.context
-        if (!LocalNetworkPermission.requestIfNeeded(context, localNetworkPermissionLauncher)) startDiscovery()
+        if (!askedLocalNetwork && LocalNetworkPermission.requestIfNeeded(context, localNetworkPermissionLauncher)) {
+            askedLocalNetwork = true
+        } else {
+            startDiscovery()
+        }
         if (context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
             Settings.Global.putInt(context.contentResolver, "adb_wifi_enabled", 1)
         }
@@ -224,6 +239,7 @@ class AdbDialogFragment : DialogFragment() {
     companion object {
         // In the arguments rather than a field so a recreated dialog keeps its origin.
         private const val ARG_USER_GESTURE = "user_gesture"
+        private const val KEY_ASKED_LOCAL_NETWORK = "asked_local_network"
 
         /**
          * A discovery dialog opened by a tap on the Home card's Start button: the start it makes

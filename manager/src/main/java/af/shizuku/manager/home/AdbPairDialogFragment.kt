@@ -31,6 +31,8 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.net.ConnectException
 
+private const val KEY_ASKED_LOCAL_NETWORK = "asked_local_network"
+
 @RequiresApi(VERSION_CODES.R)
 class AdbPairDialogFragment : DialogFragment() {
     private lateinit var binding: AdbPairDialogBinding
@@ -41,7 +43,18 @@ class AdbPairDialogFragment : DialogFragment() {
     private val localNetworkPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { viewModel.startDiscovery() }
 
+    // Asked once per dialog session, kept across recreation: a rotation while the system
+    // permission dialog is up must not launch a second request, which the system answers "denied"
+    // at once. The pending answer still reaches the launcher above after the recreation.
+    private var askedLocalNetwork = false
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_ASKED_LOCAL_NETWORK, askedLocalNetwork)
+    }
+
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        askedLocalNetwork = savedInstanceState?.getBoolean(KEY_ASKED_LOCAL_NETWORK) ?: false
         val context = requireContext()
         binding = AdbPairDialogBinding.inflate(LayoutInflater.from(context))
 
@@ -65,7 +78,11 @@ class AdbPairDialogFragment : DialogFragment() {
     }
 
     private fun onDialogShow(dialog: AlertDialog) {
-        if (!LocalNetworkPermission.requestIfNeeded(requireContext(), localNetworkPermissionLauncher)) viewModel.startDiscovery()
+        if (!askedLocalNetwork && LocalNetworkPermission.requestIfNeeded(requireContext(), localNetworkPermissionLauncher)) {
+            askedLocalNetwork = true
+        } else {
+            viewModel.startDiscovery()
+        }
 
         val codeEditText = binding.pairingCode.editText
         codeEditText?.doAfterTextChanged {
