@@ -113,6 +113,11 @@ class AdbMdns(
 
     private fun onStartDiscoveryFailed(errorCode: Int) {
         registered = false
+        // Nothing is discovering any more, so a later start() must try again rather than return
+        // at `if (running)`: a pairing dialog reopened after the user granted local network
+        // access in Settings would otherwise never find the port (#25). Cleared before the
+        // consumer is told, so a consumer that retries from the callback really retries.
+        running = false
         if (errorCode == NsdManager.FAILURE_PERMISSION_DENIED) {
             Timber.tag(TAG).w("discovery of $serviceType refused: local network access is not granted")
         }
