@@ -1,10 +1,27 @@
 package rikka.shizuku.server;
 
+import android.os.Build;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
+import android.system.StructStat;
+
 import java.io.File;
-import java.io.RandomAccessFile;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.OpenOption;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.HashSet;
+import java.util.Set;
 
 import rikka.shizuku.server.util.Logger;
 
@@ -35,6 +52,13 @@ import rikka.shizuku.server.util.Logger;
  * read-only path, an SELinux denial, an OEM oddity) the server starts unlocked. A device where the
  * lock is unavailable must still get a working Shizuku; the duplicate is a rare race, and refusing
  * to start would turn it into an outage.
+ *
+ * <p><b>The lock file is never followed through a symlink and never opened to everyone.</b> Its
+ * directory is writable by shell, and the server may run as root, so a shell process could plant
+ * the lock path as a symlink to a root-only file. The file is opened with {@code O_NOFOLLOW},
+ * anything but a regular file is refused (the server then starts unlocked, as above), and its mode
+ * is set through the open descriptor, never the path: {@code 0660}, group shell, the same policy as
+ * {@code shizuku.json} (#419), so a root-created file still admits the next adb (shell) start.
  */
 public final class SingleInstanceLock {
 
@@ -47,14 +71,14 @@ public final class SingleInstanceLock {
      */
     static final String LOCK_NAME = ServerConstants.SERVER_NAME + ".lock";
 
+    /** Mode of the lock file: owner and group (shell) read/write, nothing for others (#419). */
+    private static final int LOCK_MODE = 0660;
+
     /**
-     * Held for the life of the process. All three references are kept because a {@link FileLock}
-     * is released when its channel is closed <em>or</em> collected: dropping them would hand the
-     * lock back at the next GC, and a second server would then start hours later with no trace of
-     * why.
+     * Held for the life of the process. Both references are kept because a {@link FileLock} is
+     * released when its channel is closed <em>or</em> collected: dropping them would hand the lock
+     * back at the next GC, and a second server would then start hours later with no trace of why.
      */
-    @SuppressWarnings("FieldCanBeLocal")
-    private static RandomAccessFile lockRaf;
     @SuppressWarnings("FieldCanBeLocal")
     private static FileChannel lockChannel;
     @SuppressWarnings("FieldCanBeLocal")
@@ -78,30 +102,17 @@ public final class SingleInstanceLock {
             LOGGER.w("single-instance lock already held by this process");
             return true;
         }
-        RandomAccessFile raf = null;
+        FileChannel channel = null;
         try {
-            raf = new RandomAccessFile(file, "rw");
-            // The server runs as shell (adb start) or root (root start), and whichever created the
-            // file first owns it. A zero-byte lock file carries nothing worth protecting, so open
-            // it to everyone rather than let a root-created file lock out the next adb start.
-            try {
-                //noinspection ResultOfMethodCallIgnored
-                file.setReadable(true, false);
-                //noinspection ResultOfMethodCallIgnored
-                file.setWritable(true, false);
-            } catch (Throwable ignored) {
-            }
-
-            FileChannel channel = raf.getChannel();
+            channel = openNoFollow(file);
             FileLock acquired = channel.tryLock();
             if (acquired == null) {
                 LOGGER.e("another %s already holds %s; standing down so the running one keeps its clients and its grant table",
                         ServerConstants.SERVER_NAME, file);
-                closeQuietly(raf);
+                closeQuietly(channel);
                 return false;
             }
 
-            lockRaf = raf;
             lockChannel = channel;
             lock = acquired;
             LOGGER.i("single-instance lock held on %s", file);
@@ -110,12 +121,102 @@ public final class SingleInstanceLock {
             // Only reachable if this JVM already holds it through another channel, which main()
             // cannot do twice.
             LOGGER.w("single-instance lock already held by this process");
-            closeQuietly(raf);
+            closeQuietly(channel);
             return true;
         } catch (Throwable tr) {
             LOGGER.w(tr, "cannot take the single-instance lock at %s; starting unlocked", file);
-            closeQuietly(raf);
+            closeQuietly(channel);
             return true;
+        }
+    }
+
+    /**
+     * Opens (creating if needed) {@code file} for locking without following a symlink at its last
+     * component, and refuses anything that is not a regular file.
+     */
+    static FileChannel openNoFollow(File file) throws IOException, ErrnoException {
+        if (isAndroid()) {
+            return AndroidOpener.open(file);
+        }
+        // A plain JVM (unit tests): java.nio has the same O_NOFOLLOW open.
+        return NioOpener.open(file);
+    }
+
+    private static boolean isAndroid() {
+        return "Dalvik".equals(System.getProperty("java.vm.name"));
+    }
+
+    /** The server's path: every step after the open goes through the descriptor, not the name. */
+    private static final class AndroidOpener {
+        static FileChannel open(File file) throws IOException, ErrnoException {
+            int flags = OsConstants.O_RDWR | OsConstants.O_CREAT | OsConstants.O_NOFOLLOW;
+            if (Build.VERSION.SDK_INT >= 27) {
+                flags |= OsConstants.O_CLOEXEC;
+            }
+            // A symlink fails here with ELOOP: it is never followed, so never chmodded.
+            FileDescriptor fd = Os.open(file.getAbsolutePath(), flags, LOCK_MODE);
+            boolean ok = false;
+            try {
+                StructStat st = Os.fstat(fd);
+                if (!OsConstants.S_ISREG(st.st_mode)) {
+                    throw new IOException(file + " is not a regular file");
+                }
+                // Same policy as shizuku.json (#419): root needs no bits; shell gets in through the
+                // group. Only the owner (or root) may change these; a shell start that opens a file
+                // root created leaves it as it is.
+                int uid = Os.getuid();
+                if (uid != 0 && st.st_uid != uid) {
+                    FileChannel channel = new FileOutputStream(fd).getChannel();
+                    ok = true;
+                    return channel;
+                }
+                if (uid == 0) {
+                    try {
+                        Os.fchown(fd, -1, android.os.Process.SHELL_UID);
+                    } catch (ErrnoException e) {
+                        LOGGER.w("cannot give %s to group shell: %s", file, e);
+                    }
+                }
+                try {
+                    Os.fchmod(fd, LOCK_MODE);
+                } catch (ErrnoException e) {
+                    LOGGER.w("cannot set the mode of %s: %s", file, e);
+                }
+                FileChannel channel = new FileOutputStream(fd).getChannel();
+                ok = true;
+                return channel;
+            } finally {
+                if (!ok) {
+                    try {
+                        Os.close(fd);
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        }
+    }
+
+    /** JVM only (unit tests). Not loaded on Android, whose minSdk predates java.nio.file. */
+    @android.annotation.SuppressLint("NewApi")
+    private static final class NioOpener {
+        static FileChannel open(File file) throws IOException {
+            Path path = file.toPath();
+            Set<OpenOption> options = new HashSet<>();
+            options.add(StandardOpenOption.CREATE);
+            options.add(StandardOpenOption.READ);
+            options.add(StandardOpenOption.WRITE);
+            options.add(LinkOption.NOFOLLOW_LINKS);
+            FileChannel channel = FileChannel.open(path, options,
+                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-rw----")));
+            try {
+                if (!Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).isRegularFile()) {
+                    throw new IOException(file + " is not a regular file");
+                }
+            } catch (IOException | RuntimeException e) {
+                closeQuietly(channel);
+                throw e;
+            }
+            return channel;
         }
     }
 
@@ -130,14 +231,9 @@ public final class SingleInstanceLock {
             if (lock != null) lock.release();
         } catch (Throwable ignored) {
         }
-        try {
-            if (lockChannel != null) lockChannel.close();
-        } catch (Throwable ignored) {
-        }
-        closeQuietly(lockRaf);
+        closeQuietly(lockChannel);
         lock = null;
         lockChannel = null;
-        lockRaf = null;
     }
 
     /**
@@ -165,10 +261,10 @@ public final class SingleInstanceLock {
         return new File("/data/local/tmp/" + LOCK_NAME);
     }
 
-    private static void closeQuietly(RandomAccessFile raf) {
-        if (raf == null) return;
+    private static void closeQuietly(FileChannel channel) {
+        if (channel == null) return;
         try {
-            raf.close();
+            channel.close();
         } catch (Throwable ignored) {
         }
     }

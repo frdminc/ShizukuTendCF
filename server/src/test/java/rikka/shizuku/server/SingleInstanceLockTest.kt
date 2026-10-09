@@ -1,6 +1,7 @@
 package rikka.shizuku.server
 
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -9,6 +10,10 @@ import org.junit.jupiter.api.Test
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.channels.OverlappingFileLockException
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.attribute.PosixFilePermission
+import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.createTempDirectory
 
@@ -89,8 +94,48 @@ class SingleInstanceLockTest {
         }
     }
 
-    /** A JVM that holds [file]'s lock until killed, or null if one cannot be started here. */
-    private fun startHolder(file: File): Process? {
+    @Test
+    fun `a lock path that is a symlink is not followed and its target keeps its mode`() {
+        // 6.1a: shell can plant the lock path as a symlink to a root-only file; a root start must
+        // neither open the target nor open it up to everyone.
+        val target = File(dir, "root-only").apply { writeText("secret") }
+        Files.setPosixFilePermissions(target.toPath(), PosixFilePermissions.fromString("rw-------"))
+        val link = File(dir, SingleInstanceLock.LOCK_NAME)
+        Files.createSymbolicLink(link.toPath(), target.toPath())
+
+        assertTrue(SingleInstanceLock.acquire(link), "a refused lock path fails open")
+        assertFalse(SingleInstanceLock.isHeld(), "the lock must not be taken through a symlink")
+        assertEquals(
+            "rw-------",
+            PosixFilePermissions.toString(Files.getPosixFilePermissions(target.toPath())),
+            "the symlink target's mode changed",
+        )
+        assertTrue(Files.isSymbolicLink(link.toPath()), "the planted link is left as it was")
+        RandomAccessFile(target, "rw").use { raf ->
+            val taken = raf.channel.tryLock()
+            assertNotNull(taken, "the symlink target was locked")
+            taken.release()
+        }
+    }
+
+    @Test
+    fun `a new lock file grants nothing to other users`() {
+        // 6.1a: no world bits (the #419 policy for shizuku.json).
+        val file = File(dir, SingleInstanceLock.LOCK_NAME)
+        assertTrue(SingleInstanceLock.acquire(file))
+        val mode = Files.getPosixFilePermissions(file.toPath(), LinkOption.NOFOLLOW_LINKS)
+        val others = setOf(PosixFilePermission.OTHERS_READ, PosixFilePermission.OTHERS_WRITE, PosixFilePermission.OTHERS_EXECUTE)
+        assertTrue(mode.none { it in others }, "lock file is open to others: ${PosixFilePermissions.toString(mode)}")
+    }
+
+    /**
+     * A JVM that holds [file]'s lock until killed (or, with [exitAfterMs], exits that long after it
+     * took it), or null if one cannot be started here.
+     */
+    private fun startHolder(
+        file: File,
+        exitAfterMs: Long? = null,
+    ): Process? {
         val java = File(System.getProperty("java.home"), "bin/java")
         if (!java.canExecute()) return null
         val process =
@@ -101,6 +146,7 @@ class SingleInstanceLockTest {
                     System.getProperty("java.class.path"),
                     LockHolder::class.java.name,
                     file.absolutePath,
+                    (exitAfterMs ?: -1L).toString(),
                 ).redirectErrorStream(true).start()
             }.getOrNull() ?: return null
         // Waits for the holder to say it has the lock.
@@ -113,7 +159,10 @@ class SingleInstanceLockTest {
     }
 }
 
-/** Main class of the holder JVM: takes the lock on `args[0]` and sleeps until killed. */
+/**
+ * Main class of the holder JVM: takes the lock on `args[0]` and sleeps until killed, or exits
+ * `args[1]` ms after taking it when that is not negative.
+ */
 object LockHolder {
     const val HELD = "HELD"
 
@@ -127,6 +176,11 @@ object LockHolder {
             }
             println(HELD)
             System.out.flush()
+            val exitAfterMs = args.getOrNull(1)?.toLongOrNull() ?: -1L
+            if (exitAfterMs >= 0) {
+                Thread.sleep(exitAfterMs)
+                Runtime.getRuntime().halt(0)
+            }
             while (true) Thread.sleep(1_000)
         }
     }
