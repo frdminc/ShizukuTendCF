@@ -87,9 +87,10 @@ class AdbMdns(
      * The flag covers discovery only, despite the commit that added it ("never show Android 17's
      * device picker"). Connecting to a non-loopback [resolvedHost] without the permission may
      * still bring up the picker (reported in thedjchi/Shizuku eea81ed7). The pairing paths connect
-     * there after a denial and can still hit it; the headless worker cannot while its pre-check
-     * stops a start that lacks the permission (LocalNetworkPermission.enforced). Not confirmed on
-     * a device.
+     * there after a denial and can still hit it. The headless worker is covered two ways: while
+     * the app targets API 36 or lower, Android 17 grants the permission implicitly (the split
+     * permission model); from target 37 its pre-check (LocalNetworkPermission.enforced) stops a
+     * start that lacks the permission before any discovery or connect. Not confirmed on a device.
      */
     private fun discover() {
         if (Build.VERSION.SDK_INT >= 37) {
