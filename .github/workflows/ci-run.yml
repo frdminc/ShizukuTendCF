@@ -1,0 +1,63 @@
+name: CI run
+
+# Pushed by scripts/github-ci-run to ci/run/<slug>-<sha8>: the target tree plus this overlay.
+# Same checks as app.yml's lint job plus a debug assemble; release signing stays on the Mac.
+on:
+  push:
+    branches: ['ci/run/**']
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Pre-push guard (static checks only, no Gradle)
+        env:
+          SKIP_GRADLE_CHECK: '1'
+        run: bash pre-push-guard/scripts/pre_push_check.sh
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Accept SDK licenses
+        run: yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+
+      - name: Spotless
+        run: ./gradlew :manager:spotlessCheck
+
+      - name: Lint
+        run: ./gradlew :manager:lint
+
+      - name: Unit tests
+        run: ./gradlew --continue :manager:testShizukuplusDebugUnitTest :server:testDebugUnitTest :database:testDebugUnitTest
+
+      - name: Unit test counts
+        if: ${{ !cancelled() }}
+        run: python3 scripts/dev/check-test-counts.py
+
+      - name: Assemble debug
+        run: ./gradlew :manager:assembleDebug
+
+      - name: Upload reports on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            **/build/reports/**
+            **/build/test-results/**
+          retention-days: 7
