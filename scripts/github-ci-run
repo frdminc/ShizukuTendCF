@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# github-ci-run — overlay ci/base onto REF, push ci/run/<slug>-<sha8> to GitHub, watch the run.
+#
+#   scripts/github-ci-run [--no-wait] [REF]
+#
+# REF defaults to HEAD. Needs a local ci/base or origin/ci/base (git fetch origin ci/base).
+# The pushed commit is the REF tree plus .github/workflows/ci-run.yml, this script and
+# docs/ci-github.md. Workflows whose push trigger would fire on ci/run/** are deleted from
+# that commit only, so the repo's own jobs never run twice.
+set -euo pipefail
+
+wait=1
+if [ "${1:-}" = "--no-wait" ]; then wait=0; shift; fi
+ref="${1:-HEAD}"
+
+top=$(git rev-parse --show-toplevel)
+cd "$top"
+remote="${GITHUB_CI_REMOTE:-origin}"
+git remote get-url "$remote" >/dev/null 2>&1 || { echo "github-ci-run: remote $remote missing" >&2; exit 2; }
+repo=$(git remote get-url "$remote" | gsed -E 's#.*github.com[:/]##; s#\.git$##')
+
+if git show-ref --verify --quiet refs/heads/ci/base; then
+  base_ref=refs/heads/ci/base
+elif git show-ref --verify --quiet "refs/remotes/$remote/ci/base"; then
+  base_ref=refs/remotes/$remote/ci/base
+else
+  echo "github-ci-run: ci/base not found; run: git fetch $remote ci/base" >&2
+  exit 2
+fi
+
+target_sha=$(git rev-parse --verify "$ref^{commit}")
+short=$(git rev-parse --short=8 "$target_sha")
+slug=$(printf '%s' "$ref" | tr -c 'A-Za-z0-9._-' '-' | gsed 's/-\+/-/g; s/^-//; s/-$//')
+[ -n "$slug" ] || slug=head
+run_branch="ci/run/${slug}-${short}"
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+wf_dir="$work/wf"
+
+# Index = the target's tree, so the api submodule gitlink survives; overlay edits go on top.
+export GIT_INDEX_FILE="$work/index"
+git read-tree "$target_sha^{tree}"
+mkdir -p "$wf_dir"
+git archive "$target_sha" .github/workflows | tar -x -C "$wf_dir"
+
+# Names of the workflows that would fire on a push to ci/run/** (one per line).
+drop=$(python3 -I - "$wf_dir/.github/workflows" <<'PYEOF'
+import pathlib, sys
+
+root = pathlib.Path(sys.argv[1])
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+
+def fires_on_ci_run(on):
+    if isinstance(on, str):
+        on = {on: None}
+    if isinstance(on, list):
+        on = {k: None for k in on}
+    if not isinstance(on, dict) or "push" not in on:
+        return False
+    push = on["push"]
+    if not isinstance(push, dict):
+        return True
+    branches = push.get("branches")
+    if branches is None:
+        return push.get("tags") is None
+    pats = branches if isinstance(branches, list) else [branches]
+    return any(p in ("*", "**") or str(p).startswith("ci/") for p in pats)
+
+
+for f in sorted(root.iterdir()):
+    if f.suffix not in (".yml", ".yaml") or f.name == "ci-run.yml":
+        continue
+    try:
+        data = yaml.safe_load(f.read_text()) or {}
+        drop = fires_on_ci_run(data.get("on", data.get(True)))
+    except Exception:
+        drop = True
+    if drop:
+        print(f.name)
+PYEOF
+)
+for name in $drop; do
+  echo "neutralised (deleted) $name" >&2
+  git update-index --force-remove ".github/workflows/$name"
+done
+
+add_blob() { # MODE PATH, content on stdin
+  local blob
+  blob=$(git hash-object -w --stdin)
+  git update-index --add --cacheinfo "$1,$blob,$2"
+}
+git show "$base_ref:.github/workflows/ci-run.yml" | add_blob 100644 .github/workflows/ci-run.yml
+git show "$base_ref:scripts/github-ci-run" | add_blob 100755 scripts/github-ci-run
+git show "$base_ref:docs/ci-github.md" | add_blob 100644 docs/ci-github.md
+printf '%s\n' "$target_sha" | add_blob 100644 .ci-target-sha
+
+tree=$(git write-tree)
+msg="ci: overlay ci/base onto ${short} ($(git log -1 --format=%s "$target_sha"))"
+commit=$(git commit-tree "$tree" -p "$target_sha" -m "$msg")
+unset GIT_INDEX_FILE
+
+echo "overlay $commit for $target_sha -> $remote $run_branch"
+timeout 600 git push --force "$remote" "$commit:refs/heads/$run_branch"
+echo "branch: https://github.com/$repo/tree/$run_branch"
+
+# Find the run this push started.
+run_id=
+for _ in $(seq 1 12); do
+  sleep 5
+  run_id=$(timeout 60 gh run list -R "$repo" --branch "$run_branch" --workflow ci-run.yml --limit 5 \
+    --json databaseId,headSha -q ".[] | select(.headSha==\"$commit\") | .databaseId" | head -1 || true)
+  [ -n "$run_id" ] && break
+done
+[ -n "$run_id" ] || { echo "github-ci-run: no run appeared for $run_branch" >&2; exit 1; }
+echo "run: https://github.com/$repo/actions/runs/$run_id"
+[ "$wait" = 0 ] && exit 0
+exec gh run watch "$run_id" -R "$repo" --exit-status
