@@ -46,9 +46,9 @@ import java.util.concurrent.atomic.AtomicReference
  * Wireless debugging cannot come up without the user: there is no Wi-Fi, or the Wi-Fi network is
  * not trusted for it. Retrying would only repeat the same wait (or the system's "Allow wireless
  * debugging on this network?" prompt), so the start stops. Wi-Fi connecting resumes a start that
- * had none ([WirelessDebugging.armResume]); a refused network gets one automatic prompt per boot,
- * and wireless debugging coming on continues the start ([WirelessDebugging.watch]). A start by hand
- * always tries again.
+ * had none ([WirelessDebugging.armResume]); prompts that arrive together collapse into one
+ * ([WirelessDebugging.PROMPT_BURST_MS]), and a later attempt may ask again. Wireless debugging
+ * coming on continues the start ([WirelessDebugging.watch]). A start by hand always tries again.
  */
 class WirelessDebuggingBlockedException(
     val reason: WirelessDebugging.Blocked,
@@ -72,11 +72,13 @@ class TcpPortOpenAgainException : Exception("the tcp port is open again")
  * AdbDebuggingManager). A paired or "Always allow" key in adb_keys authorises the TLS connection
  * after a reboot, so nothing needs pairing again.
  *
- * At most one automatic prompt per boot: the moment a write of 1 comes back 0 on the same Wi-Fi
- * the prompt is recorded (durably, with the boot count), and from then on only a start by hand
- * made after it, HEADLESS_START with force, the user turning wireless debugging on, or the next
- * boot write 1 again. Without location permission no Wi-Fi network has a stable identity (each
- * connection gets a new handle, and handles restart with every boot), so the record is per boot.
+ * Automatic prompts that arrive together collapse into one. The moment a write of 1 comes back 0
+ * on the same Wi-Fi the prompt is recorded (durably, with the boot count and the time). For
+ * [PROMPT_BURST_MS] after that, further automatic writes stand down, so a pile of starts in the
+ * same moment raises one dialog. A later attempt, including the next repair cycle, may write 1
+ * again and may ask again: trust is per BSSID, and a roam is a new question, not a reason to stay
+ * silent for the rest of the boot. A start by hand made after the prompt, HEADLESS_START with
+ * force, or the user turning wireless debugging on may ask without waiting out the burst.
  *
  * One UI shows no prompt while the keyguard is locked: an untrusted network's write is refused in
  * silence (s24: "startConfirmationForNetwork: isLockScreenMode", no WifiDebuggingActivity). Trust is
@@ -98,6 +100,12 @@ object WirelessDebugging {
     // This boot's prompt: the boot count, and when (wall clock, AdbAuthWait.clockMs) it was raised.
     private const val KEY_PROMPTED_BOOT = "wadb_restore_prompted_boot"
     private const val KEY_PROMPTED_AT = "wadb_restore_prompted_at"
+
+    /**
+     * How long automatic writes stand down after a network prompt. Long enough that starts which
+     * arrive together share one dialog. Short enough that a later roam can ask again.
+     */
+    const val PROMPT_BURST_MS = 60_000L
 
     // A write of 1 made this boot whose outcome no run saw (the run died): counts as the prompt.
     private const val KEY_WRITE_PENDING_BOOT = "wadb_restore_write_pending_boot"
@@ -408,6 +416,13 @@ object WirelessDebugging {
     fun promptedAt(context: Context): Long? =
         if (thisBoot(context, KEY_PROMPTED_BOOT)) runCatching { prefs().getLong(KEY_PROMPTED_AT, 0L) }.getOrNull() else null
 
+    /** True when an automatic network prompt was raised within [PROMPT_BURST_MS]. */
+    fun promptBurstActive(context: Context): Boolean {
+        val at = promptedAt(context) ?: return false
+        val now = AdbAuthWait.clockMs()
+        return now >= at && now - at < PROMPT_BURST_MS
+    }
+
     private fun markPrompted(context: Context) {
         runCatching {
             prefs()
@@ -620,7 +635,7 @@ object WirelessDebugging {
     /** What stops a start that has not been allowed to ask (see [standDownReason]); null: nothing. */
     fun blocked(context: Context): Blocked? =
         when {
-            promptedAt(context) != null && setting(context) != 1 -> Blocked.UNTRUSTED_NETWORK
+            promptBurstActive(context) && setting(context) != 1 -> Blocked.UNTRUSTED_NETWORK
             silentRefusalPending(context) && setting(context) != 1 -> Blocked.UNTRUSTED_NETWORK
             noWifiThisBoot(context) -> Blocked.NO_WIFI
             else -> null
@@ -628,9 +643,9 @@ object WirelessDebugging {
 
     /**
      * Why a start should not try wireless debugging now, or null if it should. Unattended starts
-     * ([explicit] false) stand down after this boot's prompt while wireless debugging is still off,
-     * and while there is still no Wi-Fi after a no-Wi-Fi stop. A start by hand may ask again,
-     * unless it is a WorkManager re-run of a request made before the prompt ([requestedAt]).
+     * ([explicit] false) stand down for [PROMPT_BURST_MS] after a prompt while wireless debugging
+     * is still off, and while there is still no Wi-Fi after a no-Wi-Fi stop. A start by hand may
+     * ask again, unless it is a WorkManager re-run of a request made before the prompt ([requestedAt]).
      * After a silent refusal (One UI, locked) unattended starts stand down while still locked; the
      * unlock, or any start made unlocked, may write once more. Only the [quiet] retry writes locked.
      */
@@ -641,13 +656,12 @@ object WirelessDebugging {
         quiet: Boolean = false,
     ): Pair<Blocked, String>? {
         val prompted = promptedAt(context)
-        if (prompted != null && setting(context) != 1) {
+        if (promptBurstActive(context) && setting(context) != 1) {
             if (!explicit) {
                 return Blocked.UNTRUSTED_NETWORK to
-                    "this Wi-Fi network is still not trusted for wireless debugging (one automatic prompt per boot); " +
-                    "waiting for a start by hand, wireless debugging turned on, or the next boot"
+                    "a network prompt was just raised; waiting ${PROMPT_BURST_MS / 1000}s before asking again"
             }
-            if (requestedAt <= prompted) {
+            if (prompted != null && requestedAt <= prompted) {
                 return Blocked.UNTRUSTED_NETWORK to
                     "this start by hand was requested before this boot's network prompt and has asked already; waiting for a new start by hand"
             }
@@ -1123,9 +1137,9 @@ object WirelessDebugging {
                     )
                     markSilentRefusal(context)
                 } else if (setting(context) != 1) {
-                    warn("an earlier start turned wireless debugging on and stopped before it saw the outcome; counting that as this boot's network prompt")
+                    warn("an earlier start turned wireless debugging on and stopped before it saw the outcome; counting that as the network prompt")
                     markPrompted(context)
-                    throw untrustedStop("an earlier start may have raised this boot's network prompt")
+                    throw untrustedStop("an earlier start may have raised the network prompt")
                 } else {
                     setWritePending(context, false)
                 }
@@ -1135,9 +1149,9 @@ object WirelessDebugging {
                 when (val round = round(network)) {
                     is Round.Found -> return round.port
                     Round.NetworkChanged -> {
-                        if (promptedAt(context) != null && setting(context) != 1) {
-                            warn("Wi-Fi changed after this boot's network prompt; not turning wireless debugging on again")
-                            throw untrustedStop("Wi-Fi changed after this boot's network prompt")
+                        if (promptBurstActive(context) && setting(context) != 1) {
+                            warn("Wi-Fi changed during the network-prompt burst; not turning wireless debugging on again yet")
+                            throw untrustedStop("Wi-Fi changed during the network-prompt burst")
                         }
                         network = requireWifi()
                     }
@@ -1235,7 +1249,7 @@ object WirelessDebugging {
             }
             var wroteThisRound = false
             if (before != 1) {
-                if (promptedAt(context) != null) throw untrustedStop("this boot's network prompt has been raised already")
+                if (promptBurstActive(context)) throw untrustedStop("a network prompt was just raised")
                 // Wi-Fi may have moved while this round settled: the system would check the new
                 // network, which has not settled.
                 if (!isConnectedWifi(context, network)) {
@@ -1344,7 +1358,7 @@ object WirelessDebugging {
                                 // and may have asked about: count it as this boot's prompt.
                                 markPrompted(context)
                                 notifyUntrusted(context)
-                                warn("adb_wifi_enabled went to 0 after the write with Wi-Fi now on network $wifi; counting that as this boot's network prompt")
+                                warn("adb_wifi_enabled went to 0 after the write with Wi-Fi now on network $wifi; counting that as the network prompt")
                             } else {
                                 // Nothing judged the write: it is no prompt, nor the unlock's write.
                                 setWritePending(context, false)
@@ -1378,12 +1392,11 @@ object WirelessDebugging {
                             delay(pollMs)
                             continue
                         }
-                        // Otherwise the system asked (or will once unlocked). Recorded before
-                        // anything else, so no run asks again this boot.
-                        if (promptedAt(context) == null) {
-                            markPrompted(context)
-                            warn("adb_wifi_enabled went back to 0 with Wi-Fi connected: this network is not trusted for wireless debugging; this boot's one network prompt")
-                        }
+                        // Otherwise the system asked (or will once unlocked). Recording it
+                        // again restarts the burst, so a pile of starts around this
+                        // prompt collapses, and a later attempt may ask.
+                        markPrompted(context)
+                        warn("adb_wifi_enabled went back to 0 with Wi-Fi connected: this network is not trusted for wireless debugging; counting that as the network prompt")
                         if (locked()) awaitUnlock()
                         untrusted(network)
                         deadline = elapsedMs() + discoveryMs
@@ -1455,8 +1468,8 @@ object WirelessDebugging {
             goForeground()
             if (!awaitUnlock(waitMs)) {
                 warn(
-                    "not unlocked within ${waitMs / 1000} s; the system's prompt waits for the unlock, and no second one is raised this boot; " +
-                        "continuing when wireless debugging is turned on, or on a start by hand",
+                    "not unlocked within ${waitMs / 1000} s; the system's prompt waits for the unlock, and no further automatic prompt is raised during this burst; " +
+                        "continuing when wireless debugging is turned on, on a later attempt, or on a start by hand",
                 )
                 throw untrustedStop("locked while the system asked to allow wireless debugging on this network")
             }
@@ -1497,8 +1510,8 @@ object WirelessDebugging {
                 delay(pollMs)
             }
             warn(
-                "the network was not allowed within ${waitMs / 1000} s; no second prompt this boot: " +
-                    "continuing when wireless debugging is turned on, or on a start by hand",
+                "the network was not allowed within ${waitMs / 1000} s; no further automatic prompt during this burst: " +
+                    "a later attempt may ask again, and a start by hand may ask without waiting",
             )
             throw untrustedStop("this Wi-Fi network is not trusted for wireless debugging")
         }

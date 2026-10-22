@@ -428,7 +428,8 @@ class AdbStartWorker(
         AdbStarter.startAdb(applicationContext, port, connectedClient = discoverySession?.scannedClient)
         Starter.waitForBinder()
         ManagerActivityLog.log(applicationContext, "Service started via background ADB worker on port $port")
-        // This boot's network prompt stays: a later restore the same boot must not ask again.
+        // The prompt record stays, so a burst still in progress does not ask again.
+        // A later attempt, once that minute has passed, may ask.
         WirelessDebugging.clearNoWifi(applicationContext)
         WirelessDebugging.succeeded(applicationContext)
         note("SUCCESS on port $port (attempt=$runAttemptCount)")
@@ -436,12 +437,12 @@ class AdbStartWorker(
     }
 
     /**
-     * This run's use of wireless debugging. A start nobody made by hand stands down after this
-     * boot's network prompt (while wireless debugging is still off) and while there is still no
-     * Wi-Fi after a no-Wi-Fi stop, so the watchdog, the boot retry and WorkManager's re-runs
-     * neither wait nor prompt again. A start by hand made after the prompt may ask once more; a
-     * re-run of one made before it may not (its requested-at, as the unanswered marker does).
-     * The quiet retry (One UI, locked, after a silent refusal) may write while locked.
+     * This run's use of wireless debugging. A start nobody made by hand stands down for a minute
+     * after a network prompt (while wireless debugging is still off) and while there is still no
+     * Wi-Fi after a no-Wi-Fi stop, so a pile of watchdog, boot-retry and WorkManager re-runs
+     * raises one prompt. A later attempt may ask again. A start by hand made after the prompt may
+     * ask without waiting out that minute, unless it is a re-run of a request made before the
+     * prompt. The quiet retry (One UI, locked, after a silent refusal) may write while locked.
      */
     private fun wirelessSession(
         restoresState: Boolean = false,

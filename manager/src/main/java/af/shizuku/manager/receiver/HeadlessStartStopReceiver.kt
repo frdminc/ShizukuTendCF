@@ -93,8 +93,9 @@ class HeadlessStartStopReceiver : BroadcastReceiver() {
                         WirelessDebugging.clearNoWifi(context)
                     }
                     // Wireless debugging is the start worker's: it turns it on only when the start
-                    // needs it, after Wi-Fi has settled, at most one network prompt per boot, and
-                    // (in TCP mode) back off afterwards. Turned on here it raised a refused
+                    // needs it, after Wi-Fi has settled. Prompts that arrive together collapse
+                    // into one for a minute, and a later attempt may ask again. In TCP mode it
+                    // is turned back off afterwards. Turned on here it raised a refused
                     // network's prompt on every pass of a repair loop. enable_wireless_adb is
                     // still accepted and changes nothing.
                     HeadlessLogger.i("Start", "Leaving wireless debugging to the start worker")

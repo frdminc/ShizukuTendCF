@@ -199,7 +199,7 @@ class TcpRestoreScenariosTest {
                 assertEquals(string(R.string.wadb_restore_untrusted_text), restoreNoticeText)
                 assertLogHas(
                     "StartWorker: adb_wifi_enabled went back to 0 with Wi-Fi connected: this network is not trusted for wireless debugging",
-                    "no second prompt this boot",
+                    "no further automatic prompt during this burst",
                     "StartWorker: FAILURE",
                 )
                 assertLogLacks("RETRY")
@@ -212,7 +212,7 @@ class TcpRestoreScenariosTest {
                 assertEquals(WorkInfo.State.FAILED, lastWork)
                 assertEquals(2, startsRun)
                 assertEquals("no second prompt", 1, trustPrompts)
-                assertLogHas("this Wi-Fi network is still not trusted for wireless debugging")
+                assertLogHas("a network prompt was just raised; waiting 60s before asking again")
             }
 
             // The user starts by hand: that tries again, prompting once more.
@@ -259,9 +259,9 @@ class TcpRestoreScenariosTest {
             check { assertEquals("the user's wireless debugging is left on", 1, adbWifiEnabled) }
         }
 
-    // Without location permission no network has a stable identity (a reconnect gets a new handle),
-    // so a refused network allows one automatic prompt per boot; after that only a start by hand,
-    // the user turning wireless debugging on, or the next boot tries again.
+    // Without location permission no network has a stable identity (a reconnect gets a new handle).
+    // Reconnects inside the burst window do not ask again. After the window, or on the next boot,
+    // an automatic start may ask again. A start by hand may ask without waiting.
     @Test
     fun `untrusted-network-then-another-network-needs-a-start-by-hand`() =
         scenario {
@@ -289,7 +289,7 @@ class TcpRestoreScenariosTest {
         }
 
     @Test
-    fun `untrusted-network-reconnects-prompt-once-per-boot`() =
+    fun `untrusted-network-reconnects-ask-once-per-burst`() =
         scenario {
             WirelessDebugging.userWaitMs = 1_500
             wifiConnects(trusted = false)
@@ -304,17 +304,44 @@ class TcpRestoreScenariosTest {
             awaitStartWork()
             check {
                 assertEquals("no automatic restart", 1, startsRun)
-                assertEquals("one prompt this boot", 1, trustPrompts)
+                assertEquals("one prompt inside the burst", 1, trustPrompts)
             }
 
-            // The next boot may ask once more.
+            // Past the burst, the same refused network may be asked again.
+            advanceTime(WirelessDebugging.PROMPT_BURST_MS)
+            backgroundStart()
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals("a later attempt may ask again", 2, trustPrompts)
+                assertEquals(2, startsRun)
+            }
+
+            // That later prompt starts its own burst.
+            backgroundStart()
+            awaitStartWork()
+            check {
+                assertEquals("a pile right after the later prompt collapses", 2, trustPrompts)
+                assertEquals(3, startsRun)
+            }
+
+            advanceTime(WirelessDebugging.PROMPT_BURST_MS)
+            backgroundStart()
+            awaitStartWork()
+            check {
+                assertEquals(WorkInfo.State.FAILED, lastWork)
+                assertEquals(3, trustPrompts)
+                assertEquals(4, startsRun)
+            }
+
+            // The next boot may ask once more. Start requests and prompts accumulate.
             reboot()
             boot()
             awaitStartWork()
             check {
                 assertEquals(WorkInfo.State.FAILED, lastWork)
-                assertEquals(2, startsRun)
-                assertEquals(2, trustPrompts)
+                assertEquals(5, startsRun)
+                assertEquals(4, trustPrompts)
             }
         }
 
@@ -585,7 +612,7 @@ class TcpRestoreScenariosTest {
             check {
                 assertTrue("tcp port open again", tcpPortOpen)
                 assertEquals(0, trustPrompts)
-                assertLogLacks("counting that as this boot's network prompt")
+                assertLogLacks("counting that as the network prompt")
             }
             // Nothing recorded: a later start still restores, and HEADLESS_START is not refused.
             world.closeTcpPort()
@@ -951,7 +978,7 @@ class TcpRestoreScenariosTest {
             world.awaitHeldRefusal()
             lockScreen()
             world.releaseRefusal()
-            awaitLog("this boot's one network prompt")
+            awaitLog("counting that as the network prompt")
             unlockScreen()
             awaitStartWork()
             check {
@@ -1107,7 +1134,7 @@ class TcpRestoreScenariosTest {
             awaitStartWork()
             check {
                 assertEquals(WorkInfo.State.FAILED, lastWork)
-                assertLogHas("this boot's one network prompt")
+                assertLogHas("counting that as the network prompt")
                 assertFalse(quietRetryQueued)
             }
             unlockScreen()
