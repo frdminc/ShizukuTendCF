@@ -92,7 +92,6 @@ object AdbPortProber {
         }
 
     /**
-<<<<<<< HEAD
      * The first of [ports] that accepts a loopback connection, or -1. Safe on the main thread (a
      * broadcast receiver's): the connects run on a thread of their own, since a socket opened on
      * the main thread throws NetworkOnMainThreadException in a release build.
@@ -113,42 +112,29 @@ object AdbPortProber {
     }
 
     /**
-     * Checks candidate ports on loopback (127.0.0.1) in order of likelihood:
-     * 1. 5555 (Standard ADB TCP/IP port - works offline / over 5G)
-     * 2. ShizukuSettings.getLastPort() (Previously successful session port)
-=======
      * Checks candidate ports on loopback (127.0.0.1 / ::1) in order of likelihood:
      * 1. EnvironmentUtils.getAdbTcpPort() (Active system-reported port from service.adb.tcp.port)
      * 2. 5555 (Standard ADB TCP/IP port - works offline / over 5G)
->>>>>>> upstream/master
      * 3. ShizukuSettings.getTcpPort() (Configured custom TCP port)
      * 4. ShizukuSettings.getLastPort() (Previously successful session port)
      *
-     * Probes all candidates in parallel for minimal latency and returns the highest-priority
-     * open port, or -1 if none.
+     * When adbd reports its port (1), only that port is probed. Otherwise the remaining candidates
+     * are probed in parallel for minimal latency and the highest-priority open port is returned,
+     * or -1 if none (or when the loopback probe is switched off in settings).
      */
     suspend fun findActiveLoopbackPort(context: Context? = null): Int =
         withContext(Dispatchers.IO) {
-<<<<<<< HEAD
+            if (!ShizukuSettings.isAdbLoopbackProbeEnabled()) return@withContext -1
+
             // When adbd reports the TCP port it is listening on, use only that. A fixed candidate
             // such as 5555 could be held by another app while adbd listens elsewhere, and that app
             // could relay adbd's auth challenge to this app's authorised key.
-            val reported =
-                af.shizuku.manager.utils.EnvironmentUtils
-                    .getAdbTcpPort()
+            val reported = EnvironmentUtils.getAdbTcpPort()
             if (reported in 1..65535) {
                 return@withContext if (isPortOpen(reported, 150)) reported else -1
             }
 
-=======
-            if (!ShizukuSettings.isAdbLoopbackProbeEnabled()) return@withContext -1
->>>>>>> upstream/master
             val candidates = LinkedHashSet<Int>()
-
-            val sysPropPort = EnvironmentUtils.getAdbTcpPort()
-            if (sysPropPort in 1..65535) {
-                candidates.add(sysPropPort)
-            }
             candidates.add(5555)
             val tcpPort = ShizukuSettings.getTcpPort()
             if (tcpPort in 1..65535) {

@@ -25,11 +25,7 @@ class RemoteDbSyncWorker(
     companion object {
         private const val WORK_NAME = "remote_app_db_sync"
         private const val DB_URL =
-<<<<<<< HEAD
-            "https://raw.githubusercontent.com/frdminc/ShizukuTendCF/master/app-context-db.json"
-=======
-            "https://raw.githubusercontent.com/thejaustin/ShizukuPlus/master/database/src/main/assets/app_context_db.json"
->>>>>>> upstream/master
+            "https://raw.githubusercontent.com/frdminc/ShizukuTendCF/master/database/src/main/assets/app_context_db.json"
         private const val CONNECT_TIMEOUT_MS = 8_000
         private const val READ_TIMEOUT_MS = 12_000
 
@@ -153,80 +149,15 @@ class RemoteDbSyncWorker(
         }
     }
 
-    // The network fetch, replaceable by tests: java.net.URL cannot be constructor-mocked on current JDKs.
-    internal var fetchDb: (String) -> String? = ::fetch
-
     override suspend fun doWork(): Result {
         val lastUpdate = ShizukuSettings.getLastDbUpdate()
         if (lastUpdate > 0 && System.currentTimeMillis() - lastUpdate < MIN_REFRESH_INTERVAL_MS) {
             Timber.d("RemoteDbSync: skipping — checked %dh ago", (System.currentTimeMillis() - lastUpdate) / 3600_000)
             return Result.success()
         }
-<<<<<<< HEAD
-
-        return try {
-            val json = fetchDb(DB_URL)
-            if (json != null) {
-                AppContextManager.updateDatabase(json)
-                Timber.d("RemoteDbSync: app context database updated successfully")
-            } else {
-                Timber.w("RemoteDbSync: server returned empty or error response")
-            }
-            Result.success()
-        } catch (e: Exception) {
-            Timber.w(e, "RemoteDbSync: network fetch failed, will retry next cycle")
-            Result.retry()
-        }
-    }
-
-    private fun fetch(urlString: String): String? {
-        val connection =
-            (URL(urlString).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                setRequestProperty("User-Agent", "Shizuku+/${BuildConfig.VERSION_NAME}")
-                setRequestProperty("Accept", "application/json")
-
-                ShizukuSettings.getRemoteDbEtag()?.let {
-                    setRequestProperty("If-None-Match", it)
-                }
-                ShizukuSettings.getRemoteDbLastModified()?.let {
-                    setRequestProperty("If-Modified-Since", it)
-                }
-            }
-        return try {
-            when (connection.responseCode) {
-                HttpURLConnection.HTTP_OK -> {
-                    val etag = connection.getHeaderField("ETag")
-                    val lastModified = connection.getHeaderField("Last-Modified")
-
-                    ShizukuSettings.setRemoteDbEtag(etag)
-                    ShizukuSettings.setRemoteDbLastModified(lastModified)
-
-                    connection.inputStream
-                        .bufferedReader()
-                        .use { it.readText() }
-                        .takeIf { it.isNotBlank() }
-                }
-                HttpURLConnection.HTTP_NOT_MODIFIED -> {
-                    Timber.d("RemoteDbSync: 304 Not Modified — using local cache")
-                    // If not modified, the cache is implicitly fresh, update the timestamp
-                    ShizukuSettings.setLastDbUpdate(System.currentTimeMillis())
-                    null
-                }
-                else -> {
-                    Timber.w("RemoteDbSync: HTTP ${connection.responseCode} from $urlString")
-                    null
-                }
-            }
-        } finally {
-            connection.disconnect()
-=======
         return when (val r = sync()) {
             is SyncResult.Failed -> if (r.retry) Result.retry() else Result.success()
             else -> Result.success()
->>>>>>> upstream/master
         }
     }
 }

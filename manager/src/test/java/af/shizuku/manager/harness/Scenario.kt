@@ -1,27 +1,18 @@
 package af.shizuku.manager.harness
 
 import af.shizuku.manager.adb.AdbAuthWait
-<<<<<<< HEAD
 import af.shizuku.manager.adb.WirelessDebugging
 import af.shizuku.manager.receiver.BootCompleteReceiver
 import af.shizuku.manager.receiver.HeadlessStartStopReceiver
-=======
-import af.shizuku.manager.receiver.BootCompleteReceiver
->>>>>>> upstream/master
 import af.shizuku.manager.receiver.NotifAttemptReceiver
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.worker.AdbStartWorker
 import android.app.Notification
 import android.app.NotificationManager
-<<<<<<< HEAD
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-=======
-import android.content.Context
-import android.content.Intent
->>>>>>> upstream/master
 import android.text.format.DateFormat
 import androidx.work.ListenableWorker
 import androidx.work.WorkInfo
@@ -31,25 +22,18 @@ import rikka.shizuku.Shizuku
 import java.util.Locale
 
 /**
-<<<<<<< HEAD
  * One-prompt scenarios in the event vocabulary of the scenario catalogue (A2 §2). Each event drives
-=======
- * One-prompt scenarios as a sequence of events. Each event drives
->>>>>>> upstream/master
  * the production entry point that the event stands for; adbd's side is [adbd].
  */
 class Scenario(
     val world: FakeWorld,
 ) {
-<<<<<<< HEAD
     data class Headless(
         val code: Int,
         val data: String?,
         val extras: Bundle?,
     )
 
-=======
->>>>>>> upstream/master
     val adbd: FakeAdbd get() = world.adbd
     private val app get() = world.app
 
@@ -70,15 +54,10 @@ class Scenario(
         world.settle()
     }
 
-<<<<<<< HEAD
+    /** An unlock, as the boot receiver hears it (USER_PRESENT): a start nobody asked for just now. */
+    fun userPresent() = bootAction(Intent.ACTION_USER_PRESENT)
+
     fun bootRetryTick(): ListenableWorker.Result = world.bootRetryTick()
-=======
-    /** A start nobody asked for just now: the watchdog's restart, a widget or automation. */
-    fun plainStart() {
-        ShizukuReceiverStarter.start(app)
-        world.settle()
-    }
->>>>>>> upstream/master
 
     // User and automation starts.
 
@@ -97,7 +76,6 @@ class Scenario(
         world.settle()
     }
 
-<<<<<<< HEAD
     fun headlessStart(force: Boolean = false): Headless =
         headless(Intent(HeadlessStartStopReceiver.ACTION_HEADLESS_START).putExtra(HeadlessStartStopReceiver.EXTRA_FORCE, force))
 
@@ -178,8 +156,6 @@ class Scenario(
             restoreNoticeTitle == string(af.shizuku.manager.R.string.wadb_restore_untrusted_title)
         }
 
-=======
->>>>>>> upstream/master
     // adbd's dialog. As on a device, a rejection and a dialog nobody answers look the same to the
     // manager: adbd sends nothing and keeps the connection open, so both end at AdbClient's
     // deadline (shortened by FakeWorld) with the same AdbAuthTimeoutException.
@@ -283,7 +259,6 @@ class Scenario(
                 (it.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: it.getCharSequence(Notification.EXTRA_TEXT))?.toString()
             }
 
-<<<<<<< HEAD
     private val restoreNotice: Notification?
         get() =
             (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
@@ -325,8 +300,6 @@ class Scenario(
     /** The start log as HEADLESS_LOG returns it. */
     fun log(): String = headlessLog().data.orEmpty()
 
-=======
->>>>>>> upstream/master
     /** [wallMs] as the device shows a time of day: hours, minutes and seconds in its locale and 12/24-hour setting. */
     fun clock(wallMs: Long): String {
         val pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), if (DateFormat.is24HourFormat(app)) "Hms" else "hms")
@@ -358,7 +331,6 @@ class Scenario(
 
     private companion object {
         const val MARKER = "adb_auth_unanswered_at"
-<<<<<<< HEAD
 
         val createPendingResult =
             Class
@@ -373,8 +345,6 @@ class Scenario(
 
         val setPendingResult =
             BroadcastReceiver::class.java.getMethod("setPendingResult", BroadcastReceiver.PendingResult::class.java)
-=======
->>>>>>> upstream/master
     }
 }
 

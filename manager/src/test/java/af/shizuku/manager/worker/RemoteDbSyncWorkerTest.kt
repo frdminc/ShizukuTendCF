@@ -14,10 +14,7 @@ import io.mockk.mockkObject
 import io.mockk.mockkStatic
 import io.mockk.runs
 import io.mockk.unmockkAll
-<<<<<<< HEAD
-=======
 import io.mockk.verify
->>>>>>> upstream/master
 
 class RemoteDbSyncWorkerTest :
     FunSpec({
@@ -51,13 +48,9 @@ class RemoteDbSyncWorkerTest :
         test("doWork returns retry when fetch throws exception") {
             every { ShizukuSettings.getLastDbUpdate() } returns 0L
 
-<<<<<<< HEAD
-=======
             RemoteDbSyncWorker.fetchForTesting = { throw RuntimeException("Simulated network error") }
 
->>>>>>> upstream/master
             val worker = RemoteDbSyncWorker(context, workerParams)
-            worker.fetchDb = { throw RuntimeException("Simulated network error") }
             val result = worker.doWork()
 
             result shouldBe Result.retry()

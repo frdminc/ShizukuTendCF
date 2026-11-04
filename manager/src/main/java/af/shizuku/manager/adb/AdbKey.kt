@@ -513,15 +513,11 @@ class AdbKey(
                 ): String? = null
             }
 
-    fun sslContext(trustManager: X509ExtendedTrustManager): SSLContext =
-        SSLContext.getInstance("TLSv1.3").apply {
-            init(arrayOf(keyManager), arrayOf(trustManager), SecureRandom())
-        }
-<<<<<<< HEAD
-=======
-
-    @delegate:RequiresApi(Build.VERSION_CODES.R)
-    val sslContext: SSLContext by unsafeLazy {
+    /**
+     * A TLS context that presents this key and trusts adbd through [trustManager]: the pinned
+     * [PinnedAdbServerTrustManager] on the connect port, [PairingAdbServerTrustManager] for pairing.
+     */
+    fun sslContext(trustManager: X509ExtendedTrustManager): SSLContext {
         val sslContext =
             try {
                 SSLContext.getInstance("TLSv1.3")
@@ -530,9 +526,8 @@ class AdbKey(
                 SSLContext.getInstance("TLS")
             }
         sslContext.init(arrayOf(keyManager), arrayOf(trustManager), SecureRandom())
-        sslContext
+        return sslContext
     }
->>>>>>> upstream/master
 }
 
 interface AdbKeyStore {

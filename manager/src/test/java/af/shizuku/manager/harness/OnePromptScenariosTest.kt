@@ -2,10 +2,7 @@ package af.shizuku.manager.harness
 
 import af.shizuku.manager.R
 import af.shizuku.manager.adb.AdbAuthWait
-<<<<<<< HEAD
 import af.shizuku.manager.receiver.HeadlessStartStopReceiver
-=======
->>>>>>> upstream/master
 import android.app.Application
 import androidx.work.ListenableWorker
 import androidx.work.WorkInfo
@@ -26,11 +23,7 @@ import org.robolectric.annotation.Config
 /**
  * "At most one adbd authorisation dialog per boot or per fresh user gesture", driven end to end:
  * receivers, the shared starter, WorkManager, AdbStartWorker, AdbStarter and AdbClient all run for
-<<<<<<< HEAD
  * real against [FakeWorld]'s adbd. Test names are the scenario catalogue's ids (A2 §3).
-=======
- * real against [FakeWorld]'s adbd.
->>>>>>> upstream/master
  */
 @RunWith(RobolectricTestRunner::class)
 // A plain Application: ShizukuApplication's onCreate (Sentry, Koin) is not part
@@ -68,13 +61,7 @@ class OnePromptScenariosTest {
                 assertEquals(WorkInfo.State.SUCCEEDED, lastWork)
                 assertNull("marker after acceptance", marker)
                 assertTrue("server up", serverRunning)
-<<<<<<< HEAD
                 assertEquals(1, headlessStart().code)
-=======
-                plainStart()
-                assertEquals("a start while running opens nothing", 1, startsRun)
-                expectOffers(1)
->>>>>>> upstream/master
             }
         }
 
@@ -87,12 +74,7 @@ class OnePromptScenariosTest {
             check {
                 assertEquals(WorkInfo.State.FAILED, lastWork)
                 assertNotNull("marker after a rejected key", marker)
-<<<<<<< HEAD
                 assertEquals("boot retry stops", ListenableWorker.Result.success(), bootRetryTick())
-=======
-                plainStart()
-                bootQuickboot()
->>>>>>> upstream/master
                 assertEquals("no further start ran", 1, startsRun)
                 expectOffers(1)
             }
@@ -112,21 +94,14 @@ class OnePromptScenariosTest {
             }
         }
 
+    // An unlock with the server down is a start on boot that could not run before (the receiver's
+    // USER_PRESENT path): a plain start, so it keeps to the marker like every background start.
     @Test
-<<<<<<< HEAD
-    fun `headless-plain-respects-marker`() =
+    fun `unlock-start-respects-marker`() =
         scenario {
             markerSetAt(now)
-            val result = headlessStart(force = false)
+            userPresent()
             check {
-                assertEquals(HeadlessStartStopReceiver.RESULT_AUTH_UNANSWERED, result.code)
-=======
-    fun `plain-start-respects-marker`() =
-        scenario {
-            markerSetAt(now)
-            plainStart()
-            check {
->>>>>>> upstream/master
                 assertEquals("no start enqueued", null, awaitStartWork())
                 assertNotNull("marker kept", marker)
                 expectOffers(0)
@@ -134,35 +109,52 @@ class OnePromptScenariosTest {
         }
 
     @Test
-<<<<<<< HEAD
+    fun `unlock-with-server-down-offers-once`() =
+        scenario {
+            userPresent()
+            keyOffered()
+            dialogAccepted()
+            check {
+                expectOffers(1)
+                assertEquals(WorkInfo.State.SUCCEEDED, lastWork)
+                assertNull("marker after acceptance", marker)
+                assertTrue("server up", serverRunning)
+                userPresent()
+                assertEquals("an unlock while running starts nothing more", 1, startsRun)
+                expectOffers(1)
+            }
+        }
+
+    @Test
+    fun `headless-plain-respects-marker`() =
+        scenario {
+            markerSetAt(now)
+            val result = headlessStart(force = false)
+            check {
+                assertEquals(HeadlessStartStopReceiver.RESULT_AUTH_UNANSWERED, result.code)
+                assertEquals("no start enqueued", null, awaitStartWork())
+                assertNotNull("marker kept", marker)
+                expectOffers(0)
+            }
+        }
+
+    @Test
     fun `headless-force-clears-offers-once`() =
-=======
-    fun `force-start-offers-once`() =
->>>>>>> upstream/master
         scenario {
             val first = now
             markerSetAt(first)
             advanceTime(1_000)
-<<<<<<< HEAD
             assertEquals("forced start accepted", 0, headlessStart(force = true).code)
-=======
-            settingsForceStart()
->>>>>>> upstream/master
             keyOffered()
             dialogTimedOut()
             check {
                 expectOffers(1)
                 assertTrue("the new offer re-marked", (marker ?: 0L) > first)
-<<<<<<< HEAD
                 assertEquals(
                     "a plain start after the forced one is withheld again",
                     HeadlessStartStopReceiver.RESULT_AUTH_UNANSWERED,
                     headlessStart(force = false).code,
                 )
-=======
-                plainStart()
-                assertEquals("a plain start after the forced one is withheld again", 1, startsRun)
->>>>>>> upstream/master
                 expectOffers(1)
             }
         }
@@ -195,23 +187,14 @@ class OnePromptScenariosTest {
             check {
                 assertTrue("marker committed before the key went out", markerOnDisk)
                 assertEquals("rerun refused", ListenableWorker.Result.failure(), workerRerun())
-<<<<<<< HEAD
                 assertEquals("boot retry stops", ListenableWorker.Result.success(), bootRetryTick())
-=======
-                plainStart()
->>>>>>> upstream/master
                 expectOffers(1)
             }
         }
 
-<<<<<<< HEAD
     // SD-1: markUnanswered() commit()s but clearUnanswered() only apply()s, so a process killed
     // before the OS flushes the clear comes back believing an accepted key went unanswered.
     // Expected to fail until the clear is made durable.
-=======
-    // The marker's clear must be as durable as its set (commit(), not apply()): a process killed
-    // before the OS flushes the clear would come back believing an accepted key went unanswered.
->>>>>>> upstream/master
     @Test
     fun `accepted-then-killed-before-flush`() =
         scenario {
@@ -219,37 +202,24 @@ class OnePromptScenariosTest {
             keyOffered()
             dialogAccepted()
             processDeath()
-<<<<<<< HEAD
             val status = headlessStatus()
             check {
                 expectOffers(1)
                 assertFalse(
                     "HEADLESS_STATUS auth_unanswered after the key was accepted (clear lost with the process)",
                     status.extras?.getBoolean("auth_unanswered") ?: true,
-=======
-            check {
-                expectOffers(1)
-                assertFalse(
-                    "unanswered after the key was accepted (clear lost with the process)",
-                    AdbAuthWait.isUnanswered(),
->>>>>>> upstream/master
                 )
                 assertNull("marker after acceptance survives process death", marker)
             }
         }
 
     // SD-2: isUnanswered() fails open where unansweredStamp() fails closed. With storage unreadable
-<<<<<<< HEAD
     // the boot retry loop must stop (and offer nothing) rather than start and stand down forever.
     // Expected to fail until isUnanswered() fails closed.
-=======
-    // a start nobody asked for must offer nothing rather than start and stand down forever.
->>>>>>> upstream/master
     @Test
     fun `prefs-unreadable-fail-closed`() =
         scenario {
             world.prefs.failOnRead = true
-<<<<<<< HEAD
             val tick = runCatching { bootRetryTick() }
             awaitStartWork()
             check {
@@ -259,14 +229,6 @@ class OnePromptScenariosTest {
                     ListenableWorker.Result.success(),
                     tick.getOrNull(),
                 )
-=======
-            // Every caller of start() catches what it throws (BootCompleteReceiver, the watchdog).
-            runCatching { plainStart() }
-            awaitStartWork()
-            check {
-                expectOffers(0)
-                assertTrue("unreadable storage counts as unanswered", AdbAuthWait.isUnanswered())
->>>>>>> upstream/master
             }
         }
 
@@ -394,11 +356,7 @@ class OnePromptScenariosTest {
                 assertEquals(WorkInfo.State.FAILED, lastWork)
                 assertFalse("wait released", AdbAuthWait.isWaiting())
                 assertNotNull("marker after an unanswered re-offer", marker)
-<<<<<<< HEAD
                 assertEquals(HeadlessStartStopReceiver.RESULT_AUTH_UNANSWERED, headlessStart(force = false).code)
-=======
-                plainStart()
->>>>>>> upstream/master
                 expectOffers(2)
             }
         }

@@ -6,11 +6,7 @@ import com.airbnb.mvrx.Uninitialized
 import com.airbnb.mvrx.test.MavericksTestRule
 import com.airbnb.mvrx.withState
 import io.kotest.matchers.shouldBe
-<<<<<<< HEAD
 import io.mockk.mockk
-=======
-import io.kotest.matchers.types.shouldBeInstanceOf
->>>>>>> upstream/master
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -21,21 +17,13 @@ class HomeViewModelTest {
 
     @Before
     fun setUp() {
-<<<<<<< HEAD
-        // HomeViewModel reads ShizukuApplication.appContext in its constructor. The property is a
-        // private-set lateinit var whose backing field lives on ShizukuApplication as a private
-        // static field, so initialize it via reflection with a relaxed mock Context.
+        // HomeViewModel reads ShizukuApplication.appContext in its constructor, which only
+        // Application.onCreate sets. The property is a private-set lateinit var whose backing field
+        // lives on ShizukuApplication as a private static field, so initialize it via reflection
+        // with a relaxed mock Context.
         val field = ShizukuApplication::class.java.getDeclaredField("appContext")
         field.isAccessible = true
         field.set(null, mockk<Context>(relaxed = true))
-=======
-        // HomeViewModel reads ShizukuApplication.appContext, which only Application.onCreate sets.
-        // (private setter, so set the backing static field directly)
-        af.shizuku.manager.ShizukuApplication::class.java
-            .getDeclaredField("appContext")
-            .apply { isAccessible = true }
-            .set(null, io.mockk.mockk<android.content.Context>(relaxed = true))
->>>>>>> upstream/master
     }
 
     @Test

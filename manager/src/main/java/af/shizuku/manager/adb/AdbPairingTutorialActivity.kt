@@ -46,9 +46,6 @@ class AdbPairingTutorialActivity : AppBarActivity() {
         registerForActivityResult(
             ActivityResultContracts.RequestPermission(),
         ) { granted ->
-<<<<<<< HEAD
-            if (!granted &&
-=======
             notificationEnabled = isNotificationEnabled()
             syncNotificationEnabled()
             val fromUser = notifRequestFromUser
@@ -57,7 +54,6 @@ class AdbPairingTutorialActivity : AppBarActivity() {
                 startPairingService()
             } else if (
                 fromUser &&
->>>>>>> upstream/master
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
             ) {

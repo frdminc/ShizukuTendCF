@@ -3,22 +3,16 @@ package af.shizuku.manager.harness
 import af.shizuku.manager.ShizukuApplication
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.adb.AdbAuthWait
-<<<<<<< HEAD
 import af.shizuku.manager.adb.AdbStarter
 import af.shizuku.manager.adb.WirelessDebugging
 import af.shizuku.manager.receiver.BootRetryWorker
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.starter.Starter
 import af.shizuku.manager.utils.HeadlessLogger
-=======
-import af.shizuku.manager.receiver.ShizukuReceiverStarter
-import af.shizuku.manager.starter.Starter
->>>>>>> upstream/master
 import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.worker.AdbStartWorker
 import android.Manifest
 import android.app.Application
-<<<<<<< HEAD
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -29,12 +23,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkInfo
 import android.os.Binder
 import android.os.Looper
-=======
-import android.content.Context
-import android.os.Binder
-import android.os.Looper
 import android.os.UserManager
->>>>>>> upstream/master
 import android.provider.Settings
 import androidx.work.Configuration
 import androidx.work.Data
@@ -45,7 +34,6 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
-<<<<<<< HEAD
 import androidx.work.testing.WorkManagerTestInitHelper.getTestDriver
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -55,19 +43,12 @@ import org.robolectric.shadows.ShadowNetwork
 import org.robolectric.shadows.ShadowNetworkCapabilities
 import org.robolectric.shadows.ShadowNetworkInfo
 import org.robolectric.shadows.ShadowSystemProperties
-=======
-import kotlinx.coroutines.runBlocking
-import org.robolectric.Shadows.shadowOf
->>>>>>> upstream/master
 import rikka.shizuku.Shizuku
 import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
-<<<<<<< HEAD
 import java.net.InetAddress
 import java.net.ServerSocket
-=======
->>>>>>> upstream/master
 import java.security.Key
 import java.security.KeyStoreSpi
 import java.security.Provider
@@ -78,10 +59,7 @@ import java.util.Date
 import java.util.Enumeration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
-<<<<<<< HEAD
 import java.util.concurrent.atomic.AtomicInteger
-=======
->>>>>>> upstream/master
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -98,7 +76,6 @@ class FakeWorld(
     val prefs = FakePrefs()
     val adbd = FakeAdbd(onShell = { serverUp() })
 
-<<<<<<< HEAD
     // Wireless debugging and Wi-Fi as the system runs them (AOSP AdbDebuggingManager): adbd's TLS
     // port is announced by mDNS only while adb_wifi_enabled is 1 on a connected, trusted Wi-Fi; the
     // system writes adb_wifi_enabled back to 0 without Wi-Fi, and on an untrusted network after
@@ -186,8 +163,6 @@ class FakeWorld(
     private var nextNetId = 100
     private var wifiCaps: NetworkCapabilities? = null
 
-=======
->>>>>>> upstream/master
     /** Input of every AdbStartWorker WorkManager ran, oldest first: what a rerun repeats. */
     val startInputs = CopyOnWriteArrayList<Data>()
 
@@ -201,10 +176,7 @@ class FakeWorld(
             .apply { isAccessible = true }
             .set(null, app)
         Starter.initialize(app)
-<<<<<<< HEAD
         ShizukuSettings.initialize(app)
-=======
->>>>>>> upstream/master
         ShizukuSettings.setPreferencesForTesting(prefs)
         AdbAuthWait.clockMs = { clock.get() }
         AdbAuthWait.elapsedMs = { clock.get() }
@@ -224,12 +196,13 @@ class FakeWorld(
         ShizukuReceiverStarter.resetForTesting()
         AdbAuthWait.resetForTesting()
         ShizukuStateMachine.resetForTesting()
-<<<<<<< HEAD
         // The log lives in this test's files dir; a previous test's dir is gone.
         HeadlessLogger.resetForTesting()
         HeadlessLogger.init(app)
 
         shadowOf(app).grantPermissions(Manifest.permission.WRITE_SECURE_SETTINGS)
+        // The user is unlocked (USER_PRESENT's receiver asks UserManager before a start).
+        app.getSystemService(UserManager::class.java)?.let { shadowOf(it).setUserUnlocked(true) }
         // A trusted Wi-Fi is connected and wireless debugging is off.
         shadowOf(cm).clearAllNetworks()
         addWifi(trusted = true)
@@ -258,14 +231,6 @@ class FakeWorld(
         Settings.Global.putInt(app.contentResolver, Settings.Global.BOOT_COUNT, 1)
         // Robolectric's SystemClock stands still unless the main looper is idled.
         WirelessDebugging.elapsedMs = { System.nanoTime() / 1_000_000 }
-=======
-
-        shadowOf(app).grantPermissions(Manifest.permission.WRITE_SECURE_SETTINGS)
-        val um = app.getSystemService(UserManager::class.java)
-        if (um != null) {
-            shadowOf(um).setUserUnlocked(true)
-        }
->>>>>>> upstream/master
         // Skips the worker's post-boot settling delay.
         Settings.Global.putInt(app.contentResolver, Settings.Global.ADB_ENABLED, 1)
         // A saved port that answers the starter's probe routes the worker straight to adbd, with
@@ -274,10 +239,6 @@ class FakeWorld(
             .edit()
             .putInt("mode", ShizukuSettings.LaunchMethod.ADB)
             .putInt("last_adb_port", adbd.port)
-<<<<<<< HEAD
-=======
-            .putBoolean("force_start_wadb", true)
->>>>>>> upstream/master
             .commit()
 
         val config =
@@ -320,7 +281,6 @@ class FakeWorld(
         due.filterNot { it.cancelled }.forEach { it.task() }
     }
 
-<<<<<<< HEAD
     private val cm: ConnectivityManager get() = app.getSystemService(ConnectivityManager::class.java)
 
     val adbWifiEnabled: Int get() = Settings.Global.getInt(app.contentResolver, ADB_WIFI, 0)
@@ -601,8 +561,6 @@ class FakeWorld(
 
     fun awaitWifiWait() = waitUntil({ "a start to wait for Wi-Fi" }) { shadowOf(cm).networkCallbacks.isNotEmpty() }
 
-=======
->>>>>>> upstream/master
     fun serverUp() = setShizukuBinder(Binder())
 
     fun serverDown() = setShizukuBinder(null)
@@ -649,7 +607,6 @@ class FakeWorld(
         return last.lastOrNull()?.state
     }
 
-<<<<<<< HEAD
     /** The start work ran and asked WorkManager to retry it (now ENQUEUED with a backoff). */
     fun awaitRetry() {
         settle()
@@ -674,8 +631,6 @@ class FakeWorld(
         return checkNotNull(result)
     }
 
-=======
->>>>>>> upstream/master
     /** WorkManager runs the given start request again, as after the system stopped it. */
     fun workerRerun(input: Data = startInputs.last()): ListenableWorker.Result {
         val worker =
@@ -702,7 +657,6 @@ class FakeWorld(
 
     override fun close() {
         adbd.close()
-<<<<<<< HEAD
         wirelessAdbd.close()
         tcpAdbd?.close()
         runCatching { awaitStartWork() }
@@ -712,19 +666,11 @@ class FakeWorld(
         ShadowBuild.setManufacturer(originalManufacturer)
         ShadowSystemProperties.reset()
         WirelessDebugging.resetForTesting()
-=======
-        runCatching { awaitStartWork() }
-        runCatching { settle() }
-        workExecutor.shutdownNow()
->>>>>>> upstream/master
         AdbAuthWait.clockMs = System::currentTimeMillis
         AdbAuthWait.elapsedMs = { android.os.SystemClock.elapsedRealtime() }
         AdbAuthWait.timeoutMs = AdbAuthWait.TIMEOUT_MS
         AdbAuthWait.schedule = AdbAuthWait.realSchedule
-<<<<<<< HEAD
         AdbStarter.isLegacyAuthPort = AdbStarter.realIsLegacyAuthPort
-=======
->>>>>>> upstream/master
         timers.clear()
         serverDown()
     }
@@ -735,7 +681,6 @@ class FakeWorld(
         // Real seconds: a denied or unanswered dialog ends only at AdbClient's deadline.
         const val AUTH_TIMEOUT_MS = 3_000
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
-<<<<<<< HEAD
         const val ADB_WIFI = "adb_wifi_enabled"
 
         // ro.build.version.oneui on the s24 whose silent locked refusal is the evidence.
@@ -750,8 +695,6 @@ class FakeWorld(
 
         // A system API constant (NetworkCapabilities.NET_CAPABILITY_NOT_VCN_MANAGED) that requests carry by default.
         const val NET_CAPABILITY_NOT_VCN_MANAGED = 28
-=======
->>>>>>> upstream/master
     }
 }
 

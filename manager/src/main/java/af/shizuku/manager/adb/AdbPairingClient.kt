@@ -285,13 +285,8 @@ class AdbPairingClient(
         val s = connectedSocket ?: throw (lastException ?: java.net.ConnectException("Could not connect to pairing service on port $port across $candidates"))
         socket = s
 
-<<<<<<< HEAD
         val sslContext = key.sslContext(PairingAdbServerTrustManager)
-        val sslSocket = sslContext.socketFactory.createSocket(s, host, port, true) as SSLSocket
-=======
-        val sslContext = key.sslContext
         val sslSocket = sslContext.socketFactory.createSocket(s, successfulHost, port, true) as SSLSocket
->>>>>>> upstream/master
         sslSocket.startHandshake()
         Timber.tag(TAG).d("Handshake succeeded on $successfulHost:$port.")
 

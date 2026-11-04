@@ -225,15 +225,16 @@ class AdbCertPinDiscoveryScenariosTest {
         }
         assertNull(AdbServerPin.store().connectPin)
         world.waitUntil({ "scan connection closes" }) { world.wirelessAdbd.activeConnections == 0 }
-        val nm = world.app.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        // The refusal is a problem in the registry (the start notification's successor); it opens
+        // the app, where the key is confirmed, not the bug report.
         val notice =
-            org.robolectric.Shadows
-                .shadowOf(nm)
-                .getNotification(af.shizuku.manager.worker.AdbStartWorker.NOTIFICATION_ID)
+            af.shizuku.manager.utils.ShizukuIssues
+                .top()
         assertNotNull(notice)
+        assertEquals(af.shizuku.manager.utils.ShizukuIssues.KEY_START_FAILED, notice!!.key)
         val intent =
             org.robolectric.Shadows
-                .shadowOf(notice.contentIntent)
+                .shadowOf(notice.contentIntent!!)
                 .savedIntent
         assertEquals(af.shizuku.manager.MainActivity::class.java.name, intent.component!!.className)
     }

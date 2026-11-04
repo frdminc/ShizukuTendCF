@@ -3,29 +3,33 @@ package af.shizuku.manager.service
 import af.shizuku.manager.MainActivity
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.adb.AdbAuthWait
+import af.shizuku.manager.adb.AdbPortProber
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
+import af.shizuku.manager.utils.BackgroundNudge
+import af.shizuku.manager.utils.DeviceOptimizer
 import af.shizuku.manager.utils.LiveActivityNotificationManager
-<<<<<<< HEAD
 import af.shizuku.manager.utils.ManagerActivityLog
-import af.shizuku.manager.utils.SettingsPage
-=======
 import af.shizuku.manager.utils.ShizukuIssues
->>>>>>> upstream/master
 import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.utils.StockShizukuCompat
+import af.shizuku.manager.utils.UserStopFlag
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
@@ -41,17 +45,13 @@ class WatchdogService : Service() {
     private var job: Job? = null
     private var pendingRecoveryJob: Job? = null
     private var stabilityJob: Job? = null
-<<<<<<< HEAD
-=======
-    private var cooldownRetryJob: Job? = null
-    private var graceRestartJob: Job? = null
-    private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private fun acquireTemporaryWakeLock(durationMs: Long = 10_000L) {
         try {
             if (wakeLock == null) {
-                val pm = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
-                wakeLock = pm?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "ShizukuPlus:WatchdogRecovery")
+                val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ShizukuPlus:WatchdogRecovery")
                 wakeLock?.setReferenceCounted(false)
             }
             wakeLock?.acquire(durationMs)
@@ -60,8 +60,11 @@ class WatchdogService : Service() {
         }
     }
 
+    // A USB unplug takes adbd's TCP listener with it on some builds: with TCP mode (or on-device
+    // ADB over TCP) on, put it back so the session survives the cable, unless the server is up and
+    // the port still answers. Power-save mode re-applies the device fixes. Both are blocking I/O.
     private val powerReceiver =
-        object : android.content.BroadcastReceiver() {
+        object : BroadcastReceiver() {
             override fun onReceive(
                 context: Context,
                 intent: Intent?,
@@ -73,10 +76,7 @@ class WatchdogService : Service() {
                         scope.launch(Dispatchers.IO) {
                             if (ShizukuSettings.getTcpMode() || ShizukuSettings.isOnDeviceAdbTcpEnabled()) {
                                 val port = if (ShizukuSettings.getTcpMode()) ShizukuSettings.getTcpPort().takeIf { it in 1..65535 } ?: 5555 else 5555
-                                if (ShizukuStateMachine.isRunning() &&
-                                    af.shizuku.manager.adb.AdbPortProber
-                                        .isPortOpen(port, 300)
-                                ) {
+                                if (ShizukuStateMachine.isRunning() && AdbPortProber.isPortOpen(port, 300)) {
                                     Timber.tag(TAG).d("TCP port $port already listening and Shizuku is running; keeping session intact")
                                 } else {
                                     AdbProxyService.enableAdbTcp(port)
@@ -85,20 +85,18 @@ class WatchdogService : Service() {
                             ShizukuStateMachine.update()
                         }
                     }
-                    android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
+                    PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
                         Timber.tag(TAG).i("Power save mode changed")
-                        val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
                         if (pm?.isPowerSaveMode == true) {
                             scope.launch(Dispatchers.IO) {
-                                af.shizuku.manager.utils.DeviceOptimizer
-                                    .applyFixes(context)
+                                DeviceOptimizer.applyFixes(context)
                             }
                         }
                     }
                 }
             }
         }
->>>>>>> upstream/master
 
     // Only true when the user explicitly taps "Turn off" from the notification — keeps
     // onDestroy() from clearing the watchdog setting when the service self-stops due to a
@@ -133,11 +131,7 @@ class WatchdogService : Service() {
         super.onCreate()
         setRunning(true)
 
-<<<<<<< HEAD
         // Stop legacy ShizukuLiveService and dismiss notification 9999 if active (#33, #34)
-=======
-        // Stop legacy ShizukuLiveService and dismiss notification 9999 if active
->>>>>>> upstream/master
         try {
             stopService(Intent(this, ShizukuLiveService::class.java))
             LiveActivityNotificationManager.dismiss(this)
@@ -171,9 +165,9 @@ class WatchdogService : Service() {
         ShizukuIssues.render(applicationContext)
 
         val powerFilter =
-            android.content.IntentFilter().apply {
+            IntentFilter().apply {
                 addAction(Intent.ACTION_POWER_DISCONNECTED)
-                addAction(android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+                addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
             }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(powerReceiver, powerFilter, Context.RECEIVER_NOT_EXPORTED)
@@ -187,13 +181,9 @@ class WatchdogService : Service() {
                     // The title says whether the server is up.
                     refreshNotification(applicationContext)
                     if (state == ShizukuStateMachine.State.CRASHED) {
-<<<<<<< HEAD
-                        // The server is no longer RUNNING, so the stability window ends here:
-                        // left armed, it would fire while the server is dead and reset
-                        // consecutiveCrashes, making the next crash look like a first restart (#35).
-=======
                         acquireTemporaryWakeLock(15_000L)
-                        // Suppress false crash alert if disconnected from Wi-Fi on Wireless ADB
+                        // Wireless ADB without its Wi-Fi: the server went with the network, which
+                        // is expected, so neither a restart nor a crash alert.
                         if (ShizukuIssues.droppedWithNetwork(applicationContext)) {
                             Timber.tag(TAG).d("Watchdog: server dropped because Wi-Fi/network is disconnected; suppressing crash alert")
                             stabilityJob?.cancel()
@@ -203,13 +193,9 @@ class WatchdogService : Service() {
 
                         // The user stopped it; a crash reported in the middle of their stop must
                         // not bring it back.
-                        if (af.shizuku.manager.utils.UserStopFlag
-                                .isSet()
-                        ) {
+                        if (UserStopFlag.isSet()) {
                             stabilityJob?.cancel()
                             pendingRecoveryJob?.cancel()
-                            graceRestartJob?.cancel()
-                            cooldownRetryJob?.cancel()
                             return@collectLatest
                         }
                         // Restarting is off: only the status shows here, and the stop is
@@ -217,55 +203,52 @@ class WatchdogService : Service() {
                         if (!ShizukuSettings.isWatchdogAutoRestartEnabled()) {
                             stabilityJob?.cancel()
                             pendingRecoveryJob?.cancel()
-                            graceRestartJob?.cancel()
-                            cooldownRetryJob?.cancel()
                             return@collectLatest
                         }
 
                         // The server is no longer RUNNING, so the stability window ends here:
                         // left armed, it would fire while the server is dead and reset
-                        // consecutiveCrashes, making the next crash look like a first restart.
->>>>>>> upstream/master
+                        // consecutiveCrashes, making the next crash look like a first restart (#35).
                         stabilityJob?.cancel()
                         // A recovery job armed by an earlier first restart is stale too: the
                         // server just died again, so what that job waits for is a later
                         // restart's business now. Left armed, its timeout would post a
                         // duplicate heads-up for this same outage, or a later restart's
-<<<<<<< HEAD
                         // server would be logged as "came back after restart #1" (#35).
                         pendingRecoveryJob?.cancel()
-                        // A restart run from outside the app (a shell, ops tooling) kills the
-                        // server and starts a new one, and its binder dies here like a crash's.
-                        // Restarting at once started a second starter alongside that one, and the
-                        // two left two servers running. Wait, then restart only if no server came
-                        // back: any later state (the new server's binder arriving, a start or stop
-                        // from elsewhere) cancels this block, and update() asks the binder itself.
+                        // A restart run from outside the app (a shell, ops tooling, adb or a PC
+                        // starting it again, automation) kills the server and starts a new one, and
+                        // its binder dies here like a crash's. Restarting at once started a second
+                        // starter alongside that one, and the two left two servers running. Wait,
+                        // then restart only if no server came back: any later state (the new
+                        // server's binder arriving, a start or stop from elsewhere — a headless stop
+                        // marks no UserStopFlag) cancels this block, and update() asks the binder
+                        // itself. The wait and the cooldown retry below live in this block for that
+                        // reason: a job of their own would outlive the state that made them moot.
                         Timber.tag(TAG).d("Watchdog: server gone; waiting ${RESTART_GRACE_MS}ms for it to come back before restarting")
                         delay(RESTART_GRACE_MS)
                         if (ShizukuStateMachine.update() != ShizukuStateMachine.State.CRASHED) {
                             ManagerActivityLog.log(applicationContext, "Watchdog: the server came back on its own; no restart")
                             return@collectLatest
                         }
-=======
-                        // server would be logged as "came back after restart #1".
-                        pendingRecoveryJob?.cancel()
-                        graceRestartJob?.cancel()
->>>>>>> upstream/master
                         val now = System.currentTimeMillis()
                         val cooldown = backoffMs(consecutiveCrashes)
                         if (now - lastRestartMs > cooldown) {
                             val wasFirstRestart = (consecutiveCrashes == 0)
                             consecutiveCrashes++
                             lastRestartMs = now
-<<<<<<< HEAD
+                            // Repeated crashes with no OS exemption usually mean an OEM battery manager
+                            // is killing it: send the user to the Service Doctor once (#476).
+                            if (consecutiveCrashes >= 2) {
+                                BackgroundNudge.maybePost(applicationContext)
+                            }
                             // An unanswered authorisation dialog stops unattended ADB starts, so
                             // start() below will do nothing: do not announce a restart that is
                             // not going to happen. The "not answered" notice, with "Attempt
                             // now", is what the user sees instead.
                             val withheld =
                                 ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ADB &&
-                                    af.shizuku.manager.adb.AdbAuthWait
-                                        .isUnanswered()
+                                    AdbAuthWait.isUnanswered()
                             if (withheld) {
                                 ManagerActivityLog.log(
                                     applicationContext,
@@ -273,7 +256,7 @@ class WatchdogService : Service() {
                                 )
                             } else {
                                 if (!wasFirstRestart) {
-                                    showCrashNotification()
+                                    reportCrash(stopped = false)
                                 }
                                 ManagerActivityLog.log(applicationContext, "Watchdog: restarting after crash #$consecutiveCrashes")
                                 if (wasFirstRestart) {
@@ -290,108 +273,46 @@ class WatchdogService : Service() {
                                                     }
                                                 } ?: false
                                             if (cameBack) {
+                                                // Auto-run snippets run from the RUNNING transition.
                                                 ManagerActivityLog.log(applicationContext, "Watchdog: the server came back after restart #1")
                                             } else {
-                                                showCrashNotification()
+                                                reportCrash(stopped = true)
                                             }
                                         }
                                 }
                             }
                             ShizukuReceiverStarter.start(applicationContext)
-=======
-                            if (!wasFirstRestart) {
-                                reportCrash(stopped = false)
-                            }
-                            // Repeated crashes with no OS exemption usually mean an OEM battery manager
-                            // is killing it: send the user to the Service Doctor once (#476).
-                            if (consecutiveCrashes >= 2) {
-                                af.shizuku.manager.utils.BackgroundNudge
-                                    .maybePost(applicationContext)
-                            }
-                            ActivityLogManager.log("Shizuku", applicationContext.packageName, "Watchdog: restarting after crash #$consecutiveCrashes")
-                            if (wasFirstRestart) {
-                                pendingRecoveryJob?.cancel()
-                                pendingRecoveryJob =
-                                    scope.launch {
-                                        val cameBack =
-                                            withTimeoutOrNull(RECOVERY_WAIT_MS) {
-                                                if (ShizukuStateMachine.get() == ShizukuStateMachine.State.RUNNING) {
-                                                    true
-                                                } else {
-                                                    ShizukuStateMachine.asFlow().first { it == ShizukuStateMachine.State.RUNNING }
-                                                    true
-                                                }
-                                            } ?: false
-                                        if (cameBack) {
-                                            // Auto-run snippets run from the RUNNING transition.
-                                            ActivityLogManager.log("Shizuku", applicationContext.packageName, "Watchdog: the server came back after restart #1")
-                                        } else {
-                                            reportCrash(stopped = true)
-                                        }
-                                    }
-                            }
-                            // Short grace first: whoever killed the server (adb or a PC starting
-                            // it again, automation, the starter) is often already starting a new
-                            // one. Starting ours on top raced it: both starters killed the old
-                            // server and two servers ran. Skip if a binder arrived meanwhile.
-                            graceRestartJob?.cancel()
-                            graceRestartJob =
-                                scope.launch {
-                                    delay(RESTART_GRACE_MS)
-                                    if (!af.shizuku.manager.utils.UserStopFlag
-                                            .isSet() &&
-                                        ShizukuSettings.isWatchdogAutoRestartEnabled() &&
-                                        ShizukuStateMachine.update() != ShizukuStateMachine.State.RUNNING
-                                    ) {
-                                        ShizukuReceiverStarter.start(applicationContext)
-                                    } else {
-                                        Timber.tag(TAG).d("Watchdog: server running or restart suppressed; restart skipped")
-                                    }
-                                }
->>>>>>> upstream/master
                             Timber.tag(TAG).d("Watchdog: restart #$consecutiveCrashes (cooldown was ${cooldown}ms)")
                         } else {
                             Timber.tag(TAG).d("Watchdog: restart suppressed (cooldown active, ${now - lastRestartMs}ms / ${cooldown}ms)")
-                            // Held back, not given up: try again once the cooldown has passed, and
-                            // say it's stopped meanwhile. Nothing used to follow, so a server that
+                            // Held back, not given up: say it's stopped meanwhile and try again once
+                            // the cooldown has passed. Nothing used to follow, so a server that
                             // died again inside the window stayed down without a word.
                             reportCrash(stopped = true)
-                            cooldownRetryJob?.cancel()
-                            cooldownRetryJob =
-                                scope.launch {
-                                    delay(cooldown - (now - lastRestartMs) + RESTART_GRACE_MS)
-                                    if (ShizukuStateMachine.update() != ShizukuStateMachine.State.RUNNING &&
-                                        !af.shizuku.manager.utils.UserStopFlag
-                                            .isSet() &&
-                                        ShizukuSettings.isWatchdogAutoRestartEnabled()
-                                    ) {
-                                        lastRestartMs = System.currentTimeMillis()
-                                        consecutiveCrashes++
-                                        ShizukuReceiverStarter.start(applicationContext)
-                                    }
-                                }
+                            delay(cooldown - (now - lastRestartMs))
+                            if (ShizukuStateMachine.update() != ShizukuStateMachine.State.RUNNING &&
+                                !UserStopFlag.isSet() &&
+                                ShizukuSettings.isWatchdogAutoRestartEnabled()
+                            ) {
+                                lastRestartMs = System.currentTimeMillis()
+                                consecutiveCrashes++
+                                ManagerActivityLog.log(applicationContext, "Watchdog: restarting after crash #$consecutiveCrashes (cooldown passed)")
+                                ShizukuReceiverStarter.start(applicationContext)
+                            }
                         }
                     } else if (state == ShizukuStateMachine.State.RUNNING) {
                         // Not pendingRecoveryJob: RUNNING is exactly what the recovery check
                         // waits for, and both run on the main dispatcher, so cancelling here
-<<<<<<< HEAD
                         // would kill that check before it logs the recovery (#35).
-=======
-                        // would kill that check before it logs the recovery.
->>>>>>> upstream/master
                         stabilityJob?.cancel()
                         stabilityJob =
                             scope.launch {
                                 delay(STABILITY_WINDOW_MS)
                                 consecutiveCrashes = 0
-<<<<<<< HEAD
-                            }
-=======
                                 // Running steadily again: the crashes are history.
                                 ShizukuIssues.clear(applicationContext, KEY_CRASHED)
                             }
                         dismissCrashNotification(applicationContext)
->>>>>>> upstream/master
                     }
                 }
             }
@@ -416,9 +337,6 @@ class WatchdogService : Service() {
     }
 
     override fun onDestroy() {
-<<<<<<< HEAD
-        stabilityJob?.cancel()
-=======
         try {
             unregisterReceiver(powerReceiver)
         } catch (_: Exception) {
@@ -429,8 +347,6 @@ class WatchdogService : Service() {
         wakeLock = null
 
         stabilityJob?.cancel()
-        cooldownRetryJob?.cancel()
->>>>>>> upstream/master
         pendingRecoveryJob?.cancel()
         job?.cancel()
         scope.cancel()
@@ -444,11 +360,8 @@ class WatchdogService : Service() {
         }
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         nm?.cancel(NOTIFICATION_ID_WATCHDOG)
-<<<<<<< HEAD
-=======
         // With this notification gone, problems go back to their own (if the user wants them).
         ShizukuIssues.render(applicationContext)
->>>>>>> upstream/master
         // Only clear the user's preference when the service was deliberately stopped via the
         // notification action. Transient stops (failed foreground-start, background-start
         // restrictions) must not wipe the setting — the watchdog should re-arm on next boot.
@@ -461,53 +374,12 @@ class WatchdogService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun buildNotification(): Notification = buildNotification(this, currentLiveStatus)
-<<<<<<< HEAD
-
-    private fun showCrashNotification() {
-        val channelId = CRASH_CHANNEL_ID
-        val channelName = "Crash Reports"
-
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel =
-                NotificationChannel(
-                    channelId,
-                    channelName,
-                    NotificationManager.IMPORTANCE_DEFAULT,
-                )
-            nm.createNotificationChannel(channel)
-        }
-
-        val learnMoreIntent =
-            Intent(Intent.ACTION_VIEW).apply {
-                setData(Uri.parse("https://github.com/thejaustin/ShizukuPlus/wiki#shizuku-keeps-stopping-randomly"))
-            }
-        val learnMorePendingIntent = PendingIntent.getActivity(this, 10, learnMoreIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-
-        val disableIntent = SettingsPage.Notifications.NotificationChannel.buildIntent(applicationContext)
-        val disablePendingIntent = PendingIntent.getActivity(this, 11, disableIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-
-        // Manual crash report via BugReportDialogActivity or similar
-        val reportIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/frdminc/ShizukuTendCF/issues/new"))
-        val reportPendingIntent = PendingIntent.getActivity(this, 12, reportIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-
-        val builder =
-            NotificationCompat
-                .Builder(this, channelId)
-                .setContentTitle(getString(R.string.watchdog_shizuku_crashed_title))
-                .setContentText(getString(R.string.watchdog_shizuku_crashed_text))
-                .setSmallIcon(R.drawable.ic_notification_icon)
-                .setContentIntent(learnMorePendingIntent)
-                .setAutoCancel(true)
-                .addAction(0, getString(R.string.watchdog_shizuku_crashed_action_report_manually), reportPendingIntent)
-                .addAction(0, getString(R.string.watchdog_shizuku_crashed_action_turn_off_alerts), disablePendingIntent)
-=======
->>>>>>> upstream/master
 
     /**
      * The server crashed again ([stopped] false: the watchdog is restarting it) or did not come
      * back after a restart. Either shows in this notification; one that stayed down also alerts if
-     * the user's "Helper notifications" setting allows it.
+     * the user's "Helper notifications" setting allows it. A first restart that brings the server
+     * back within [RECOVERY_WAIT_MS] reports nothing (#35).
      */
     private fun reportCrash(stopped: Boolean) {
         val ctx = applicationContext
@@ -557,14 +429,13 @@ class WatchdogService : Service() {
         const val NOTIFICATION_ID_CRASH = 1002
         private const val ACTION_STOP_SERVICE = "action.stop_service"
         const val WATCHDOG_CHANNEL_ID = "shizuku_watchdog"
-        private const val KEY_CRASHED = "crashed"
 
-        /** How long a first restart waits for RUNNING before the crash heads-up is posted: a successful restart took ~11 s on an API 34 emulator, a loaded device's first start 32 s. A restart slower than this, or one that raises a fresh authorisation dialog answered later, still gets the heads-up — by design for now. */
-        const val RECOVERY_WAIT_MS = 60_000L
-        private const val RESTART_GRACE_MS = 1_500L
-
-        /** How long the server must remain RUNNING before consecutive crash count resets. */
-        const val STABILITY_WINDOW_MS = 60_000L
+        /**
+         * The crash heads-up's own channel before problems moved into [ShizukuIssues], which
+         * deletes it once; kept for the notification-settings page that still names it.
+         */
+        const val CRASH_CHANNEL_ID = "crash_reports"
+        internal const val KEY_CRASHED = "crashed"
 
         /** How long a crash waits for a server restarted from outside the app to come back. */
         const val RESTART_GRACE_MS = 10_000L
@@ -623,12 +494,6 @@ class WatchdogService : Service() {
             status: String?,
         ) {
             currentLiveStatus = status
-<<<<<<< HEAD
-            if (isRunning()) {
-                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-                nm?.notify(NOTIFICATION_ID_WATCHDOG, buildNotification(context, status))
-            }
-=======
             refreshNotification(context)
         }
 
@@ -640,7 +505,6 @@ class WatchdogService : Service() {
                 val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
                 nm?.notify(NOTIFICATION_ID_WATCHDOG, buildNotification(context))
             }.onFailure { Timber.tag(TAG).w(it, "could not refresh the watchdog notification") }
->>>>>>> upstream/master
         }
 
         @JvmStatic
@@ -676,26 +540,8 @@ class WatchdogService : Service() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
-<<<<<<< HEAD
-            val builder =
-                NotificationCompat
-                    .Builder(context, WATCHDOG_CHANNEL_ID)
-                    .setContentTitle(context.getString(R.string.watchdog_running))
-                    .setSmallIcon(R.drawable.ic_notification_icon)
-                    .setContentIntent(launchPendingIntent)
-                    .addAction(
-                        R.drawable.ic_close_24,
-                        context.getString(R.string.watchdog_turn_off),
-                        stopPendingIntent,
-                    ).setOngoing(true)
-
-            if (!status.isNullOrEmpty()) {
-                builder.setContentText(status)
-            }
-
-=======
             // A problem takes the notification over; otherwise it says whether the server is up,
-            // with the live activity line under that.
+            // with the live activity line under that (#33).
             val issue = ShizukuIssues.top()
             val title =
                 issue?.title ?: context.getString(
@@ -717,7 +563,6 @@ class WatchdogService : Service() {
                 builder.setContentText(text)
                 if (issue != null) builder.setStyle(NotificationCompat.BigTextStyle().bigText(text))
             }
->>>>>>> upstream/master
             return builder.build()
         }
 

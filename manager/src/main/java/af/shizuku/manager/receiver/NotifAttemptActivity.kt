@@ -7,10 +7,7 @@ import android.os.Bundle
  * The start notification's "Attempt now". SystemUI collapses the shade when a notification action
  * starts an activity, and leaves it open for a broadcast; adbd's "Allow USB debugging?" dialog,
  * which this start raises, would otherwise open behind the shade and time out unseen.
-<<<<<<< HEAD
  * Not exported, so only the notification's PendingIntent can start it.
-=======
->>>>>>> upstream/master
  */
 class NotifAttemptActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {

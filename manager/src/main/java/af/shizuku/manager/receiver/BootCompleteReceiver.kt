@@ -4,6 +4,8 @@ import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.database.RootCompatHelper
 import af.shizuku.manager.service.WatchdogService
 import af.shizuku.manager.utils.HeadlessLogger
+import af.shizuku.manager.utils.ShizukuStateMachine
+import af.shizuku.manager.utils.UserStopFlag
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -32,11 +34,13 @@ class BootCompleteReceiver : BroadcastReceiver() {
         if (!handled) return
 
         Timber.tag("BootCompleteReceiver").i("Triggered by: $action")
-<<<<<<< HEAD
         HeadlessLogger.init(context)
         HeadlessLogger.i("Boot", "received ${action.substringAfterLast('.')}")
-=======
 
+        // An unlock: the server may have died while the device was locked or asleep, and a boot
+        // start that could not run before the unlock (the FBE unlock, the keyguard) runs now. A
+        // plain start, so the one-prompt marker and a start already holding adbd's dialog apply,
+        // and a deliberate stop (UserStopFlag) holds until the next boot or start by hand.
         if (action == Intent.ACTION_USER_PRESENT) {
             val um = context.getSystemService(android.os.UserManager::class.java)
             if (um != null && !um.isUserUnlocked) return
@@ -54,69 +58,66 @@ class BootCompleteReceiver : BroadcastReceiver() {
 
             // If Watchdog auto-restart is enabled and the server died while locked/sleeping,
             // revive it immediately upon unlock instead of waiting for the 15-minute alarm.
-            if (ShizukuSettings.getWatchdog() &&
-                ShizukuSettings.isWatchdogAutoRestartEnabled() &&
-                !af.shizuku.manager.utils.UserStopFlag
-                    .isSet()
-            ) {
-                if (!af.shizuku.manager.utils.ShizukuStateMachine
-                        .isRunning() &&
-                    af.shizuku.manager.utils.ShizukuStateMachine
-                        .get() != af.shizuku.manager.utils.ShizukuStateMachine.State.STARTING
-                ) {
+            if (ShizukuSettings.getWatchdog() && ShizukuSettings.isWatchdogAutoRestartEnabled() && !UserStopFlag.isSet()) {
+                if (!ShizukuStateMachine.isRunning() && ShizukuStateMachine.get() != ShizukuStateMachine.State.STARTING) {
                     Timber.tag("BootCompleteReceiver").i("User unlocked device while server stopped — triggering Watchdog revival")
+                    HeadlessLogger.i("Boot", "unlock with the server down: the Watchdog's restart")
                     try {
                         ShizukuReceiverStarter.start(context)
                     } catch (e: Exception) {
                         Timber.tag("BootCompleteReceiver").w(e, "Watchdog revival on USER_PRESENT failed")
+                        HeadlessLogger.w("Boot", "unlock start failed: ${HeadlessLogger.brief(e)}")
                     }
                     return
                 }
             }
 
-            if (!ShizukuSettings.getStartOnBoot(context) ||
-                af.shizuku.manager.utils.UserStopFlag
-                    .isSet()
-            ) {
-                return
-            }
-            if (af.shizuku.manager.utils.ShizukuStateMachine
-                    .isRunning() ||
-                af.shizuku.manager.utils.ShizukuStateMachine
-                    .get() == af.shizuku.manager.utils.ShizukuStateMachine.State.STARTING
-            ) {
-                return
-            }
+            if (!ShizukuSettings.getStartOnBoot(context) || UserStopFlag.isSet()) return
+            if (ShizukuStateMachine.isRunning() || ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) return
             Timber.tag("BootCompleteReceiver").i("User unlocked device while Shizuku is stopped — triggering start on boot")
+            HeadlessLogger.i("Boot", "unlock with the server down: the start on boot")
             try {
                 ShizukuReceiverStarter.start(context)
             } catch (e: Exception) {
                 Timber.tag("BootCompleteReceiver").w(e, "USER_PRESENT auto-start failed")
+                HeadlessLogger.w("Boot", "unlock start failed: ${HeadlessLogger.brief(e)}")
             }
             return
         }
->>>>>>> upstream/master
         // LOCKED_BOOT_COMPLETED fires before credential-encrypted storage is unlocked, so prefs
         // (launch mode, shell commands, etc.) are unavailable. Attempting to start here would either
         // crash or spawn a server using stale defaults, and BOOT_COMPLETED fires seconds later once
         // the user unlocks and handles the actual start (#504). Skip auto-start for LOCKED_BOOT_COMPLETED.
         if (action != Intent.ACTION_LOCKED_BOOT_COMPLETED) {
-<<<<<<< HEAD
-            try {
-                // A real boot may raise adbd's authorisation dialog once more; the unprotected
-                // QUICKBOOT actions, which any app can send, may not reset that.
-                if (action == Intent.ACTION_BOOT_COMPLETED) {
-                    af.shizuku.manager.adb.AdbAuthWait
-                        .clearUnanswered()
-                    // One automatic wireless debugging network prompt per boot; all of its
-                    // records are per boot.
-                    af.shizuku.manager.adb.WirelessDebugging
-                        .onBoot(context)
+            if (action == Intent.ACTION_BOOT_COMPLETED) {
+                // A real boot ends a deliberate stop: "start on boot" is the user's standing
+                // choice (see UserStopFlag). The QUICKBOOT actions, which any app can send, end
+                // nothing.
+                UserStopFlag.clear()
+            }
+            val shouldStartOnBoot =
+                ShizukuSettings.getStartOnBoot(context) ||
+                    (ShizukuSettings.getWatchdog() && ShizukuSettings.isWatchdogAutoRestartEnabled())
+            if (shouldStartOnBoot && !UserStopFlag.isSet()) {
+                try {
+                    // A real boot may raise adbd's authorisation dialog once more; the unprotected
+                    // QUICKBOOT actions, which any app can send, may not reset that.
+                    if (action == Intent.ACTION_BOOT_COMPLETED) {
+                        af.shizuku.manager.adb.AdbAuthWait
+                            .clearUnanswered()
+                        // One automatic wireless debugging network prompt per boot; all of its
+                        // records are per boot.
+                        af.shizuku.manager.adb.WirelessDebugging
+                            .onBoot(context)
+                    }
+                    ShizukuReceiverStarter.start(context)
+                } catch (e: Exception) {
+                    Timber.tag("BootCompleteReceiver").w(e, "Auto-start skipped (service not ready, e.g. direct boot)")
+                    HeadlessLogger.w("Boot", "auto-start skipped: ${HeadlessLogger.brief(e)}")
                 }
-                ShizukuReceiverStarter.start(context)
-            } catch (e: Exception) {
-                Timber.tag("BootCompleteReceiver").w(e, "Auto-start skipped (service not ready, e.g. direct boot)")
-                HeadlessLogger.w("Boot", "auto-start skipped: ${HeadlessLogger.brief(e)}")
+            } else {
+                Timber.tag("BootCompleteReceiver").d("Start on boot disabled or user stopped; skipping boot start")
+                HeadlessLogger.i("Boot", "no start: start on boot is off (user_stopped=${UserStopFlag.isSet()})")
             }
             // The direct start above is one shot; on slow or unattended devices (FBE unlock,
             // network authorization, pairing) it fails and nothing retries until the next
@@ -127,28 +128,6 @@ class BootCompleteReceiver : BroadcastReceiver() {
             if (action == Intent.ACTION_BOOT_COMPLETED) {
                 BootRetryWorker.schedule(context)
                 HeadlessLogger.i("Boot", "boot retry scheduled")
-=======
-            val shouldStartOnBoot =
-                ShizukuSettings.getStartOnBoot(context) ||
-                    (ShizukuSettings.getWatchdog() && ShizukuSettings.isWatchdogAutoRestartEnabled())
-            if (shouldStartOnBoot &&
-                !af.shizuku.manager.utils.UserStopFlag
-                    .isSet()
-            ) {
-                try {
-                    // A real boot may raise adbd's authorisation dialog once more; the QUICKBOOT
-                    // look-alikes do not reset that.
-                    if (action == Intent.ACTION_BOOT_COMPLETED) {
-                        af.shizuku.manager.adb.AdbAuthWait
-                            .clearUnanswered()
-                    }
-                    ShizukuReceiverStarter.start(context)
-                } catch (e: Exception) {
-                    Timber.tag("BootCompleteReceiver").w(e, "Auto-start skipped (service not ready, e.g. direct boot)")
-                }
-            } else {
-                Timber.tag("BootCompleteReceiver").d("Start on boot disabled or user stopped; skipping boot start")
->>>>>>> upstream/master
             }
         } else {
             Timber.tag("BootCompleteReceiver").d("LOCKED_BOOT_COMPLETED — deferring start to BOOT_COMPLETED")
@@ -156,6 +135,8 @@ class BootCompleteReceiver : BroadcastReceiver() {
         try {
             if (ShizukuSettings.getWatchdog()) {
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                    // Android 15 refuses this foreground service type from a boot receiver; the
+                    // worker starts it once the app may.
                     af.shizuku.manager.worker.WatchdogWorker
                         .scheduleOneTimeHeal(context.applicationContext)
                 } else {
@@ -167,6 +148,7 @@ class BootCompleteReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             // startForegroundService can be refused during direct boot / from background — expected.
             Timber.tag("BootCompleteReceiver").w(e, "Watchdog start skipped")
+            HeadlessLogger.w("Boot", "watchdog start skipped: ${HeadlessLogger.brief(e)}")
         }
         // Restart AutomationService if any automation rules were configured before the reboot.
         if (ShizukuSettings.hasAnyAutomationRulesConfigured()) {

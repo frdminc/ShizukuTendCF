@@ -29,11 +29,7 @@ class StartNotificationStateTest :
             val unanswered: Boolean = false,
         )
 
-<<<<<<< HEAD
         val prompt = Display.Prompt("fingerprint")
-=======
-        val prompt = Display.Prompt()
->>>>>>> upstream/master
         val queued = Work(Phase.ENQUEUED)
         val retrying = Work(Phase.ENQUEUED, runAttemptCount = 1)
         val needsWifi = Work(Phase.ENQUEUED, needsUnmetered = true)

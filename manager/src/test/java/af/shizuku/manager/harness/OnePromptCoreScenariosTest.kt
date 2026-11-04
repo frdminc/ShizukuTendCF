@@ -64,13 +64,8 @@ class OnePromptCoreScenariosTest {
         unmockkAll()
     }
 
-<<<<<<< HEAD
     /** A connection as AdbStarter.startAdb makes it to adbd's TCP port: connect() returns once adbd accepts the key. */
     private fun connect(): Future<Unit> = clients.submit<Unit> { AdbClient("127.0.0.1", adbd.port, key, allowLegacyAuth = { true }).use { it.connect() } }
-=======
-    /** A connection as AdbStarter.startAdb makes it: connect() returns once adbd accepts the key. */
-    private fun connect(): Future<Unit> = clients.submit<Unit> { AdbClient("127.0.0.1", adbd.port, key).use { it.connect() } }
->>>>>>> upstream/master
 
     private fun Future<Unit>.failure(): Throwable? =
         try {
@@ -150,11 +145,7 @@ class OnePromptCoreScenariosTest {
         assertEquals("key offers", 1, adbd.offers)
     }
 
-<<<<<<< HEAD
-    // SD-1, expected to fail until clearUnanswered() is durable (it apply()s; the set commit()s).
-=======
-    // clearUnanswered() is as durable as the set (both commit()).
->>>>>>> upstream/master
+    // SD-1: clearUnanswered() is as durable as the set (both commit()).
     @Test
     fun `accepted-then-killed-before-flush`() {
         val start = connect()
@@ -166,11 +157,7 @@ class OnePromptCoreScenariosTest {
         assertFalse("marker after the key was accepted, once the process died before the flush", AdbAuthWait.isUnanswered())
     }
 
-<<<<<<< HEAD
-    // SD-2, expected to fail until isUnanswered() fails closed like unansweredStamp() does.
-=======
-    // isUnanswered() fails closed like unansweredStamp() does.
->>>>>>> upstream/master
+    // SD-2: isUnanswered() fails closed like unansweredStamp() does.
     @Test
     fun `prefs-unreadable-fail-closed`() {
         prefs.failOnRead = true
@@ -179,7 +166,6 @@ class OnePromptCoreScenariosTest {
         assertTrue("isUnanswered() with unreadable storage (fail-open guards let starts through)", AdbAuthWait.isUnanswered())
     }
 
-<<<<<<< HEAD
     // A command whose output never ends is cut off at the output bound, not read until memory runs out.
     @Test
     fun `endless command output is cut off at the output bound`() {
@@ -215,8 +201,6 @@ class OnePromptCoreScenariosTest {
         }
     }
 
-=======
->>>>>>> upstream/master
     private companion object {
         const val MARKER = "adb_auth_unanswered_at"
 
