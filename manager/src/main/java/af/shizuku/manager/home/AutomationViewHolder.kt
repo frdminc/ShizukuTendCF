@@ -9,10 +9,8 @@ import af.shizuku.manager.databinding.HomeItemContainerBinding
 import af.shizuku.manager.ktx.toHtml
 import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.IconStyleHelper
-import af.shizuku.manager.utils.MotionUtils.applySpringTouch
 import android.os.Build
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.core.view.isVisible
@@ -47,21 +45,7 @@ class AutomationViewHolder(
     private val originalIcon = binding.icon.drawable
 
     init {
-        containerBinding.root.applySpringTouch()
-        containerBinding.root.setOnLongClickListener {
-            HomeEditMode.enter()
-            true
-        }
-        containerBinding.dragHandle.apply {
-            setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_DOWN) HomeEditMode.startDragCallback?.invoke(this@AutomationViewHolder)
-                false
-            }
-            setOnLongClickListener {
-                HomeEditMode.enter()
-                true
-            }
-        }
+        HomeEditMode.bindCardGestures(containerBinding, this)
         binding.button1.setOnClickListener { v ->
             val context = v.context
             val authToken =

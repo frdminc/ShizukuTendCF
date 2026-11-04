@@ -143,6 +143,7 @@ object SettingsHelper {
         Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
             setData(Uri.parse("package:" + context.packageName))
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+<<<<<<< HEAD
         }
 
     fun isSamsungAutoBlockerDisabled(context: Context): Boolean =
@@ -159,5 +160,7 @@ object SettingsHelper {
             maxRestrictions == 0
         } catch (_: Exception) {
             true
+=======
+>>>>>>> upstream/master
         }
 }

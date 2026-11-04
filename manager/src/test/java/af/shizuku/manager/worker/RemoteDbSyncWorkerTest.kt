@@ -8,10 +8,16 @@ import androidx.work.WorkerParameters
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.mockkStatic
+import io.mockk.runs
 import io.mockk.unmockkAll
+<<<<<<< HEAD
+=======
+import io.mockk.verify
+>>>>>>> upstream/master
 
 class RemoteDbSyncWorkerTest :
     FunSpec({
@@ -22,9 +28,13 @@ class RemoteDbSyncWorkerTest :
         beforeTest {
             mockkStatic(ShizukuSettings::class)
             mockkObject(AppContextManager)
+            every { ShizukuSettings.setLastDbUpdate(any()) } just runs
+            every { ShizukuSettings.setRemoteDbEtag(any()) } just runs
+            every { ShizukuSettings.setRemoteDbLastModified(any()) } just runs
         }
 
         afterTest {
+            RemoteDbSyncWorker.fetchForTesting = null
             unmockkAll()
         }
 
@@ -41,10 +51,42 @@ class RemoteDbSyncWorkerTest :
         test("doWork returns retry when fetch throws exception") {
             every { ShizukuSettings.getLastDbUpdate() } returns 0L
 
+<<<<<<< HEAD
+=======
+            RemoteDbSyncWorker.fetchForTesting = { throw RuntimeException("Simulated network error") }
+
+>>>>>>> upstream/master
             val worker = RemoteDbSyncWorker(context, workerParams)
             worker.fetchDb = { throw RuntimeException("Simulated network error") }
             val result = worker.doWork()
 
             result shouldBe Result.retry()
+        }
+
+        test("doWork updates the database when the fetch returns data") {
+            every { ShizukuSettings.getLastDbUpdate() } returns 0L
+            every { AppContextManager.updateDatabase(any()) } returns 3
+            RemoteDbSyncWorker.fetchForTesting = { "{}" }
+
+            val worker = RemoteDbSyncWorker(context, workerParams)
+            val result = worker.doWork()
+
+            result shouldBe Result.success()
+            verify(exactly = 1) { AppContextManager.updateDatabase("{}") }
+        }
+
+        test("sync reports a parse failure without retrying or saving the version") {
+            every { AppContextManager.updateDatabase(any()) } throws IllegalArgumentException("bad json")
+            RemoteDbSyncWorker.fetchForTesting = { "nope" }
+
+            RemoteDbSyncWorker.sync() shouldBe RemoteDbSyncWorker.Companion.SyncResult.Failed(retry = false)
+            verify(exactly = 0) { ShizukuSettings.setLastDbUpdate(any()) }
+        }
+
+        test("sync says up to date when the download isn't newer") {
+            every { AppContextManager.updateDatabase(any()) } returns null
+            RemoteDbSyncWorker.fetchForTesting = { "{}" }
+
+            RemoteDbSyncWorker.sync() shouldBe RemoteDbSyncWorker.Companion.SyncResult.UpToDate
         }
     })

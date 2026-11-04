@@ -26,20 +26,39 @@
 > history is preserved on the `legacy/pre-shizukuplus` branch. Everything below is ShizukuPlus's own README.
 
 <div align="center">
+[[[ UPDATE ]]]
+
+Stable Release is heading your way... soon... have had some more issues creep up on me that I want to fix firsthand.
+
+Pre-releases are back in the meantime.
+
+I've been in the process of simplifying, restructuring, and improving the code quality, and visual quality of the app locally. 
+
+Releases have been, and will be less frequent as I'm doing more local testing before pushing releases.
+Pre-releases will return for simple things like bugs, crashes, issues and such. 
+
+I'm creating more checkpoints for myself and this project as I shift my focus to stability and improvement in visual quality & user experience ahead of new feature implementation.
+
+It's time to truly stabilize things instead of simply moving forward with development at lightspeed.
+Thank you for your patience, and much love to you all!
+
 
 # Shizuku+
 
 The advanced privileged-process manager for Android.
 
-An enhanced version of [Shizuku](https://github.com/RikkaApps/Shizuku) built on top of [thedjchi/Shizuku](https://github.com/thedjchi/Shizuku), with quality-of-life improvements, backported optimizations, and exclusive Plus APIs.
+Shizuku+ is an enhanced version of [Shizuku](https://github.com/RikkaApps/Shizuku) built on top of [thedjchi/Shizuku](https://github.com/thedjchi/Shizuku), with quality-of-life improvements, backported optimizations, exclusive Plus APIs, M3E theming & TCP connectivity improvements, and more. 
 
-Shizuku lets normal apps use system-level APIs directly via a privileged process started with adb or root. Shizuku+ keeps full compatibility while adding features for power users and developers.
+Shizuku lets normal apps use system-level APIs directly via a privileged process started with adb or root. Shizuku+ keeps full compatibility while adding features for power users and developers through the API and in-app with advanced settings and experimental developments.
+
+✨ Check out everything else this fork offers in the feature section further below!
 
 [![Stars](https://img.shields.io/github/stars/thejaustin/ShizukuPlus?style=for-the-badge&color=bfb330&labelColor=807820)](https://github.com/thejaustin/ShizukuPlus/stargazers)
 [![Downloads](https://img.shields.io/github/downloads/thejaustin/ShizukuPlus/total?style=for-the-badge&color=bf7830&labelColor=805020)](https://github.com/thejaustin/ShizukuPlus/releases)
-[![Latest Release](https://img.shields.io/github/v/release/thejaustin/ShizukuPlus?style=for-the-badge&color=3060bf&labelColor=204080&label=Latest)](https://github.com/thejaustin/ShizukuPlus/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/thejaustin/ShizukuPlus?include_prereleases&sort=date&style=for-the-badge&color=3060bf&labelColor=204080&label=Latest)](https://github.com/thejaustin/ShizukuPlus/releases)
+[![Crowdin](https://badges.crowdin.net/ShizukuPlus/localized.svg)](https://crowdin.com/project/ShizukuPlus)
 
-**🌐 Languages:** **English** · [Simplified Chinese](README.zh-CN.md)
+**🌐 Languages:** **English** · [Simplified Chinese](README.zh-CN.md) · [Help Translate on Crowdin](https://crowdin.com/project/ShizukuPlus)
 
 </div>
 
@@ -57,29 +76,42 @@ Get the latest release from [GitHub Releases](https://github.com/thejaustin/Shiz
 *   **Customizable Gestures**: Swipe left, swipe right, and long-press actions, configurable per app.
 *   **In-App Changelogs**: See what's new after an update without leaving the app.
 *   **Bulk Management**: Multi-select apps to grant/revoke permissions or hide them in one tap.
-*   **Activity Log**: Audit trail of API calls and `su` bridge commands, with app icons and real-time updates.
-*   **Root Compatibility Hub**: Dashboard for legacy root apps, with granular module control (Magisk mocking, auto-grant, file interceptor, and more).
-*   **Universal SU Automation**: One-tap 'Magic Setup' to point all installed root apps at the Shizuku+ SU Bridge.
-*   **Service Doctor**: Diagnoses and fixes service startup issues (Samsung Auto Blocker included).
-*   **Integrated Feature Guides**: Every Plus feature has an info icon with a plain-language explanation of what it does.
+*   **Per-app API scopes**: Limit what each authorized app can do (shell, package manager, activity manager, app ops, system settings). An app with a scope off can't get around it with an interactive shell or its own background services.
+*   **Quick safety check** (optional, off by default): When an app asks for access, see where it was installed from, when, and its signing certificate. Add your own VirusTotal or Pithus key to also see whether scanners flag that exact APK; only its hash is looked up.
+*   **Safe by default for other apps**: Shizuku+'s riskier APIs for other apps (other apps' private data, SMS, contacts, location, screenshots, input, reboot) stay off until you turn them on in **Developer options → Unrestricted access** (unlock Developer options by tapping the version 7 times in Settings → About).
+*   **App list sorting up front**: A sort chip leads the filter row: name, last installed, last updated or granted first, and tap again to reverse.
+*   **In-App Knowledgebase**: Clean, offline-first Material 3 peek dialogs with rich guides, copyable command snippets, and direct action buttons without navigating away.
+*   **Activity Log with Morphe Timeline**: Visual node rails with dynamic pulsing status halos, repetitive activity occurrence grouping, and multi-criteria sorting.
+*   **Root Compatibility Hub & Enhanced SU Bridge**: Seamless translation of legacy `su -c` commands into Shizuku IPC with POSIX argument parsing and Android 14–17 support.
+*   **Universal SU Automation**: One-tap 'Magic Setup' to configure installed root apps to use the Shizuku+ SU Bridge.
+*   **Adaptive Service Doctor**: Diagnoses and fixes service startup, Samsung Auto Blocker (read from its real settings now) and OEM battery restrictions. Its background self-healing has its own switches, including whether it may turn the Pairing Helper back on and whether to tell you about fixes that failed.
+*   **Helper notifications**: Problems show up in one place. With the Watchdog on, its notification says whether Shizuku+ is running and offers a fix button when something's wrong; without it, one quiet notification updates in place. You pick how much you hear (off, only when it stops or needs you, or every problem), and nothing pops up over the app you're using.
+*   **Expressive morphing icons**: Setting icons morph from an "off" shape into your chosen shape when you switch them on, with Spin, Morph, Pop, Sweep or Liquid motion. There are Material's shapes plus the original hand-built "classic" ones, and experimental switch designs where the icon itself is the switch.
+*   **Integrated Feature Guides & Smart Tooltips**: Long-press any setting for contextual explanations and direct links to the relevant knowledgebase guide.
 *   **Quick Settings Tile**: Check and toggle the service status from your notification panel.
 
-## 🚀 Plus API Features
+<details>
+<summary>🚀 Plus API Features</summary>
 
 Shizuku+ provides exclusive system interfaces for advanced automation and tools — none of these exist in stock Shizuku:
 
 *   **AICore+ Automation Bridge**: Privileged UI automation (hierarchy dumps, tap/swipe) for AI-driven tools — no root needed. ([added](https://github.com/thejaustin/ShizukuPlus/commit/e9bd1187))
-*   **AVF (Virtual Machine) Manager**: Run isolated Linux/Microdroid VMs with GPU acceleration. ([added](https://github.com/thejaustin/ShizukuPlus/commit/c8e962f6))
-*   **Privileged Storage Proxy**: Authenticated access to restricted paths for backups and file management. `/data/app/` and external `/Android/data/` work in ADB mode; `/data/data/` requires root (the server must run as UID 0 to cross app-private directory boundaries). ([added](https://github.com/thejaustin/ShizukuPlus/commit/c8e962f6))
+*   **AVF (Virtual Machine) Manager**: Create, start and stop AVF virtual machines, on devices whose firmware supports AVF. ([added](https://github.com/thejaustin/ShizukuPlus/commit/c8e962f6))
+*   **Privileged Storage Proxy**: Fast access to shared storage and read-only access to installed APKs for backup and file tools. Other apps' private data (`/data/data/`, `/Android/data/`, `/Android/obb/`) is off by default; turn on **Developer options → Unrestricted app data access** for tools like Neo Backup. `/data/data/` also needs root. ([added](https://github.com/thejaustin/ShizukuPlus/commit/c8e962f6))
 *   **Device Spoofing** (*Spoof Device Identity* in Settings): Present a different device identity to bypass device-specific restrictions. ([added](https://github.com/thejaustin/ShizukuPlus/commit/11867f44))
-*   **Intelligence Bridge** (*AI Core Plus*): Privileged NPU scheduling and screen context intelligence. ([added](https://github.com/thejaustin/ShizukuPlus/commit/e9bd1187))
+*   **Intelligence Bridge** (*AI Core Plus*): Screen context for AI tools (pixel colors, layer captures, system context). NPU scheduling isn't offered: there's no public API for it, so the call says "not supported" instead of pretending ([#633](https://github.com/thejaustin/ShizukuPlus/issues/633)). ([added](https://github.com/thejaustin/ShizukuPlus/commit/e9bd1187))
 *   **Window Manager Plus**: Force free-form resizing, manage the Bubble Bar, and resilient overlays. ([added](https://github.com/thejaustin/ShizukuPlus/commit/e9bd1187))
 *   **System Theming Bridge** (*Overlay Manager Plus*): Privileged overlay management for rootless theming (e.g. Hex Installer). ([added](https://github.com/thejaustin/ShizukuPlus/commit/55f6b7c7))
 *   **Network & DNS Governor**: Manage Private DNS and firewall routing for rootless ad-blockers. ([added](https://github.com/thejaustin/ShizukuPlus/commit/55f6b7c7))
 *   **Deep Process Control** (*Activity Manager Plus*): Lets process managers kill apps and set standby buckets more aggressively. ([added](https://github.com/thejaustin/ShizukuPlus/commit/55f6b7c7))
 *   **Continuity Bridge**: Secure state and task handoff between Shizuku+ devices. ([added](https://github.com/thejaustin/ShizukuPlus/commit/20cf14f7))
 
-## 🛠️ Backporting & Optimizations
+See the [Shizuku+-API](https://github.com/thejaustin/ShizukuPlus-API) repository for full documentation and client bindings.
+
+</details>
+
+<details>
+<summary>🛠️ Backporting & Optimizations</summary>
 
 Shizuku+ makes regular Shizuku apps faster and more compatible without any code changes:
 
@@ -88,6 +120,8 @@ Shizuku+ makes regular Shizuku apps faster and more compatible without any code 
 *   **SU Bridge**: A Shizuku-backed `su` drop-in for non-rooted apps that support a custom root path. Common root commands are translated into real framework operations where shell UID allows it — `iptables --uid-owner` per-app blocks become live `NetworkPolicy` restrictions, `resetprop` reads/writes real system properties, and `chmod`/`chown` apply for real — falling back to mocked success only when an operation genuinely requires root (e.g. flashing partitions or loading kernel modules).
 *   **`plus` CLI Helper**: A privileged command-line utility, available inside `rish`.
 *   **Dynamic App Database**: Keeps app descriptions and suggestions in the UI up-to-date from GitHub.
+
+</details>
 
 ## ⚙️ Modular Control
 
@@ -108,6 +142,10 @@ Shizuku+ installs under its own package (`af.shizuku.plus.api`) so it can coexis
 
 Alternatively, install the **drop-in** build, which registers as `moe.shizuku.privileged.api` directly (do not install it alongside stock Shizuku).
 
+## 🔒 Privacy & Backups
+
+Nothing leaves your device except update checks, a public app-compatibility list from this repo and, only if you opt in, crash reports (with addresses and other apps' commands stripped) and the safety check's VirusTotal or Pithus hash lookups. Backups never carry your ADB key or the list of apps you allowed, and the risky APIs for other apps are off until you turn them on. The details, with links to the code, are in [docs/PRIVACY.md](docs/PRIVACY.md).
+
 ## ☑️ Requirements
 
 **Minimum: Android 7+ · Fully supported through Android 17 (SDK 37)**
@@ -118,11 +156,14 @@ Alternatively, install the **drop-in** build, which registers as `moe.shizuku.pr
 
 On **Android 16+**, Shizuku+ requests the new Local Network Protection permissions so wireless-debugging discovery and pairing keep working; on **Android 17**, it transparently handles the hidden-API `deviceId` change so authorized apps still appear and permission grants still apply.
 
-## 📱 Developer Guide
+## 📃 License
 
-See the [Shizuku+-API](https://github.com/thejaustin/ShizukuPlus-API) repository for documentation on the exclusive Plus APIs.
+[Apache 2.0](LICENSE)
 
-## 🙏 Acknowledgements & Licenses
+---
+
+<details>
+<summary>🙏 Acknowledgements & Upstream Projects</summary>
 
 Shizuku+ is a community-driven enhancement and fork of [thedjchi/Shizuku](https://github.com/thedjchi/Shizuku), which is itself a fork of the original [RikkaApps/Shizuku](https://github.com/RikkaApps/Shizuku). This project is not affiliated with the original RikkaApps team.
 
@@ -180,13 +221,10 @@ Thanks to the following upstream contributors and projects whose work makes Shiz
 
 Full license texts and per-library details: [OPEN_SOURCE_LICENSES.md](OPEN_SOURCE_LICENSES.md) | [NOTICE](NOTICE)
 
-## 📃 License
+</details>
 
-[Apache 2.0](LICENSE)
-
-### Contributors
-
-Thank you to everyone who has contributed code, translations, and testing to Shizuku+:
+<details>
+<summary>👥 Contributors</summary>
 
 **Code Contributors**
 
@@ -198,19 +236,27 @@ Thank you to everyone who has contributed code, translations, and testing to Shi
 | [Ryfter](https://github.com/Ryfter) | mDNS timeout improvements, FGS subtype refactoring, notification UX |
 | [vvb2060](https://github.com/vvb2060) | AGP build system updates, LTO optimization, license clarifications |
 | [Haruue Icymoon](https://github.com/haruue) | Documentation & README improvements |
+| [djbclark](https://github.com/djbclark) | Fork-migration guide (`FORK_MIGRATION.md`); stock-API transaction-code, `onTransact` logging, locked-device ADB foreground-service, CI release-notes and bug-report link fixes (#572–#582) |
+| [Enursha](https://github.com/Enursha) | BinderContainer keep-rules and binder delivery to stock clients; manager "not running" status fix (#307, #308) |
 
 **Translation Contributors**
 
 | Language | Contributor |
 |----------|-------------|
-| Brazilian Portuguese | [odorizzioficial](https://github.com/odorizzioficial) |
+| Azerbaijani | [Figim](https://github.com/Figim) |
+| Brazilian Portuguese | [odorizzioficial](https://github.com/odorizzioficial), [ViictorNunes](https://github.com/ViictorNunes) |
+| Simplified Chinese | [Yizutt](https://github.com/Yizutt), [JeffioZ](https://github.com/JeffioZ), [qianyumeng0228](https://github.com/qianyumeng0228) |
+| Ukrainian | [insabon](https://github.com/insabon), [AmakerGame](https://github.com/AmakerGame) |
+| Urdu | [hamzaharoon1314](https://github.com/hamzaharoon1314) |
 | French | [Ryfter](https://github.com/Ryfter), [T. Clement](https://github.com/thibaultclement) |
 | Vietnamese | [ThePrimalPea](https://github.com/ThePrimalPea) |
 | Filipino | [IverCoder](https://github.com/IverCoder) |
 | Italian | [Dany-coder778](https://github.com/Dany-coder778) |
 | Japanese | [MES-mitutti](https://github.com/MES-mitutti) |
 
-*Plus many more via community translation through Weblate — thank you to all translators!*
+*Plus many more via community translation through [Crowdin](https://crowdin.com/project/ShizukuPlus) — thank you to all translators!*
+
+> **Machine-assisted drafts:** where a language was still incomplete, missing strings were filled with AI-assisted drafts in `strings_machine_translated.xml` and are **flagged for native review**. If you speak the language, corrections are very welcome — see [TRANSLATING.md](TRANSLATING.md).
 
 ### Acknowledgments
 - Special thanks to **AkayamiShurui42** for the proactive security research and stability patches (Reference: #239).
@@ -219,4 +265,7 @@ Thank you to everyone who has contributed code, translations, and testing to Shi
 - Thank you to **Kevinco1** for feedback on root compat app detection issues (#243).
 - Thank you to **aragortsantiago6-beep** and **Scoop2389** (Pixel 9a) and **ConversionRituals** (Xiaomi) for on-device Android 16/17 testing, crash reports, and logs that drove the SDK 37 hidden-API and Local Network Protection compatibility fixes (#317, #323).
 - Thank you to **gmm96** for extensive multi-round logcat debugging across several builds that pinned down the Cached Apps Freezer binder-delivery bug (#371).
+- Thank you to **bilemke** for isolating the stock-API regression that led to removing the legacy binder proxy (#584), and to everyone who filed crash reports and tested builds recently.
 - Thank you to **[odorizzioficial](https://github.com/odorizzioficial)** for the complete Brazilian Portuguese translation (#409), and for the detailed report on the Samsung "Sleeping apps" Watchdog freeze (#415).
+
+</details>

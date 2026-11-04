@@ -279,11 +279,11 @@ class AppPickerPreference(
 
     private fun updateSummary(value: String) {
         val packages = value.split(",").filter { it.isNotBlank() }
-        summary =
+        setCustomSummary(
             if (packages.isEmpty()) {
                 context.getString(R.string.settings_shadow_binder_hidden_packages_summary)
             } else {
-                val scope = CoroutineScope(Dispatchers.Main)
+                // The preference's own scope, cancelled when it's detached.
                 scope.launch {
                     val apps = getApps(context)
                     val selectedNames =
@@ -295,16 +295,18 @@ class AppPickerPreference(
                     val displayNames = selectedNames.take(limit).joinToString(", ")
                     val remaining = selectedNames.size - limit
 
-                    summary =
+                    setCustomSummary(
                         if (remaining > 0) {
-                            "$displayNames +$remaining more"
+                            context.getString(R.string.app_picker_names_and_more, displayNames, remaining)
                         } else {
                             displayNames
-                        }
+                        },
+                    )
                 }
                 // Temporary summary while loading names
                 context.resources.getQuantityString(R.plurals.settings_shadow_binder_hidden_packages_count, packages.size, packages.size)
-            }
+            },
+        )
     }
 
     override fun onSetInitialValue(defaultValue: Any?) {

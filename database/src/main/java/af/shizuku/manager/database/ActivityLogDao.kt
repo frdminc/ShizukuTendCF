@@ -34,6 +34,14 @@ interface ActivityLogDao {
     @Query("DELETE FROM activity_logs WHERE id NOT IN (SELECT id FROM (SELECT id FROM activity_logs ORDER BY timestamp DESC, id DESC LIMIT :limit))")
     fun deleteExcess(limit: Int): Int
 
+    /** Trims everything except connection events down to the newest [limit]. */
+    @Query("DELETE FROM activity_logs WHERE action NOT LIKE 'Connection:%' AND id NOT IN (SELECT id FROM (SELECT id FROM activity_logs WHERE action NOT LIKE 'Connection:%' ORDER BY timestamp DESC, id DESC LIMIT :limit))")
+    fun deleteExcessGeneral(limit: Int): Int
+
+    /** Trims connection events (drops, failed starts, reconnects) down to the newest [limit], independent of general entries. */
+    @Query("DELETE FROM activity_logs WHERE action LIKE 'Connection:%' AND id NOT IN (SELECT id FROM (SELECT id FROM activity_logs WHERE action LIKE 'Connection:%' ORDER BY timestamp DESC, id DESC LIMIT :limit))")
+    fun deleteExcessConnection(limit: Int): Int
+
     /**
      * Delete activity logs older than the specified timestamp.
      */

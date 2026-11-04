@@ -156,6 +156,7 @@ private class PairingContext private constructor(
 
     companion object {
         fun create(password: ByteArray): PairingContext? {
+            if (!AdbPairingClient.isNativeAvailable()) return null
             val nativePtr = nativeConstructor(true, password)
             return if (nativePtr != 0L) PairingContext(nativePtr) else null
         }
@@ -191,11 +192,16 @@ class AdbPairingClient(
     private var state: State = State.Ready
 
     fun start(): Boolean {
+        // A port read off the screen or a notification can be garbage (SHIZUKUPLUS-9V: 84000);
+        // Socket() would throw IllegalArgumentException instead of the pairing just failing.
+        if (port !in 1..65535) {
+            Timber.tag(TAG).w("Pairing port out of range: $port")
+            return false
+        }
         Sentry.addBreadcrumb(
             Breadcrumb("ADB Pairing started").apply {
+                // No host or port: they identify the device's network.
                 category = "adb.pairing"
-                setData("host", host)
-                setData("port", port.toString())
             },
         )
         try {
@@ -250,17 +256,44 @@ class AdbPairingClient(
     }
 
     private fun setupTlsConnection() {
-        val s = Socket()
-        socket = s
-        s.connect(java.net.InetSocketAddress(host, port), 5000)
-        s.tcpNoDelay = true
-        s.soTimeout = 15000 // 15 seconds read timeout to prevent infinite hangs during pairing
-        s.keepAlive = true
+        val candidates = AdbPortProber.getCandidateHosts(host)
+        var connectedSocket: Socket? = null
+        var lastException: Exception? = null
+        var successfulHost = host
 
+        for (candidate in candidates) {
+            val s = Socket()
+            try {
+                s.connect(java.net.InetSocketAddress(candidate, port), 3000)
+                s.tcpNoDelay = true
+                s.soTimeout = 15000 // 15 seconds read timeout to prevent infinite hangs during pairing
+                s.keepAlive = true
+                connectedSocket = s
+                successfulHost = candidate
+                break
+            } catch (e: Exception) {
+                s.close()
+                lastException = e
+                if (e is java.net.ConnectException || e is java.net.NoRouteToHostException || e is java.net.SocketTimeoutException) {
+                    continue
+                } else {
+                    throw e
+                }
+            }
+        }
+
+        val s = connectedSocket ?: throw (lastException ?: java.net.ConnectException("Could not connect to pairing service on port $port across $candidates"))
+        socket = s
+
+<<<<<<< HEAD
         val sslContext = key.sslContext(PairingAdbServerTrustManager)
         val sslSocket = sslContext.socketFactory.createSocket(s, host, port, true) as SSLSocket
+=======
+        val sslContext = key.sslContext
+        val sslSocket = sslContext.socketFactory.createSocket(s, successfulHost, port, true) as SSLSocket
+>>>>>>> upstream/master
         sslSocket.startHandshake()
-        Timber.tag(TAG).d("Handshake succeeded.")
+        Timber.tag(TAG).d("Handshake succeeded on $successfulHost:$port.")
 
         inputStream = DataInputStream(sslSocket.inputStream)
         outputStream = DataOutputStream(sslSocket.outputStream)
@@ -380,9 +413,33 @@ class AdbPairingClient(
     }
 
     companion object {
+        @Volatile
+        private var nativeLoaded: Boolean = false
+
+        @Volatile
+        var nativeLoadError: String? = null
+            private set
+
         init {
-            System.loadLibrary("adb")
+            try {
+                System.loadLibrary("adb")
+                nativeLoaded = true
+            } catch (t: Throwable) {
+                nativeLoaded = false
+                nativeLoadError = "${t.javaClass.simpleName}: ${t.message}"
+                Timber.tag(TAG).e(t, "Failed to load native libadb.so — wireless pairing JNI unavailable")
+            }
         }
+
+        @JvmStatic
+        fun isNativeAvailable(): Boolean =
+            nativeLoaded &&
+                try {
+                    available()
+                } catch (t: Throwable) {
+                    Timber.tag(TAG).w(t, "libadb.so available() check threw, falling back to nativeLoaded")
+                    nativeLoaded
+                }
 
         @JvmStatic
         external fun available(): Boolean

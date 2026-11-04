@@ -43,44 +43,59 @@ class StartStockShizukuViewHolder(
     }
 
     private fun onStartClicked(v: View) {
-        val hasRoot =
-            af.shizuku.manager.migration.MigrationHelper
-                .isRootAvailable()
-        val hasShizuku = rikka.shizuku.Shizuku.pingBinder()
-
-        if (hasRoot || hasShizuku) {
-            val starterCmd = af.shizuku.manager.starter.Starter.internalCommand
-            val cmd = "am force-stop moe.shizuku.privileged.api && am force-stop af.shizuku.plus.api && nohup sh -c 'sleep 1 && $starterCmd' >/dev/null 2>&1 &"
-            val activity = v.context.asActivity<android.app.Activity>() ?: return
-            start.isEnabled = false
-            scope.launch(Dispatchers.IO) {
-                try {
-                    if (hasRoot) {
+        val activity = v.context.asActivity<android.app.Activity>() ?: return
+        start.isEnabled = false
+        scope.launch(Dispatchers.IO) {
+            // Checking for root can wait on the su prompt, so it stays off the main thread. A
+            // live Shizuku binder is used first: it isn't root, so it mustn't go through su.
+            val hasShizuku = runCatching { rikka.shizuku.Shizuku.pingBinder() }.getOrDefault(false)
+            val hasRoot =
+                !hasShizuku &&
+                    runCatching {
                         com.topjohnwu.superuser.Shell
-                            .cmd(cmd)
-                            .exec()
-                    } else {
-                        val p = rikka.shizuku.Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
-                        p?.waitFor()
-                    }
-                } catch (_: Exception) {
-                    // Ignore
+                            .isAppGrantedRoot() == true ||
+                            com.topjohnwu.superuser.Shell
+                                .getShell()
+                                .isRoot
+                    }.getOrDefault(false)
+            val ran =
+                if (!hasShizuku && !hasRoot) {
+                    null
+                } else {
+                    val starterCmd = af.shizuku.manager.starter.Starter.internalCommand
+                    val cmd = "am force-stop moe.shizuku.privileged.api && am force-stop af.shizuku.plus.api && nohup sh -c 'sleep 1 && $starterCmd' >/dev/null 2>&1 &"
+                    runCatching {
+                        if (hasShizuku) {
+                            @Suppress("DEPRECATION")
+                            rikka.shizuku.Shizuku
+                                .newProcess(arrayOf("sh", "-c", cmd), null, null)
+                                ?.waitFor() == 0
+                        } else {
+                            com.topjohnwu.superuser.Shell
+                                .cmd(cmd)
+                                .exec()
+                                .isSuccess
+                        }
+                    }.onFailure { timber.log.Timber.w(it, "Restarting over the stock Shizuku server failed") }
+                        .getOrDefault(false)
                 }
-                withContext(Dispatchers.Main) {
-                    start.isEnabled = true
-                    android.widget.Toast
-                        .makeText(activity, R.string.stock_shizuku_restarting_via_root, android.widget.Toast.LENGTH_SHORT)
-                        .show()
+            withContext(Dispatchers.Main) {
+                start.isEnabled = true
+                when (ran) {
+                    true ->
+                        android.widget.Toast
+                            .makeText(activity, if (hasShizuku) R.string.stock_shizuku_restarting else R.string.stock_shizuku_restarting_via_root, android.widget.Toast.LENGTH_SHORT)
+                            .show()
+                    // No privileged shell, or it failed: only a reboot clears the stock server.
+                    else ->
+                        com.google.android.material.dialog
+                            .MaterialAlertDialogBuilder(activity)
+                            .setTitle(R.string.stock_shizuku_conflict_dialog_title)
+                            .setMessage(R.string.stock_shizuku_conflict_dialog_message)
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
                 }
             }
-        } else {
-            val activity = v.context.asActivity<android.app.Activity>() ?: return
-            com.google.android.material.dialog
-                .MaterialAlertDialogBuilder(activity)
-                .setTitle(R.string.stock_shizuku_conflict_dialog_title)
-                .setMessage(R.string.stock_shizuku_conflict_dialog_message)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
         }
     }
 

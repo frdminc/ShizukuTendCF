@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <style name="ThemeOverlay"/>
     <style name="ThemeOverlay.Accent" parent=""/>
 
@@ -9,8 +9,11 @@
     <style name="ThemeOverlay.Black">
         <item name="android:colorPrimaryDark">@android:color/black</item>
         <item name="android:colorBackground">@android:color/black</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="colorSurface">@android:color/black</item>
         <item name="colorSurfaceDim">@android:color/black</item>
+        <item name="colorSurfaceBright">#1A1A1A</item>
         <item name="colorSurfaceContainerLowest">@android:color/black</item>
         <item name="colorSurfaceContainerLow">@android:color/black</item>
         <item name="colorSurfaceContainer">#0B0B0B</item>
@@ -22,225 +25,40 @@
          tokens to pure black so cards blend completely with the background. Enable via the
          "AMOLED+" toggle in Personalization; requires AMOLED Night mode to be active. -->
     <style name="ThemeOverlay.Black.Plus" parent="ThemeOverlay.Black">
+        <item name="colorSurfaceBright">@android:color/black</item>
         <item name="colorSurfaceContainerLow">@android:color/black</item>
         <item name="colorSurfaceContainer">@android:color/black</item>
         <item name="colorSurfaceContainerHigh">@android:color/black</item>
         <item name="colorSurfaceContainerHighest">@android:color/black</item>
     </style>
 
+    <!-- AMOLED outlines, applied after ThemeOverlay.Black(.Plus) at standard contrast only: the
+         Medium/High contrast schemes bring stronger outlines that these would replace. -->
+    <style name="ThemeOverlay.Black.Outlines" parent="">
+        <item name="colorOutline">#4A4A4A</item>
+        <item name="colorOutlineVariant">#262626</item>
+    </style>
+    <style name="ThemeOverlay.Black.Plus.Outlines" parent="">
+        <item name="colorOutline">#333333</item>
+        <item name="colorOutlineVariant">#1C1C1C</item>
+    </style>
+
+    <!-- High contrast with system (dynamic) colours: outlines only. Custom accents and Default use
+         their generated High contrast scheme instead (themes_accents.xml). -->
+    <style name="ThemeOverlay.HighContrast" parent="">
+        <item name="colorOutline">#424242</item>
+        <item name="colorOutlineVariant">#757575</item>
+    </style>
+    <style name="ThemeOverlay.HighContrast.Dark" parent="">
+        <item name="colorOutline">#9E9E9E</item>
+        <item name="colorOutlineVariant">#616161</item>
+    </style>
+
     <style name="ThemeOverlay.DynamicColors.Light" parent="ThemeOverlay.Material3.DynamicColors.Light.Shizuku"/>
 
     <style name="ThemeOverlay.DynamicColors.Dark" parent="ThemeOverlay.Material3.DynamicColors.Dark.Shizuku"/>
 
-    <!-- Violet Accent Overlay -->
-    <style name="ThemeOverlay.Accent.Violet">
-        <item name="colorPrimary">#7B1FA2</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorPrimaryContainer">#F3E5F5</item>
-        <item name="colorOnPrimaryContainer">#4A148C</item>
-        <item name="colorSecondary">#63538A</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
-        <item name="colorSecondaryContainer">#E8DEF8</item>
-        <item name="colorOnSecondaryContainer">#1F0E3D</item>
-        <item name="colorTertiary">#7E4E77</item>
-        <item name="colorOnTertiary">#FFFFFF</item>
-        <item name="colorTertiaryContainer">#FCDAF6</item>
-        <item name="colorOnTertiaryContainer">#33002A</item>
-    </style>
-    <style name="ThemeOverlay.Accent.Violet.Dark">
-        <item name="colorPrimary">#E040FB</item>
-        <item name="colorOnPrimary">#330050</item>
-        <item name="colorPrimaryContainer">#4A148C</item>
-        <item name="colorOnPrimaryContainer">#F3E5F5</item>
-        <item name="colorSecondary">#CABFE4</item>
-        <item name="colorOnSecondary">#352554</item>
-        <item name="colorSecondaryContainer">#4B3B62</item>
-        <item name="colorOnSecondaryContainer">#E8DEF8</item>
-        <item name="colorTertiary">#EFBEE4</item>
-        <item name="colorOnTertiary">#4A1F46</item>
-        <item name="colorTertiaryContainer">#633B5E</item>
-        <item name="colorOnTertiaryContainer">#FCDAF6</item>
-    </style>
-
-    <!-- Green Accent Overlay -->
-    <style name="ThemeOverlay.Accent.Green">
-        <item name="colorPrimary">#00796B</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorPrimaryContainer">#E0F2F1</item>
-        <item name="colorOnPrimaryContainer">#004D40</item>
-        <item name="colorSecondary">#4A6660</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
-        <item name="colorSecondaryContainer">#CCE8E3</item>
-        <item name="colorOnSecondaryContainer">#04201D</item>
-        <item name="colorTertiary">#446279</item>
-        <item name="colorOnTertiary">#FFFFFF</item>
-        <item name="colorTertiaryContainer">#C8E4F9</item>
-        <item name="colorOnTertiaryContainer">#001E2D</item>
-    </style>
-    <style name="ThemeOverlay.Accent.Green.Dark">
-        <item name="colorPrimary">#64FFDA</item>
-        <item name="colorOnPrimary">#003730</item>
-        <item name="colorPrimaryContainer">#004D40</item>
-        <item name="colorOnPrimaryContainer">#E0F2F1</item>
-        <item name="colorSecondary">#B1CECA</item>
-        <item name="colorOnSecondary">#1D3532</item>
-        <item name="colorSecondaryContainer">#324E4A</item>
-        <item name="colorOnSecondaryContainer">#CCE8E3</item>
-        <item name="colorTertiary">#ACC9E4</item>
-        <item name="colorOnTertiary">#153244</item>
-        <item name="colorTertiaryContainer">#2D4A61</item>
-        <item name="colorOnTertiaryContainer">#C8E4F9</item>
-    </style>
-
-    <!-- Crimson Accent Overlay -->
-    <style name="ThemeOverlay.Accent.Crimson">
-        <item name="colorPrimary">#C2185B</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorPrimaryContainer">#FCE4EC</item>
-        <item name="colorOnPrimaryContainer">#880E4F</item>
-        <item name="colorSecondary">#74565E</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
-        <item name="colorSecondaryContainer">#FFDADF</item>
-        <item name="colorOnSecondaryContainer">#2B1519</item>
-        <item name="colorTertiary">#6D5C00</item>
-        <item name="colorOnTertiary">#FFFFFF</item>
-        <item name="colorTertiaryContainer">#FAE474</item>
-        <item name="colorOnTertiaryContainer">#211B00</item>
-    </style>
-    <style name="ThemeOverlay.Accent.Crimson.Dark">
-        <item name="colorPrimary">#FF4081</item>
-        <item name="colorOnPrimary">#5C0033</item>
-        <item name="colorPrimaryContainer">#880E4F</item>
-        <item name="colorOnPrimaryContainer">#FCE4EC</item>
-        <item name="colorSecondary">#E3BDC4</item>
-        <item name="colorOnSecondary">#432830</item>
-        <item name="colorSecondaryContainer">#5B3F46</item>
-        <item name="colorOnSecondaryContainer">#FFDADF</item>
-        <item name="colorTertiary">#D7C541</item>
-        <item name="colorOnTertiary">#393000</item>
-        <item name="colorTertiaryContainer">#524400</item>
-        <item name="colorOnTertiaryContainer">#FAE474</item>
-    </style>
-
-    <!-- Ocean Accent Overlay -->
-    <style name="ThemeOverlay.Accent.Ocean">
-        <item name="colorPrimary">#0288D1</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorPrimaryContainer">#E1F5FE</item>
-        <item name="colorOnPrimaryContainer">#01579B</item>
-        <item name="colorSecondary">#4E5F70</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
-        <item name="colorSecondaryContainer">#D1E5F9</item>
-        <item name="colorOnSecondaryContainer">#0A1D29</item>
-        <item name="colorTertiary">#5C5B8B</item>
-        <item name="colorOnTertiary">#FFFFFF</item>
-        <item name="colorTertiaryContainer">#E2DEFF</item>
-        <item name="colorOnTertiaryContainer">#151451</item>
-    </style>
-    <style name="ThemeOverlay.Accent.Ocean.Dark">
-        <item name="colorPrimary">#40C4FF</item>
-        <item name="colorOnPrimary">#003549</item>
-        <item name="colorPrimaryContainer">#01579B</item>
-        <item name="colorOnPrimaryContainer">#E1F5FE</item>
-        <item name="colorSecondary">#B5C9DC</item>
-        <item name="colorOnSecondary">#213141</item>
-        <item name="colorSecondaryContainer">#364759</item>
-        <item name="colorOnSecondaryContainer">#D1E5F9</item>
-        <item name="colorTertiary">#C5C3F0</item>
-        <item name="colorOnTertiary">#2D2F55</item>
-        <item name="colorTertiaryContainer">#44436B</item>
-        <item name="colorOnTertiaryContainer">#E2DEFF</item>
-    </style>
-
-    <!-- Amber Accent Overlay — warm golden-orange -->
-    <style name="ThemeOverlay.Accent.Amber">
-        <item name="colorPrimary">#8B4000</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorPrimaryContainer">#FFDCC1</item>
-        <item name="colorOnPrimaryContainer">#2D1600</item>
-        <item name="colorSecondary">#77574A</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
-        <item name="colorSecondaryContainer">#FFD9CC</item>
-        <item name="colorOnSecondaryContainer">#2D1400</item>
-        <item name="colorTertiary">#695F30</item>
-        <item name="colorOnTertiary">#FFFFFF</item>
-        <item name="colorTertiaryContainer">#F2E4AB</item>
-        <item name="colorOnTertiaryContainer">#221B00</item>
-    </style>
-    <style name="ThemeOverlay.Accent.Amber.Dark">
-        <item name="colorPrimary">#FFB68A</item>
-        <item name="colorOnPrimary">#4D2000</item>
-        <item name="colorPrimaryContainer">#6E3200</item>
-        <item name="colorOnPrimaryContainer">#FFDCC1</item>
-        <item name="colorSecondary">#E6BEAF</item>
-        <item name="colorOnSecondary">#442B1F</item>
-        <item name="colorSecondaryContainer">#5D4034</item>
-        <item name="colorOnSecondaryContainer">#FFD9CC</item>
-        <item name="colorTertiary">#D5C882</item>
-        <item name="colorOnTertiary">#352E04</item>
-        <item name="colorTertiaryContainer">#4C4419</item>
-        <item name="colorOnTertiaryContainer">#F2E4AB</item>
-    </style>
-
-    <!-- Rose Accent Overlay — vibrant warm pink, distinct from Crimson's cooler red -->
-    <style name="ThemeOverlay.Accent.Rose">
-        <item name="colorPrimary">#9D2C3D</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorPrimaryContainer">#FFDADF</item>
-        <item name="colorOnPrimaryContainer">#40000F</item>
-        <item name="colorSecondary">#75565F</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
-        <item name="colorSecondaryContainer">#FFD9E0</item>
-        <item name="colorOnSecondaryContainer">#2C1520</item>
-        <item name="colorTertiary">#7B5539</item>
-        <item name="colorOnTertiary">#FFFFFF</item>
-        <item name="colorTertiaryContainer">#FFD9BB</item>
-        <item name="colorOnTertiaryContainer">#2F1500</item>
-    </style>
-    <style name="ThemeOverlay.Accent.Rose.Dark">
-        <item name="colorPrimary">#FFB2BE</item>
-        <item name="colorOnPrimary">#5E1125</item>
-        <item name="colorPrimaryContainer">#7B1C35</item>
-        <item name="colorOnPrimaryContainer">#FFDADF</item>
-        <item name="colorSecondary">#E3BDC6</item>
-        <item name="colorOnSecondary">#44202B</item>
-        <item name="colorSecondaryContainer">#5D3541</item>
-        <item name="colorOnSecondaryContainer">#FFD9E0</item>
-        <item name="colorTertiary">#EDB98A</item>
-        <item name="colorOnTertiary">#462912</item>
-        <item name="colorTertiaryContainer">#5F3E26</item>
-        <item name="colorOnTertiaryContainer">#FFD9BB</item>
-    </style>
-
-    <!-- Midnight Slate Overlay — deep cool indigo-slate -->
-    <style name="ThemeOverlay.Accent.Slate">
-        <item name="colorPrimary">#3B4CB8</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorPrimaryContainer">#DEE0FF</item>
-        <item name="colorOnPrimaryContainer">#000F60</item>
-        <item name="colorSecondary">#585E8D</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
-        <item name="colorSecondaryContainer">#DDE1FF</item>
-        <item name="colorOnSecondaryContainer">#141844</item>
-        <item name="colorTertiary">#7550A0</item>
-        <item name="colorOnTertiary">#FFFFFF</item>
-        <item name="colorTertiaryContainer">#ECDCFF</item>
-        <item name="colorOnTertiaryContainer">#29004F</item>
-    </style>
-    <style name="ThemeOverlay.Accent.Slate.Dark">
-        <item name="colorPrimary">#BAC1FF</item>
-        <item name="colorOnPrimary">#04189D</item>
-        <item name="colorPrimaryContainer">#1E2F9C</item>
-        <item name="colorOnPrimaryContainer">#DEE0FF</item>
-        <item name="colorSecondary">#BFC4F8</item>
-        <item name="colorOnSecondary">#28306B</item>
-        <item name="colorSecondaryContainer">#3F4782</item>
-        <item name="colorOnSecondaryContainer">#DDE1FF</item>
-        <item name="colorTertiary">#D5B9FC</item>
-        <item name="colorOnTertiary">#421A6B</item>
-        <item name="colorTertiaryContainer">#5B3282</item>
-        <item name="colorOnTertiaryContainer">#ECDCFF</item>
-    </style>
+    <!-- Custom accent schemes (every contrast level) are generated into themes_accents.xml. -->
 
     <!--
         Shape Style overlays (settings key "shape_style", gated on "expressive_shapes").
@@ -268,6 +86,18 @@
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">32dp</item>
     </style>
+    <style name="ShapeAppearance.Modern.Corner.LargeIncreased" parent="ShapeAppearance.Material3.Corner.LargeIncreased">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">20dp</item>
+    </style>
+    <style name="ShapeAppearance.Modern.Corner.ExtraLargeIncreased" parent="ShapeAppearance.Material3.Corner.ExtraLargeIncreased">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">32dp</item>
+    </style>
+    <style name="ShapeAppearance.Modern.Corner.ExtraExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraExtraLarge">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">48dp</item>
+    </style>
     <style name="ThemeOverlay.Shape" parent=""/>
 
     <style name="ThemeOverlay.Shape.Modern">
@@ -276,6 +106,9 @@
         <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.Modern.Corner.Medium</item>
         <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.Modern.Corner.Large</item>
         <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.Modern.Corner.ExtraLarge</item>
+        <item name="shapeAppearanceCornerLargeIncreased">@style/ShapeAppearance.Modern.Corner.LargeIncreased</item>
+        <item name="shapeAppearanceCornerExtraLargeIncreased">@style/ShapeAppearance.Modern.Corner.ExtraLargeIncreased</item>
+        <item name="shapeAppearanceCornerExtraExtraLarge">@style/ShapeAppearance.Modern.Corner.ExtraExtraLarge</item>
     </style>
 
     <!-- Classic (Material 2): flatter, boxier corners, no "Full"/pill shapes. -->
@@ -299,12 +132,27 @@
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">8dp</item>
     </style>
+    <style name="ShapeAppearance.Classic.Corner.LargeIncreased" parent="ShapeAppearance.Material3.Corner.LargeIncreased">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">8dp</item>
+    </style>
+    <style name="ShapeAppearance.Classic.Corner.ExtraLargeIncreased" parent="ShapeAppearance.Material3.Corner.ExtraLargeIncreased">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">12dp</item>
+    </style>
+    <style name="ShapeAppearance.Classic.Corner.ExtraExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraExtraLarge">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">16dp</item>
+    </style>
     <style name="ThemeOverlay.Shape.Classic">
         <item name="shapeAppearanceCornerExtraSmall">@style/ShapeAppearance.Classic.Corner.ExtraSmall</item>
         <item name="shapeAppearanceCornerSmall">@style/ShapeAppearance.Classic.Corner.Small</item>
         <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.Classic.Corner.Medium</item>
         <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.Classic.Corner.Large</item>
         <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.Classic.Corner.ExtraLarge</item>
+        <item name="shapeAppearanceCornerLargeIncreased">@style/ShapeAppearance.Classic.Corner.LargeIncreased</item>
+        <item name="shapeAppearanceCornerExtraLargeIncreased">@style/ShapeAppearance.Classic.Corner.ExtraLargeIncreased</item>
+        <item name="shapeAppearanceCornerExtraExtraLarge">@style/ShapeAppearance.Classic.Corner.ExtraExtraLarge</item>
     </style>
 
     <!-- Organic (Squircle): generously rounded, continuous-looking corners throughout. -->
@@ -326,7 +174,19 @@
     </style>
     <style name="ShapeAppearance.Squircle.Corner.ExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraLarge">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">36dp</item>
+        <item name="cornerSize">32dp</item>
+    </style>
+    <style name="ShapeAppearance.Squircle.Corner.LargeIncreased" parent="ShapeAppearance.Material3.Corner.LargeIncreased">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">28dp</item>
+    </style>
+    <style name="ShapeAppearance.Squircle.Corner.ExtraLargeIncreased" parent="ShapeAppearance.Material3.Corner.ExtraLargeIncreased">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">32dp</item>
+    </style>
+    <style name="ShapeAppearance.Squircle.Corner.ExtraExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraExtraLarge">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">48dp</item>
     </style>
     <style name="ThemeOverlay.Shape.Squircle">
         <item name="shapeAppearanceCornerExtraSmall">@style/ShapeAppearance.Squircle.Corner.ExtraSmall</item>
@@ -334,6 +194,9 @@
         <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.Squircle.Corner.Medium</item>
         <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.Squircle.Corner.Large</item>
         <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.Squircle.Corner.ExtraLarge</item>
+        <item name="shapeAppearanceCornerLargeIncreased">@style/ShapeAppearance.Squircle.Corner.LargeIncreased</item>
+        <item name="shapeAppearanceCornerExtraLargeIncreased">@style/ShapeAppearance.Squircle.Corner.ExtraLargeIncreased</item>
+        <item name="shapeAppearanceCornerExtraExtraLarge">@style/ShapeAppearance.Squircle.Corner.ExtraExtraLarge</item>
     </style>
 
     <!-- Cut (Angular): M3 Expressive's "Embrace Tension" principle (mixing sharp/angular forms
@@ -359,11 +222,23 @@
     </style>
     <style name="ShapeAppearance.Cut.Corner.Large" parent="ShapeAppearance.Material3.Corner.Large">
         <item name="cornerFamily">cut</item>
-        <item name="cornerSize">18dp</item>
+        <item name="cornerSize">16dp</item>
     </style>
     <style name="ShapeAppearance.Cut.Corner.ExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraLarge">
         <item name="cornerFamily">cut</item>
         <item name="cornerSize">28dp</item>
+    </style>
+    <style name="ShapeAppearance.Cut.Corner.LargeIncreased" parent="ShapeAppearance.Material3.Corner.LargeIncreased">
+        <item name="cornerFamily">cut</item>
+        <item name="cornerSize">20dp</item>
+    </style>
+    <style name="ShapeAppearance.Cut.Corner.ExtraLargeIncreased" parent="ShapeAppearance.Material3.Corner.ExtraLargeIncreased">
+        <item name="cornerFamily">cut</item>
+        <item name="cornerSize">32dp</item>
+    </style>
+    <style name="ShapeAppearance.Cut.Corner.ExtraExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraExtraLarge">
+        <item name="cornerFamily">cut</item>
+        <item name="cornerSize">48dp</item>
     </style>
     <style name="ThemeOverlay.Shape.Cut">
         <item name="shapeAppearanceCornerExtraSmall">@style/ShapeAppearance.Cut.Corner.ExtraSmall</item>
@@ -371,6 +246,9 @@
         <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.Cut.Corner.Medium</item>
         <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.Cut.Corner.Large</item>
         <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.Cut.Corner.ExtraLarge</item>
+        <item name="shapeAppearanceCornerLargeIncreased">@style/ShapeAppearance.Cut.Corner.LargeIncreased</item>
+        <item name="shapeAppearanceCornerExtraLargeIncreased">@style/ShapeAppearance.Cut.Corner.ExtraLargeIncreased</item>
+        <item name="shapeAppearanceCornerExtraExtraLarge">@style/ShapeAppearance.Cut.Corner.ExtraExtraLarge</item>
     </style>
 
     <!--
@@ -394,6 +272,9 @@
         <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.Sharp.Corner</item>
         <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.Sharp.Corner</item>
         <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.Sharp.Corner</item>
+        <item name="shapeAppearanceCornerLargeIncreased">@style/ShapeAppearance.Sharp.Corner</item>
+        <item name="shapeAppearanceCornerExtraLargeIncreased">@style/ShapeAppearance.Sharp.Corner</item>
+        <item name="shapeAppearanceCornerExtraExtraLarge">@style/ShapeAppearance.Sharp.Corner</item>
         <item name="cardCornerRadius">0dp</item>
     </style>
 
@@ -408,7 +289,7 @@
     -->
     <style name="ShapeAppearance.OneUI.Corner.ExtraSmall" parent="ShapeAppearance.Material3.Corner.ExtraSmall">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">6dp</item>
+        <item name="cornerSize">4dp</item>
     </style>
     <style name="ShapeAppearance.OneUI.Corner.Small" parent="ShapeAppearance.Material3.Corner.Small">
         <item name="cornerFamily">rounded</item>
@@ -416,15 +297,27 @@
     </style>
     <style name="ShapeAppearance.OneUI.Corner.Medium" parent="ShapeAppearance.Material3.Corner.Medium">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">18dp</item>
+        <item name="cornerSize">16dp</item>
     </style>
     <style name="ShapeAppearance.OneUI.Corner.Large" parent="ShapeAppearance.Material3.Corner.Large">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">26dp</item>
+        <item name="cornerSize">28dp</item>
     </style>
     <style name="ShapeAppearance.OneUI.Corner.ExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraLarge">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">36dp</item>
+        <item name="cornerSize">32dp</item>
+    </style>
+    <style name="ShapeAppearance.OneUI.Corner.LargeIncreased" parent="ShapeAppearance.Material3.Corner.LargeIncreased">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">28dp</item>
+    </style>
+    <style name="ShapeAppearance.OneUI.Corner.ExtraLargeIncreased" parent="ShapeAppearance.Material3.Corner.ExtraLargeIncreased">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">32dp</item>
+    </style>
+    <style name="ShapeAppearance.OneUI.Corner.ExtraExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraExtraLarge">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">48dp</item>
     </style>
 
     <style name="ThemeOverlay.OneUI" parent="">
@@ -434,6 +327,9 @@
         <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.OneUI.Corner.Medium</item>
         <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.OneUI.Corner.Large</item>
         <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.OneUI.Corner.ExtraLarge</item>
+        <item name="shapeAppearanceCornerLargeIncreased">@style/ShapeAppearance.OneUI.Corner.LargeIncreased</item>
+        <item name="shapeAppearanceCornerExtraLargeIncreased">@style/ShapeAppearance.OneUI.Corner.ExtraLargeIncreased</item>
+        <item name="shapeAppearanceCornerExtraExtraLarge">@style/ShapeAppearance.OneUI.Corner.ExtraExtraLarge</item>
         <!-- Bolder headline typography (One UI "SamsungOne" look) -->
         <item name="textAppearanceHeadlineLarge">@style/TextAppearance.OneUI.HeadlineLarge</item>
         <item name="textAppearanceTitleLarge">@style/TextAppearance.OneUI.TitleLarge</item>
@@ -449,13 +345,16 @@
         <item name="android:listPreferredItemPaddingEnd">16dp</item>
     </style>
 
+    <!-- Samsung SESL: 34sp expanded title, 30sp when a subtitle sits under it (all our headers
+         have one). 38sp pushed long titles like "Application management" off the edge. -->
     <style name="TextAppearance.OneUI.HeadlineLarge" parent="TextAppearance.Material3.HeadlineLarge">
-        <item name="android:textSize">38sp</item>
+        <item name="android:textSize">30sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">-0.01</item>
     </style>
+    <!-- 22sp keeps titleLarge below headlineSmall (24sp); 26sp inverted the hierarchy. -->
     <style name="TextAppearance.OneUI.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
-        <item name="android:textSize">26sp</item>
+        <item name="android:textSize">22sp</item>
         <item name="android:textStyle">bold</item>
     </style>
     <style name="TextAppearance.OneUI.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
@@ -465,14 +364,26 @@
 
     <!--
         Bold Typography overlay (settings key "bold_typography").
-        Applies heavier font weights for headings/titles independently of the full One UI overlay,
-        so users can have bold typography without the One UI shape + preferenceTheme changes.
-        Applied before ThemeOverlay.OneUI so One UI's values win when both are on.
+        Swaps the display, headline, title and label roles for their M3 Expressive Emphasized
+        styles (heavier weight, same size), so the scale keeps its hierarchy. Body text stays at
+        regular weight; preference titles (listItem) are a title role and take BodyLarge.Emphasized. Applied before ThemeOverlay.OneUI so One
+        UI's values win when both are on.
     -->
     <style name="ThemeOverlay.Typography.Bold" parent="">
-        <item name="textAppearanceHeadlineLarge">@style/TextAppearance.OneUI.HeadlineLarge</item>
-        <item name="textAppearanceTitleLarge">@style/TextAppearance.OneUI.TitleLarge</item>
-        <item name="textAppearanceTitleMedium">@style/TextAppearance.OneUI.TitleMedium</item>
+        <item name="textAppearanceDisplayLarge">@style/TextAppearance.Material3.DisplayLarge.Emphasized</item>
+        <item name="textAppearanceDisplayMedium">@style/TextAppearance.Material3.DisplayMedium.Emphasized</item>
+        <item name="textAppearanceDisplaySmall">@style/TextAppearance.Material3.DisplaySmall.Emphasized</item>
+        <item name="textAppearanceHeadlineLarge">@style/TextAppearance.Material3.HeadlineLarge.Emphasized</item>
+        <item name="textAppearanceHeadlineMedium">@style/TextAppearance.Material3.HeadlineMedium.Emphasized</item>
+        <item name="textAppearanceHeadlineSmall">@style/TextAppearance.Material3.HeadlineSmall.Emphasized</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.Material3.TitleLarge.Emphasized</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.Material3.TitleMedium.Emphasized</item>
+        <item name="textAppearanceTitleSmall">@style/TextAppearance.Material3.TitleSmall.Emphasized</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.Material3.LabelLarge.Emphasized</item>
+        <item name="textAppearanceLabelMedium">@style/TextAppearance.Material3.LabelMedium.Emphasized</item>
+        <item name="textAppearanceLabelSmall">@style/TextAppearance.Material3.LabelSmall.Emphasized</item>
+        <item name="android:textAppearanceListItem">@style/TextAppearance.Material3.BodyLarge.Emphasized</item>
+        <item name="preferenceCategoryTitleTextAppearance">@style/TextAppearance.OneUI.CategoryTitle</item>
     </style>
 
     <!--
@@ -512,6 +423,23 @@
     </style>
     <style name="ThemeOverlay.CornerRounding.Maximum" parent="">
         <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.CornerRounding.Maximum.ExtraLarge</item>
+    </style>
+
+    <!-- Default Home screen card shape: preserves default 28dp roundedness unless override is toggled on -->
+    <style name="ShapeAppearance.HomeCard.ExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraLarge">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">28dp</item>
+    </style>
+
+    <!-- "Expressive animations" off: MDC components move on the Standard springs (no bounce)
+         instead of the Expressive ones the base theme sets. -->
+    <style name="ThemeOverlay.Motion.Standard" parent="" tools:ignore="PrivateResource">
+        <item name="motionSpringFastSpatial">@style/Motion.Material3.Spring.Standard.Fast.Spatial</item>
+        <item name="motionSpringFastEffects">@style/Motion.Material3.Spring.Standard.Fast.Effects</item>
+        <item name="motionSpringDefaultSpatial">@style/Motion.Material3.Spring.Standard.Default.Spatial</item>
+        <item name="motionSpringDefaultEffects">@style/Motion.Material3.Spring.Standard.Default.Effects</item>
+        <item name="motionSpringSlowSpatial">@style/Motion.Material3.Spring.Standard.Slow.Spatial</item>
+        <item name="motionSpringSlowEffects">@style/Motion.Material3.Spring.Standard.Slow.Effects</item>
     </style>
 
 </resources>

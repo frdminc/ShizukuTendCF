@@ -2,6 +2,7 @@ package af.shizuku.manager.automation
 
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.utils.NetworkTrust
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -30,7 +31,7 @@ class AutomationService : Service() {
     // NetworkFirewallRule, AppAutoHideRule, and AppSpecificProfileRule are registered globally in
     // ShizukuApplication via registerDefaultRules() — no per-service registration needed here.
     // Registering them again in onCreate()/onDestroy() would cause double-fire while the service
-    // is running and lose rule state (isSafeNetwork, savedGlobalFirewall) across service restarts.
+    // is running. The firewall state they set lives in ShizukuSettings and is cleared in onDestroy.
 
     private val networkCallback =
         object : ConnectivityManager.NetworkCallback() {
@@ -211,6 +212,11 @@ class AutomationService : Service() {
         }
     }
 
+    // One thread, so network events still reach the rules in order.
+    private val networkLookups =
+        java.util.concurrent.Executors
+            .newSingleThreadExecutor { r -> Thread(r, "AutomationNetwork") }
+
     private fun checkNetworkState(caps: NetworkCapabilities?) {
         try {
             val isWifi =
@@ -224,7 +230,7 @@ class AutomationService : Service() {
             // a network callback without requiring ACCESS_FINE_LOCATION, which was revoked in Android 10.
             // WifiManager.getConnectionInfo() (deprecated API 31) throws SecurityException on some OEM
             // builds even with ACCESS_WIFI_STATE declared (SHIZUKUPLUS-50).
-            val ssid: String? =
+            val transportSsid: String? =
                 if (Build.VERSION.SDK_INT >= 29 && isWifi && caps != null) {
                     (caps.transportInfo as? WifiInfo)?.ssid?.let { raw ->
                         // WifiInfo.getSSID() wraps SSIDs in double-quotes: "\"MyNetwork\""
@@ -241,7 +247,12 @@ class AutomationService : Service() {
                     null
                 }
 
-            AutomationEngine.dispatchEvent(NetworkEvent(isWifi, ssid), applicationContext)
+            // Without location access the name comes from the shell, so this runs off the
+            // ConnectivityManager callback thread, which the whole process shares.
+            networkLookups.execute {
+                val ssid = transportSsid ?: if (isWifi) NetworkTrust.resolveSsid(applicationContext) else null
+                AutomationEngine.dispatchEvent(NetworkEvent(isWifi, ssid), applicationContext)
+            }
         } catch (e: Exception) {
             Timber.tag("AutomationService").w(e, "Failed to check network state")
         }
@@ -293,6 +304,7 @@ class AutomationService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        networkLookups.shutdownNow()
         if (callbackRegistered) {
             try {
                 connectivityManager?.unregisterNetworkCallback(networkCallback)
@@ -301,5 +313,6 @@ class AutomationService : Service() {
             }
         }
         job.cancel()
+        ShizukuSettings.clearAutomationFirewallState()
     }
 }

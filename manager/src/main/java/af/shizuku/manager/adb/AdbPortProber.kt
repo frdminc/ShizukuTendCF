@@ -1,8 +1,12 @@
 package af.shizuku.manager.adb
 
 import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.utils.EnvironmentUtils
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -12,17 +16,73 @@ import java.util.concurrent.TimeUnit
 
 object AdbPortProber {
     /**
-     * Rapidly probes whether a given port is actively accepting TCP connections on 127.0.0.1.
-     * Uses a short timeout (150ms) to ensure UI responsiveness.
+     * Resolves all candidate network host addresses to attempt when connecting to ADB or pairing:
+     * 1. [preferredHost] (e.g. from mDNS resolution or intent extra)
+     * 2. Loopback addresses: 127.0.0.1 and ::1
+     * 3. Local network interface addresses (e.g. wlan0)
+     */
+    fun getCandidateHosts(preferredHost: String = "127.0.0.1"): List<String> {
+        val ipv4Hosts = LinkedHashSet<String>()
+        val ipv6Hosts = LinkedHashSet<String>()
+
+        val cleanPreferred = preferredHost.substringBefore('%').trim()
+        if (cleanPreferred.isNotBlank()) {
+            if (cleanPreferred.contains(':')) {
+                ipv6Hosts.add(cleanPreferred)
+            } else {
+                ipv4Hosts.add(cleanPreferred)
+            }
+        }
+        ipv4Hosts.add("127.0.0.1")
+        ipv6Hosts.add("::1")
+
+        runCatching {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces() ?: return@runCatching
+            for (iface in interfaces) {
+                if (!iface.isUp || iface.isLoopback) continue
+                for (addr in iface.inetAddresses) {
+                    val raw = addr.hostAddress ?: continue
+                    val clean = raw.substringBefore('%')
+                    if (clean.isNotBlank()) {
+                        if (clean.contains(':')) {
+                            ipv6Hosts.add(clean)
+                        } else {
+                            ipv4Hosts.add(clean)
+                        }
+                    }
+                }
+            }
+        }
+        return (ipv4Hosts + ipv6Hosts).toList()
+    }
+
+    /**
+     * Rapidly probes whether a given port is actively accepting TCP connections on [host].
+     * Uses a short timeout (150ms default) to ensure UI responsiveness.
+     * When host is "127.0.0.1", also tries "::1" (IPv6 loopback) if IPv4 connection is refused.
      */
     fun isPortOpen(
         port: Int,
         timeoutMs: Int = 150,
+        host: String = "127.0.0.1",
     ): Boolean {
         if (port !in 1..65535) return false
-        return try {
+        val cleanHost = host.substringBefore('%')
+        if (probeAddress(cleanHost, port, timeoutMs)) return true
+        if (cleanHost == "127.0.0.1") {
+            return probeAddress("::1", port, timeoutMs)
+        }
+        return false
+    }
+
+    private fun probeAddress(
+        host: String,
+        port: Int,
+        timeoutMs: Int,
+    ): Boolean =
+        try {
             Socket().use { socket ->
-                socket.connect(InetSocketAddress("127.0.0.1", port), timeoutMs)
+                socket.connect(InetSocketAddress(host, port), timeoutMs)
                 true
             }
         } catch (_: IOException) {
@@ -30,9 +90,9 @@ object AdbPortProber {
         } catch (_: Exception) {
             false
         }
-    }
 
     /**
+<<<<<<< HEAD
      * The first of [ports] that accepts a loopback connection, or -1. Safe on the main thread (a
      * broadcast receiver's): the connects run on a thread of their own, since a socket opened on
      * the main thread throws NetworkOnMainThreadException in a release build.
@@ -56,12 +116,20 @@ object AdbPortProber {
      * Checks candidate ports on loopback (127.0.0.1) in order of likelihood:
      * 1. 5555 (Standard ADB TCP/IP port - works offline / over 5G)
      * 2. ShizukuSettings.getLastPort() (Previously successful session port)
+=======
+     * Checks candidate ports on loopback (127.0.0.1 / ::1) in order of likelihood:
+     * 1. EnvironmentUtils.getAdbTcpPort() (Active system-reported port from service.adb.tcp.port)
+     * 2. 5555 (Standard ADB TCP/IP port - works offline / over 5G)
+>>>>>>> upstream/master
      * 3. ShizukuSettings.getTcpPort() (Configured custom TCP port)
+     * 4. ShizukuSettings.getLastPort() (Previously successful session port)
      *
-     * Returns the first port that responds to a TCP socket connection, or -1 if none.
+     * Probes all candidates in parallel for minimal latency and returns the highest-priority
+     * open port, or -1 if none.
      */
     suspend fun findActiveLoopbackPort(context: Context? = null): Int =
         withContext(Dispatchers.IO) {
+<<<<<<< HEAD
             // When adbd reports the TCP port it is listening on, use only that. A fixed candidate
             // such as 5555 could be held by another app while adbd listens elsewhere, and that app
             // could relay adbd's auth challenge to this app's authorised key.
@@ -72,29 +140,30 @@ object AdbPortProber {
                 return@withContext if (isPortOpen(reported, 150)) reported else -1
             }
 
+=======
+            if (!ShizukuSettings.isAdbLoopbackProbeEnabled()) return@withContext -1
+>>>>>>> upstream/master
             val candidates = LinkedHashSet<Int>()
 
-            // 1. Standard ADB TCP port
+            val sysPropPort = EnvironmentUtils.getAdbTcpPort()
+            if (sysPropPort in 1..65535) {
+                candidates.add(sysPropPort)
+            }
             candidates.add(5555)
-
-            // 2. Last known port
+            val tcpPort = ShizukuSettings.getTcpPort()
+            if (tcpPort in 1..65535) {
+                candidates.add(tcpPort)
+            }
             val lastPort = ShizukuSettings.getLastPort()
             if (lastPort in 1..65535) {
                 candidates.add(lastPort)
             }
 
-            // 3. User configured TCP port
-            val tcpPort = ShizukuSettings.getTcpPort()
-            if (tcpPort in 1..65535) {
-                candidates.add(tcpPort)
-            }
-
-            for (port in candidates) {
-                if (isPortOpen(port, 150)) {
-                    return@withContext port
-                }
-            }
-
-            -1
+            coroutineScope {
+                candidates
+                    .map { port ->
+                        async { port to isPortOpen(port, 150) }
+                    }.awaitAll()
+            }.firstOrNull { it.second }?.first ?: -1
         }
 }

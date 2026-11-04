@@ -19,6 +19,7 @@ import android.content.IContentProvider;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
+import android.content.pm.Signature;
 import android.content.pm.PackageManager;
 import android.content.pm.UserInfo;
 import android.ddm.DdmHandleAppName;
@@ -84,8 +85,37 @@ import rikka.shizuku.server.ClientRecord;
 
 public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuClientManager, ShizukuConfigManager> {
 
+    // Held for the life of the process; the kernel releases the abstract socket name on exit.
+    @SuppressWarnings("unused")
+    private static android.net.LocalServerSocket instanceLock;
+
+    /**
+     * One server at a time. Two starters running close together (the manager's auto-restart
+     * reacting to a restart started from adb, a PC or automation) each kill the old server
+     * before either new one exists, and both new servers then ran, each sending its binder to
+     * every client. The second one now waits briefly (the old server may still be dying after
+     * the starter's kill) and exits if another live server keeps the name.
+     */
+    private static boolean acquireInstanceLock() {
+        long deadline = android.os.SystemClock.uptimeMillis() + 3_000;
+        while (true) {
+            try {
+                instanceLock = new android.net.LocalServerSocket("shizuku_plus_server.instance");
+                return true;
+            } catch (java.io.IOException e) {
+                if (android.os.SystemClock.uptimeMillis() >= deadline) return false;
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ie) {
+                    return false;
+                }
+            }
+        }
+    }
+
     public static void main(String[] args) {
         DdmHandleAppName.setAppName("shizuku_plus_server", 0);
+<<<<<<< HEAD
         // Before the config is loaded or a binder registered: two starters running close together
         // (the watchdog's and one from outside the app) could each start a server, and both would
         // then rewrite the same config file. The second one leaves here instead.
@@ -101,6 +131,13 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             System.exit(ServerConstants.MANAGER_APP_NOT_FOUND);
             return;
         }
+=======
+        if (!acquireInstanceLock()) {
+            LOGGER.w("Another shizuku_plus_server is already running; exiting this duplicate (pid %d)", android.os.Process.myPid());
+            System.exit(0);
+            return;
+        }
+>>>>>>> upstream/master
         RishConfig.setLibraryPath(System.getProperty("shizuku.library.path"));
 
         Looper.prepareMainLooper();
@@ -148,32 +185,53 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     private ApkChangedListener secondaryApkListener;
     // uptimeMillis of the last on-demand manager-appId re-resolve (throttle; see checkCallerManagerPermission).
     private volatile long lastManagerAppIdRefresh;
-    private final VirtualMachineManagerImpl virtualMachineManager = new VirtualMachineManagerImpl();
-    private final StorageProxyImpl storageProxy = new StorageProxyImpl();
-    private final AICorePlusImpl aiCorePlus;
-    private final WindowManagerPlusImpl windowManagerPlus = new WindowManagerPlusImpl();
-    private final ContinuityBridgeImpl continuityBridge = new ContinuityBridgeImpl();
-    private final OverlayManagerPlusImpl overlayManagerPlus = new OverlayManagerPlusImpl();
-    private final NetworkGovernorPlusImpl networkGovernorPlus = new NetworkGovernorPlusImpl();
-    private final ActivityManagerPlusImpl activityManagerPlus = new ActivityManagerPlusImpl();
-    private final StatusBarGovernorPlusImpl statusBarGovernorPlus = new StatusBarGovernorPlusImpl();
-    private final PackageGovernorPlusImpl packageGovernorPlus = new PackageGovernorPlusImpl();
-    private final DisplayTunerPlusImpl displayTunerPlus = new DisplayTunerPlusImpl();
-    private final AppInspectorImpl appInspector = new AppInspectorImpl();
-    private final PrivilegedDataSourceImpl privilegedDataSource = new PrivilegedDataSourceImpl();
-    private final BackupRestorePlusImpl backupRestorePlus = new BackupRestorePlusImpl();
-    private final ApkPatcherImpl apkPatcher = new ApkPatcherImpl();
-    private final DeviceControlPlusImpl deviceControlPlus = new DeviceControlPlusImpl();
+    // Created on first use: none of these is needed to start serving, and loading all fifteen
+    // implementation classes up front sat on the server's cold-start path.
+    // Developer options that bring back the riskier third-party APIs; both default off.
+    // "App data": other apps' private files (Storage Bridge, temp-debug, BackupRestorePlus).
+    // "Personal data": SMS, contacts, location, clipboard, screenshots, input, logcat, reboot.
+    private static final String FEATURE_UNRESTRICTED_APP_DATA = "unrestricted_app_data";
+    private static final String FEATURE_UNRESTRICTED_PERSONAL_DATA = "unrestricted_personal_data";
 
-    // Re-grants the OS-level runtime permission for every already-authorized app on each server
-    // start. Prior to the 741df2f4 fix (2026-07-19), grantRuntimePermission silently failed because
-    // no installed package defined moe.shizuku.manager.permission.API_V23 — so apps authorized
-    // before that date have a ConfigManager entry but no OS grant. This is idempotent (re-granting
-    // an already-granted permission is a no-op), so it's safe to run unconditionally on startup.
+    private final Lazy<VirtualMachineManagerImpl> virtualMachineManager = new Lazy<>(VirtualMachineManagerImpl::new);
+    private final Lazy<StorageProxyImpl> storageProxy = new Lazy<>(() -> new StorageProxyImpl(
+            () -> isFeatureEnabled(FEATURE_UNRESTRICTED_APP_DATA),
+            () -> isRiskyBinderAllowed("StorageProxy.openContentUri", FEATURE_UNRESTRICTED_PERSONAL_DATA)));
+    private final AICorePlusImpl aiCorePlus;
+    private final Lazy<WindowManagerPlusImpl> windowManagerPlus = new Lazy<>(WindowManagerPlusImpl::new);
+    private final Lazy<ContinuityBridgeImpl> continuityBridge = new Lazy<>(ContinuityBridgeImpl::new);
+    private final Lazy<OverlayManagerPlusImpl> overlayManagerPlus = new Lazy<>(OverlayManagerPlusImpl::new);
+    private final Lazy<NetworkGovernorPlusImpl> networkGovernorPlus = new Lazy<>(NetworkGovernorPlusImpl::new);
+    private final Lazy<ActivityManagerPlusImpl> activityManagerPlus = new Lazy<>(ActivityManagerPlusImpl::new);
+    private final Lazy<StatusBarGovernorPlusImpl> statusBarGovernorPlus = new Lazy<>(StatusBarGovernorPlusImpl::new);
+    private final Lazy<PackageGovernorPlusImpl> packageGovernorPlus = new Lazy<>(PackageGovernorPlusImpl::new);
+    private final Lazy<DisplayTunerPlusImpl> displayTunerPlus = new Lazy<>(DisplayTunerPlusImpl::new);
+    private final Lazy<AppInspectorImpl> appInspector = new Lazy<>(() -> new AppInspectorImpl(() -> isRiskyBinderAllowed("AppInspector", FEATURE_UNRESTRICTED_PERSONAL_DATA)));
+    private final Lazy<PrivilegedDataSourceImpl> privilegedDataSource = new Lazy<>(() -> new PrivilegedDataSourceImpl(() -> isRiskyBinderAllowed("PrivilegedDataSource", FEATURE_UNRESTRICTED_PERSONAL_DATA)));
+    private final Lazy<BackupRestorePlusImpl> backupRestorePlus = new Lazy<>(() -> new BackupRestorePlusImpl(() -> isRiskyBinderAllowed("BackupRestorePlus", FEATURE_UNRESTRICTED_APP_DATA)));
+    private final Lazy<ApkPatcherImpl> apkPatcher = new Lazy<>(() -> new ApkPatcherImpl(() -> isFeatureEnabled(FEATURE_UNRESTRICTED_APP_DATA)));
+    private final Lazy<DeviceControlPlusImpl> deviceControlPlus = new Lazy<>(() -> new DeviceControlPlusImpl(() -> isRiskyBinderAllowed("DeviceControlPlus", FEATURE_UNRESTRICTED_PERSONAL_DATA)));
+
+    // One-time backfill: re-grants the OS-level runtime permission for every already-authorized app.
+    // Prior to the 741df2f4 fix (2026-07-19), grantRuntimePermission silently failed because no
+    // installed package defined moe.shizuku.manager.permission.API_V23 — apps authorized before
+    // that date have a ConfigManager entry but no OS grant.
+    //
+    // This runs exactly once (gated by ShizukuConfig.permGrantMigrationDone). Re-running on every
+    // startup would silently override manual pm-revoke calls the user made outside ShizukuPlus
+    // (#568). After the first pass all pre-existing apps are backfilled; new grants are issued at
+    // connect time in attachApplication, so the migration is no longer needed.
     private void migratePermissionGrants() {
+        if (configManager.isPermGrantMigrationDone()) {
+            LOGGER.i("migratePermissionGrants: already done, skipping");
+            return;
+        }
         List<Integer> allowedUids = configManager.getAllowedUids();
-        if (allowedUids.isEmpty()) return;
-        LOGGER.i("migratePermissionGrants: checking %d authorized UIDs", allowedUids.size());
+        if (allowedUids.isEmpty()) {
+            configManager.markPermGrantMigrationDone();
+            return;
+        }
+        LOGGER.i("migratePermissionGrants: backfilling %d authorized UIDs (one-time)", allowedUids.size());
         int migrated = 0;
         for (int uid : allowedUids) {
             int userId = UserHandleCompat.getUserId(uid);
@@ -202,7 +260,8 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 }
             }
         }
-        LOGGER.i("migratePermissionGrants: granted/refreshed %d permission(s)", migrated);
+        LOGGER.i("migratePermissionGrants: backfilled %d permission(s)", migrated);
+        configManager.markPermGrantMigrationDone();
     }
 
     private void grantManagerEssentialPermissions() {
@@ -215,6 +274,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             };
             for (String pkg : managerIds) {
                 if (pkg == null) continue;
+<<<<<<< HEAD
                 // The other flavor's package only while it is signed like the manager, checked
                 // again now, and only under the uid that check found.
                 if (!pkg.equals(MANAGER_APPLICATION_ID)) {
@@ -226,12 +286,21 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                         continue;
                     }
                 }
+=======
+                // WRITE_SECURE_SETTINGS and DUMP only go to the manager and a same-signed flavor.
+                if (!isSignedLikeManager(pkg)) continue;
+>>>>>>> upstream/master
                 try {
                     Android17Compat.grantRuntimePermission(pkg, WRITE_SECURE_SETTINGS, userId);
                     Android17Compat.grantRuntimePermission(pkg, "android.permission.DUMP", userId);
                     ApplicationInfo ai = Android17Compat.getApplicationInfo(pkg, 0, userId);
                     if (ai != null) {
-                        performAppOpsElevation(pkg, ai.uid);
+                        // Only the ops manager features use: usage stats (automation profiles,
+                        // standby-bucket check) and exact alarms (Watchdog). Doze / background
+                        // exemption belongs to the visible "Device hardening & keepalive" switch.
+                        // This used to set 11 ops by raw number (overlay, all-files access,
+                        // install packages...), numbers that differ between Android versions.
+                        setAppOpsAllowedByName(pkg, ai.uid, MANAGER_APP_OPS);
                     }
                 } catch (Throwable ignored) {
                 }
@@ -325,6 +394,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         }
     }
 
+<<<<<<< HEAD
     private boolean putPhantomProcessSetting(IContentProvider provider, String callingPackage,
                                             String table, String key, String value)
             throws RemoteException {
@@ -346,6 +416,45 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 : error instanceof RemoteException ? "provider IPC failed"
                 : error.getClass().getSimpleName();
         LOGGER.i("phantom killer: %s unavailable (%s)", mechanism, reason);
+=======
+    private void ensureAdbTcpPersistence() {
+        try {
+            int uid = android.os.Process.myUid();
+            int userId = UserHandleCompat.getUserId(uid);
+
+            // 1. Keep ADB authorization alive across USB disconnect
+            IContentProvider settingsProvider = ActivityManagerApis.getContentProviderExternal(
+                    "settings", userId, null, "com.android.shell");
+            if (settingsProvider != null) {
+                try {
+                    Bundle authTimeout = new Bundle();
+                    authTimeout.putString("value", "0");
+                    IContentProviderUtils.callCompat(
+                            settingsProvider, null, "settings",
+                            "PUT_global", "adb_allowed_connection_time", authTimeout);
+                    // Note: Never forcefully overwrite adb_enabled to "1", as that overrides
+                    // user Developer Options preference and causes issues for apps checking debugging status.
+                } catch (Exception e) {
+                    LOGGER.w("failed to update adb settings via ContentProvider", e);
+                }
+            }
+
+            // 2. Only ensure active TCP port if persistent TCP mode is configured/enabled by the user
+            if (uid == 2000 || uid == 0) {
+                String persistPort = android.os.SystemProperties.get("persist.adb.tcp.port", "");
+                String currentPort = android.os.SystemProperties.get("service.adb.tcp.port", "");
+                if (!persistPort.isEmpty() && !"-1".equals(persistPort) && !"0".equals(persistPort)) {
+                    if (currentPort.isEmpty() || "-1".equals(currentPort) || "0".equals(currentPort)) {
+                        LOGGER.i("Restoring active ADB TCP mode (port %s) from persistent configuration", persistPort);
+                        android.os.SystemProperties.set("service.adb.tcp.port", persistPort);
+                        android.os.SystemProperties.set("ctl.restart", "adbd");
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            LOGGER.w("Failed to ensure ADB TCP persistence", t);
+        }
+>>>>>>> upstream/master
     }
 
     public ShizukuService() {
@@ -365,6 +474,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         // Disable Phantom Process Killer on Android 12+ — must run after waitSystemService so the
         // ContentProvider path for the settings write has a live activity-manager binder.
         disablePhantomProcessKiller();
+        ensureAdbTcpPersistence();
 
         ApplicationInfo ai = getManagerApplicationInfo();
         if (ai == null) {
@@ -379,9 +489,17 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         // ever picks ONE as MANAGER_APPLICATION_ID, so if the other flavor is also installed, its
         // clients would otherwise fail every checkCallerManagerPermission() check with "is not
         // manager" (SHIZUKUPLUS-7C) even though it's the developer's own signed app, not a third
+<<<<<<< HEAD
         // party. Track its uid too so isManagerAppId() can trust either; the other flavor counts
         // only while it is signed like the manager.
         applySecondaryManager(ManagerFlavours.resolveSecondary(), false);
+=======
+        // party. Track its uid too so isManagerAppId() can trust either.
+        String otherApplicationId = ServerConstants.DROPIN_APPLICATION_ID.equals(ServerConstants.MANAGER_APPLICATION_ID)
+                ? ServerConstants.PLUS_APPLICATION_ID : ServerConstants.DROPIN_APPLICATION_ID;
+        ApplicationInfo secondaryAi = Android17Compat.getApplicationInfo(otherApplicationId, 0, 0);
+        secondaryManagerAppId = secondaryAi != null && isSignedLikeManager(otherApplicationId) ? secondaryAi.uid : -1;
+>>>>>>> upstream/master
 
         configManager = getConfigManager();
         clientManager = getClientManager();
@@ -397,7 +515,10 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         BinderSender.register(this);
 
         ((Logger) LOGGER).setEventDispatcher((priority, tag, message, throwable) -> {
-            List<ClientRecord> records = clientManager.findClients(managerAppId);
+            List<ClientRecord> records = new java.util.ArrayList<>(clientManager.findClients(managerAppId));
+            if (secondaryManagerAppId != -1) {
+                records.addAll(clientManager.findClients(secondaryManagerAppId));
+            }
             for (ClientRecord record : records) {
                 if (record.client != null) {
                     try {
@@ -427,66 +548,65 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             sendBinderToManager();
         });
 
-        // Proactive auto-grant: after service is up, grant all shell-accessible privileged
-        // permissions to every installed package that has declared them, so backup apps and
-        // other tools work without requiring the user to manually grant each one.
-        new Thread(this::scheduleAutoGrantPrivilegedPermissions, "AutoGrantPrivileged").start();
+        // No proactive auto-grant: granting every shell-grantable permission (WRITE_SECURE_SETTINGS,
+        // INSTALL_PACKAGES, ...) to every app that merely declares it handed privileges to apps the
+        // user never chose. "Auto-grant" now only answers an explicit `pm grant` from a client the
+        // user already allowed (see the SU bridge), and turning it off revokes what it granted.
     }
 
-    // Shell-grantable privileged permissions (mirrors PermissionManagerScreen.PRIVILEGED_PERMISSIONS).
-    private static final java.util.Set<String> SHELL_GRANTABLE_PERMISSIONS = new java.util.HashSet<>(java.util.Arrays.asList(
-        "android.permission.READ_LOGS",
-        "android.permission.DUMP",
-        "android.permission.PACKAGE_USAGE_STATS",
-        "android.permission.WRITE_SECURE_SETTINGS",
-        "android.permission.READ_FRAME_BUFFER",
-        "android.permission.INTERACT_ACROSS_USERS",
-        "android.permission.INTERACT_ACROSS_USERS_FULL",
-        "android.permission.MANAGE_USB",
-        "android.permission.BATTERY_STATS",
-        "android.permission.MOUNT_UNMOUNT_FILESYSTEMS",
-        "android.permission.INSTALL_PACKAGES",
-        "android.permission.DELETE_PACKAGES",
-        "android.permission.CHANGE_NETWORK_STATE",
-        "android.permission.CHANGE_WIFI_STATE",
-        "android.permission.ACCESS_WIFI_STATE",
-        "android.permission.MANAGE_NETWORK_POLICY",
-        "android.permission.CONNECTIVITY_INTERNAL",
-        "android.permission.OBSERVE_APP_USAGE",
-        "android.permission.GET_APP_OPS_STATS",
-        "android.permission.MANAGE_APP_OPS_MODES",
-        "android.permission.CHANGE_COMPONENT_ENABLED_STATE",
-        "android.permission.FORCE_STOP_PACKAGES"
-    ));
-
-    private void scheduleAutoGrantPrivilegedPermissions() {
-        if (!isFeatureEnabled("root_auto_grant")) return;
+    /**
+     * Revokes every grant the auto-grant feature made, tracked as "package|permission|userId"
+     * ("package|permission" from older builds, which granted in the server's own user). The manager's
+     * own packages are skipped: older builds' proactive scan tracked them too, and the manager's
+     * essential permissions must stay.
+     */
+    private void revokeAutoGrantedPermissions() {
         try {
-            LOGGER.i("autoGrant: scanning installed packages for privileged permissions");
-            int userId = UserHandleCompat.getUserId(android.os.Process.myUid());
-            java.util.List<PackageInfo> packages =
-                InstalledPackagesCompat.getInstalledPackagesNoThrow(PackageManager.GET_PERMISSIONS, userId);
-            int granted = 0;
-            for (PackageInfo pi : packages) {
-                if (pi.requestedPermissions == null) continue;
-                for (String perm : pi.requestedPermissions) {
-                    if (perm == null || !SHELL_GRANTABLE_PERMISSIONS.contains(perm)) continue;
+            java.util.Set<String> granted = configManager.getAutoGrantedPermissions();
+            if (granted.isEmpty()) return;
+            int defaultUserId = UserHandleCompat.getUserId(android.os.Process.myUid());
+            int revoked = 0;
+            for (String key : granted) {
+                String[] parts = key.split("\\|");
+                if (parts.length < 2 || parts[0].isEmpty()) continue;
+                String pkg = parts[0];
+                if (MANAGER_APPLICATION_ID.equals(pkg) || ServerConstants.DROPIN_APPLICATION_ID.equals(pkg)
+                        || ServerConstants.PLUS_APPLICATION_ID.equals(pkg)) {
+                    continue;
+                }
+                int userId = defaultUserId;
+                if (parts.length > 2) {
                     try {
-                        Android17Compat.grantRuntimePermission(pi.packageName, perm, userId);
-                        granted++;
-                    } catch (Throwable ignored) {
+                        userId = Integer.parseInt(parts[2]);
+                    } catch (NumberFormatException ignored) {
                     }
                 }
+                try {
+                    Android17Compat.revokeRuntimePermission(pkg, parts[1], userId);
+                    revoked++;
+                } catch (Throwable ignored) {
+                }
             }
-            LOGGER.i("autoGrant: granted/refreshed %d privileged permission grants", granted);
+            configManager.clearAutoGrantedPermissions();
+            LOGGER.i("autoGrant: turned off, revoked %d of %d grants", revoked, granted.size());
         } catch (Throwable e) {
-            LOGGER.w(e, "autoGrant: scan failed");
+            LOGGER.w(e, "autoGrant: revoke failed");
         }
     }
 
     @Override
     public ShizukuUserServiceManager onCreateUserServiceManager() {
-        return new ShizukuUserServiceManager();
+        // A user service runs the app's own code with Shizuku's access: it can run pm, am or
+        // settings without newProcess, so no scope can be checked inside it. Like an interactive
+        // shell, it's refused while "shell" or any tool scope is off for the app (#648: aShell
+        // suspended apps through its user service with package_manager off).
+        return new ShizukuUserServiceManager(uid -> {
+            if (isAppScopeDisabled(uid, null, "shell")) return true;
+            for (String scope : rikka.shizuku.server.util.ScopeCommandMatcher.TOOL_SCOPES) {
+                if (isAppScopeDisabled(uid, null, scope)) return true;
+            }
+            return false;
+        });
     }
 
     @Override
@@ -524,6 +644,41 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         return false;
     }
 
+    /**
+     * Whether {@code packageName} is the running manager or is signed with the same certificate.
+     * Plus and Drop-In are one codebase under two ids and may be installed side by side; trusting
+     * the other id by name alone would make any app sideloaded under it (or stock Shizuku, which
+     * uses the Drop-In id) a manager with WRITE_SECURE_SETTINGS and every API unprompted.
+     */
+    private static boolean isSignedLikeManager(String packageName) {
+        String manager = MANAGER_APPLICATION_ID;
+        if (manager == null || packageName == null) return false;
+        if (manager.equals(packageName)) return true;
+        try {
+            Signature[] expected = currentSigners(manager);
+            Signature[] actual = currentSigners(packageName);
+            if (expected == null || actual == null || expected.length == 0) return false;
+            return new java.util.HashSet<>(java.util.Arrays.asList(expected))
+                    .equals(new java.util.HashSet<>(java.util.Arrays.asList(actual)));
+        } catch (Throwable e) {
+            LOGGER.w(e, "signature check failed for %s", packageName);
+            return false;
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private static Signature[] currentSigners(String packageName) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageInfo pi = Android17Compat.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES, 0);
+            if (pi == null || pi.signingInfo == null) return null;
+            return pi.signingInfo.hasMultipleSigners()
+                    ? pi.signingInfo.getApkContentsSigners()
+                    : pi.signingInfo.getSigningCertificateHistory();
+        }
+        PackageInfo pi = Android17Compat.getPackageInfo(packageName, PackageManager.GET_SIGNATURES, 0);
+        return pi != null ? pi.signatures : null;
+    }
+
     private boolean isManagerAppId(int appId) {
         int cleanAppId = UserHandleCompat.getAppId(appId);
         int cleanManagerAppId = UserHandleCompat.getAppId(managerAppId);
@@ -546,11 +701,19 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             return false;
         }
         managerAppId = ai.uid;
+<<<<<<< HEAD
         applySecondaryManager(ManagerFlavours.resolveSecondary(), true);
+=======
+        String otherApplicationId = ServerConstants.DROPIN_APPLICATION_ID.equals(ServerConstants.MANAGER_APPLICATION_ID)
+                ? ServerConstants.PLUS_APPLICATION_ID : ServerConstants.DROPIN_APPLICATION_ID;
+        ApplicationInfo secondaryAi = Android17Compat.getApplicationInfo(otherApplicationId, 0, 0);
+        secondaryManagerAppId = secondaryAi != null && isSignedLikeManager(otherApplicationId) ? secondaryAi.uid : -1;
+>>>>>>> upstream/master
         LOGGER.i("Re-resolved manager appId=%d secondary=%d", managerAppId, secondaryManagerAppId);
         return true;
     }
 
+<<<<<<< HEAD
     /**
      * Records what resolving the other flavor found and watches its APK, so a change re-resolves
      * it. A result that could not be read keeps the current value when {@code keepOnUnknown}
@@ -596,12 +759,55 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         ManagerFlavours.Secondary found = ManagerFlavours.resolveSecondary();
         applySecondaryManager(found, true);
         return found.uid;
+=======
+    // Packages allowed to define a Shizuku API permission: the two manager flavors, the second of
+    // which shares its package name with the Compat Hub and stock Shizuku.
+    private static final String[] PERMISSION_DEFINERS = {
+            ServerConstants.PLUS_APPLICATION_ID, ServerConstants.DROPIN_APPLICATION_ID
+    };
+    private static final long TRUSTED_PERMISSION_TTL_MS = 10_000;
+    private static final long UNTRUSTED_PERMISSION_TTL_MS = 1_000;
+    private final java.util.concurrent.ConcurrentHashMap<String, long[]> trustedPermissionCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Whether [name] is defined, as a dangerous (user-granted) permission, by a package in
+     * {@link #PERMISSION_DEFINERS}. Cached briefly: it runs on every binder call's permission check.
+     */
+    private boolean isTrustedPermission(String name) {
+        long now = android.os.SystemClock.elapsedRealtime();
+        long[] cached = trustedPermissionCache.get(name);
+        // "Not trusted" is kept only briefly: a lookup during a package update can miss the
+        // definer, and a long negative cache would deny every legitimate client meanwhile.
+        if (cached != null && now - cached[1] < (cached[0] == 1 ? TRUSTED_PERMISSION_TTL_MS : UNTRUSTED_PERMISSION_TTL_MS))
+            return cached[0] == 1;
+        boolean trusted = false;
+        for (String pkg : PERMISSION_DEFINERS) {
+            try {
+                PackageInfo pi = Android17Compat.getPackageInfo(pkg, PackageManager.GET_PERMISSIONS, 0);
+                if (pi == null || pi.permissions == null) continue;
+                for (android.content.pm.PermissionInfo p : pi.permissions) {
+                    if (name.equals(p.name) &&
+                        (p.protectionLevel & android.content.pm.PermissionInfo.PROTECTION_MASK_BASE) == android.content.pm.PermissionInfo.PROTECTION_DANGEROUS) {
+                        trusted = true;
+                        break;
+                    }
+                }
+            } catch (Throwable tr) {
+                LOGGER.w(tr, "isTrustedPermission %s in %s", name, pkg);
+            }
+            if (trusted) break;
+        }
+        trustedPermissionCache.put(name, new long[] {trusted ? 1 : 0, now});
+        return trusted;
+>>>>>>> upstream/master
     }
 
     private int checkCallingPermission() {
         try {
             int pid = Binder.getCallingPid();
             int uid = Binder.getCallingUid();
+<<<<<<< HEAD
             if (ActivityManagerApis.checkPermission(ServerConstants.PERMISSION, pid, uid) == PackageManager.PERMISSION_GRANTED
                     && PermissionDefiners.isTrusted(ServerConstants.PERMISSION, this::isManagerAppId))
                 return PackageManager.PERMISSION_GRANTED;
@@ -610,6 +816,17 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 return PackageManager.PERMISSION_GRANTED;
             if (ActivityManagerApis.checkPermission(ServerConstants.PERMISSION_ORIGINAL, pid, uid) == PackageManager.PERMISSION_GRANTED
                     && PermissionDefiners.isTrusted(ServerConstants.PERMISSION_ORIGINAL, this::isManagerAppId))
+=======
+            // An OS grant only counts when one of our packages (or stock Shizuku) defines the
+            // permission as dangerous. A permission no trusted package defines can be declared by
+            // any app as "normal" and is then granted at install, which was a silent
+            // authorization. PERMISSION_LEGACY is defined by nothing, so it is never accepted.
+            if (isTrustedPermission(ServerConstants.PERMISSION) &&
+                ActivityManagerApis.checkPermission(ServerConstants.PERMISSION, pid, uid) == PackageManager.PERMISSION_GRANTED)
+                return PackageManager.PERMISSION_GRANTED;
+            if (isTrustedPermission(ServerConstants.PERMISSION_ORIGINAL) &&
+                ActivityManagerApis.checkPermission(ServerConstants.PERMISSION_ORIGINAL, pid, uid) == PackageManager.PERMISSION_GRANTED)
+>>>>>>> upstream/master
                 return PackageManager.PERMISSION_GRANTED;
             return PackageManager.PERMISSION_DENIED;
         } catch (Throwable tr) {
@@ -620,7 +837,11 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
     @Override
     public boolean checkCallerPermission(String func, int callingUid, int callingPid, @Nullable ClientRecord clientRecord) {
-        if (isManagerAppId(UserHandleCompat.getAppId(callingUid))) {
+        int appId = UserHandleCompat.getAppId(callingUid);
+        if (isManagerAppId(appId)) {
+            return true;
+        }
+        if (refreshManagerAppIdsThrottled() && isManagerAppId(appId)) {
             return true;
         }
         // Already-attached clients (e.g. rish, after a successful attachApplication()) have a
@@ -675,9 +896,14 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             Thread.sleep(500);
         } catch (Throwable ignored) {
         }
+<<<<<<< HEAD
         // The config manager is created in super(), before this handler is installed, but the
         // field is assigned only further down the constructor. Until then the only write that can
         // be waiting is the start-up batch, which the next start works out again.
+=======
+        // configManager is null until the constructor assigns it; until then the only write that
+        // can be waiting is start-up's batch, which the next start works out again.
+>>>>>>> upstream/master
         saveConfigAndExit(1);
     }
 
@@ -686,12 +912,22 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
     /**
      * Writes a config change still waiting for the worker, then exits. The worker writes a change
+<<<<<<< HEAD
      * the operator made at once, but one made just before an exit can still be in its queue. The
      * write runs on a thread of its own and the exit waits for it for at most
      * {@link #exitFlushTimeoutMillis()}: it can wait on the worker's write in progress and on the
      * config manager's lock, and an exit, the crash path's above all, must not hang on either. A
      * change the write did not save (it failed, or a change came after it) and a write that does
      * not finish in time are each logged here, and the exit goes ahead.
+=======
+     * the user made at once, but one made just before an exit can still be in its queue, and
+     * System.exit (or the starter killing this process for a restart) would drop it. The write
+     * runs on a thread of its own and the exit waits for it for at most
+     * {@link #exitFlushTimeoutMillis()}, as it can wait on a write in progress or on the config
+     * manager's lock, and an exit, the crash path's above all, must not hang on either. A
+     * change the write did not save (it failed, or a change came after it) and a write that does
+     * not finish in time are each logged, and the exit goes ahead.
+>>>>>>> upstream/master
      */
     private void saveConfigAndExit(int status) {
         ShizukuConfigManager config = configManager;
@@ -778,12 +1014,27 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             throw new SecurityException("Request package " + requestPackageName + "does not belong to uid " + callingUid);
         }
 
+<<<<<<< HEAD
         // Either manager flavor's applicationId, from a uid that is the manager: the other flavor
         // counts only when signed like it - see secondaryManagerAppId's declaration.
         isManager = (MANAGER_APPLICATION_ID.equals(requestPackageName)
                 || ServerConstants.DROPIN_APPLICATION_ID.equals(requestPackageName)
                 || ServerConstants.PLUS_APPLICATION_ID.equals(requestPackageName))
                 && checkCallerManagerPermission("attachApplication", callingUid, callingPid);
+=======
+        // Accept either manager flavor's applicationId - see secondaryManagerAppId's declaration.
+        // The other flavor's id only counts when it is the trusted secondary manager (same signing
+        // certificate) - anyone can install an app under that package name.
+        // When PackageManager returned no packages above, the uid→package check was skipped, so the
+        // primary id is only trusted if the uid is the manager's (re-resolved once if it looks stale).
+        int callingAppId = UserHandleCompat.getAppId(callingUid);
+        isManager = (MANAGER_APPLICATION_ID.equals(requestPackageName)
+                    && (!packages.isEmpty() || isManagerAppId(callingAppId)
+                        || (refreshManagerAppIdsThrottled() && isManagerAppId(callingAppId))))
+                || ((ServerConstants.DROPIN_APPLICATION_ID.equals(requestPackageName)
+                        || ServerConstants.PLUS_APPLICATION_ID.equals(requestPackageName))
+                    && isManagerAppId(UserHandleCompat.getAppId(callingUid)));
+>>>>>>> upstream/master
 
         if (isManager) {
             grantManagerEssentialPermissions();
@@ -820,10 +1071,15 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         reply.putInt(BIND_APPLICATION_SERVER_PATCH_VERSION, ShizukuApiConstants.SERVER_PATCH_VERSION);
         if (!isManager) {
             ClientRecord record = Objects.requireNonNull(clientRecord);
+<<<<<<< HEAD
             // Root mode decides exactly as ADB mode does: allowed only by an existing grant (config
             // entry, trusted signer, or the runtime permission). ShizukuPlus e3b2f7f2 allowed every
             // client here when the server ran as uid 0, which gave any app privileged access with
             // no dialog; a client without a grant must call requestPermission() and get the dialog.
+=======
+            // Root mode asks like ADB mode does. It used to allow every attached client, and any
+            // app can obtain the binder, so every app on a rooted device got root silently.
+>>>>>>> upstream/master
             if (!record.allowed) {
                 if (checkCallingPermission() == PackageManager.PERMISSION_GRANTED ||
                     (getFlagsForUidInternal(callingUid, ConfigManager.MASK_PERMISSION, true) & ConfigManager.FLAG_ALLOWED) == ConfigManager.FLAG_ALLOWED) {
@@ -851,6 +1107,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         } catch (Throwable e) {
             LOGGER.w(e, "Failed to add %s to power save temp whitelist before bindApplication", requestPackageName);
         }
+        if (!isManager) dispatchLog(requestPackageName, "Connected to Shizuku");
         try {
             // Normal path: IShizukuApplication is now moe.shizuku.server.IShizukuApplication, matching
             // what rikka clients implement, so this transacts under the descriptor they expect.
@@ -918,18 +1175,22 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     private final java.util.Map<String, String> plusSettingsMap = new java.util.concurrent.ConcurrentHashMap<>();
 
     private boolean isFeatureEnabled(String key) {
-        if (featureEnabledMap.containsKey(key)) return featureEnabledMap.get(key);
+        // Hot path (several checks per transactRemote): one get per candidate key, no
+        // containsKey + get double lookups or unboxing a value that could race to null.
+        Boolean value = featureEnabledMap.get(key);
+        if (value != null) return value;
         // The manager and the server don't always agree on whether a feature key carries the
         // "_enabled" suffix. Normalize in BOTH directions so a caller checking "foo_enabled"
         // still resolves a value the manager synced as "foo" (and vice versa).
-        if (key.endsWith("_enabled")) {
-            String stripped = key.substring(0, key.length() - "_enabled".length());
-            if (featureEnabledMap.containsKey(stripped)) return featureEnabledMap.get(stripped);
-        } else if (featureEnabledMap.containsKey(key + "_enabled")) {
-            return featureEnabledMap.get(key + "_enabled");
-        }
-        // Core bridge and mocking features default to true so standalone CLI / ADB runs work
-        if (key.equals("su_bridge") || key.equals("shell_interceptor") || key.equals("root_magisk_mocking") || key.equals("root_auto_grant")) {
+        value = key.endsWith("_enabled")
+                ? featureEnabledMap.get(key.substring(0, key.length() - "_enabled".length()))
+                : featureEnabledMap.get(key + "_enabled");
+        if (value != null) return value;
+        // Until the manager syncs its flags, match the manager's own defaults. su_bridge and
+        // root_magisk_mocking default to OFF there, so they must not be ON here either: a server
+        // started by the watchdog or at boot would otherwise run them even for a user who turned
+        // them off. Only features that default on in the manager default on here.
+        if (key.equals("shell_interceptor") || key.equals("ai_core_plus")) {
             return true;
         }
         return featureEnabledMap.getOrDefault(key, false);
@@ -937,7 +1198,17 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
     @Override
     public boolean checkPlusFeatureEnabled(String key) {
+        // Service.transactRemote only calls isBinderCallBlocked() when "binder_firewall" reads on.
+        // Per-app API scopes (#645) are enforced there too, so report the gate open whenever any
+        // app has a scope turned off; isBinderCallBlocked() still checks the real firewall flag
+        // before applying the general firewall rules.
+        if ("binder_firewall".equals(key) && hasPerAppScopeRules()) return true;
         return isFeatureEnabled(key);
+    }
+
+    private boolean hasPerAppScopeRules() {
+        String serialized = plusSettingsMap.get("per_app_disabled_scopes");
+        return serialized != null && !serialized.trim().isEmpty();
     }
 
     /**
@@ -1007,12 +1278,67 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         return applied;
     }
 
+    private boolean isAppScopeDisabled(int uid, String callingPkg, String scope) {
+        if (isManagerAppId(UserHandleCompat.getAppId(uid))) return false;
+        String serialized = plusSettingsMap.get("per_app_disabled_scopes");
+        if (serialized == null || serialized.isEmpty()) return false;
+
+        java.util.List<String> candidatePackages = new java.util.ArrayList<>();
+        if (callingPkg != null && !callingPkg.isEmpty() && !"unknown".equals(callingPkg)) {
+            candidatePackages.add(callingPkg);
+        } else {
+            for (ClientRecord cr : clientManager.findClients(uid)) {
+                if (cr.packageName != null && !candidatePackages.contains(cr.packageName)) {
+                    candidatePackages.add(cr.packageName);
+                }
+            }
+        }
+        // A caller that never attached has no client record; it is still bound by the rules for
+        // its packages, or it could skip every scope just by not attaching.
+        if (candidatePackages.isEmpty()) {
+            candidatePackages.addAll(PackageManagerApis.getPackagesForUidNoThrow(uid));
+        }
+        if (candidatePackages.isEmpty()) return false;
+
+        for (String entry : serialized.split(";")) {
+            int colon = entry.indexOf(':');
+            if (colon <= 0) continue;
+            String pkg = entry.substring(0, colon).trim();
+            if (!candidatePackages.contains(pkg)) continue;
+            String scopesPart = entry.substring(colon + 1);
+            for (String s : scopesPart.split("\\|")) {
+                if (scope.equals(s.trim())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     @Override
     protected boolean isBinderCallBlocked(int uid, String descriptor, int code) {
-        if (!isFeatureEnabled("binder_firewall")) return false;
-
         // The manager app (the owner of this service) is always allowed
         if (isManagerAppId(UserHandleCompat.getAppId(uid))) return false;
+
+        // Per-app granular API scope firewall (#645)
+        if (descriptor != null) {
+            String requiredScope = null;
+            if (descriptor.startsWith("android.content.pm.IPackage")) {
+                requiredScope = "package_manager";
+            } else if ("android.app.IActivityManager".equals(descriptor) || "android.app.IActivityTaskManager".equals(descriptor)) {
+                requiredScope = "activity_manager";
+            } else if ("com.android.internal.app.IAppOpsService".equals(descriptor) || "android.permission.IPermissionManager".equals(descriptor)) {
+                requiredScope = "appops";
+            } else if ("android.os.IPowerManager".equals(descriptor)) {
+                requiredScope = "system_settings";
+            }
+            if (requiredScope != null && isAppScopeDisabled(uid, null, requiredScope)) {
+                LOGGER.w("Binder call blocked by per-app scope '%s': UID=%d, Descriptor=%s, Code=%d", requiredScope, uid, descriptor, code);
+                return true;
+            }
+        }
+
+        if (!isFeatureEnabled("binder_firewall")) return false;
 
         boolean isBlocked = false;
 
@@ -1070,7 +1396,8 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     @Override
     protected boolean handleShadowBinderTransaction(IBinder target, int code, Parcel data, Parcel reply, int flags) {
         try {
-            String descriptor = target.getInterfaceDescriptor();
+            // Cached: transactRemote already resolved it, so no second IPC round-trip here.
+            String descriptor = descriptorOf(target);
             // Shadowing IPackageManager to hide specific apps or spoof Magisk presence
             if ("android.content.pm.IPackageManager".equals(descriptor)) {
                 // Save position to restore if we don't handle it
@@ -1200,7 +1527,14 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     public void updatePlusFeatureEnabled(String key, boolean enabled) {
         enforceManagerPermission("updatePlusFeatureEnabled");
         LOGGER.i("Plus Feature Update: " + key + " -> " + enabled);
+        boolean isAutoGrantKey = "root_auto_grant".equals(key) || "root_auto_grant_enabled".equals(key);
+        boolean wasAutoGrant = isAutoGrantKey && isFeatureEnabled("root_auto_grant");
         featureEnabledMap.put(key, enabled);
+        // Also when this server never saw it on (turned off while the server was down, or grants left
+        // from an older build): any tracked grant left over means it is still to be taken back.
+        if (isAutoGrantKey && !enabled && (wasAutoGrant || !configManager.getAutoGrantedPermissions().isEmpty())) {
+            new Thread(this::revokeAutoGrantedPermissions, "AutoGrantRevoke").start();
+        }
     }
 
     @Override
@@ -1208,6 +1542,11 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         enforceManagerPermission("setPlusSetting");
         LOGGER.i("Plus Setting Update: " + key + " -> " + value);
         plusSettingsMap.put(key, value);
+    }
+
+    @Override
+    protected void onClientEvent(String packageName, String action) {
+        dispatchLog(packageName, action);
     }
 
     private void dispatchLog(String packageName, String action) {
@@ -1228,7 +1567,10 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             ApplicationInfo ai = getManagerApplicationInfo();
             if (ai == null) return;
 
-            List<ClientRecord> records = clientManager.findClients(ai.uid);
+            List<ClientRecord> records = new java.util.ArrayList<>(clientManager.findClients(ai.uid));
+            if (secondaryManagerAppId != -1 && secondaryManagerAppId != ai.uid) {
+                records.addAll(clientManager.findClients(secondaryManagerAppId));
+            }
             for (ClientRecord record : records) {
                 try {
                     record.client.dispatchLog("", packageName, action);
@@ -1281,6 +1623,11 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         }
     }
 
+    /** Single-quotes [s] for a sh -c string: 'it'\''s' → it's. */
+    private static String shellQuote(String s) {
+        return "'" + s.replace("'", "'\\''") + "'";
+    }
+
     @Override
     public IRemoteProcess newProcess(String[] cmd, String[] env, String dir) {
         // Every branch below this point (SU-bridge mocking, build.prop redirection, iptables/pm
@@ -1302,6 +1649,32 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         // do nothing" reports (#411, #421, #426) undiagnosable from logcat alone. This makes every
         // call visible regardless of which branch (if any) it hits.
         LOGGER.d("newProcess: %s -> %s", callingPkg, String.join(" ", cmd));
+
+        // Per-app granular API scope enforcement for shell/process execution (#645)
+        if (isAppScopeDisabled(callingUid, callingPkg, "shell")) {
+            LOGGER.w("newProcess blocked by per-app 'shell' scope for %s (UID=%d)", callingPkg, callingUid);
+            throw new SecurityException("Permission denied: Shell execution scope is disabled for " + callingPkg);
+        }
+        // Tools are matched as whole words anywhere in the command, so `sh -c "pm ..."`,
+        // `/system/bin/pm` and chained commands are caught too (#648).
+        for (String scope : rikka.shizuku.server.util.ScopeCommandMatcher.requiredScopes(cmd)) {
+            if (isAppScopeDisabled(callingUid, callingPkg, scope)) {
+                LOGGER.w("newProcess blocked by per-app '%s' scope for %s (UID=%d)", scope, callingPkg, callingUid);
+                throw new SecurityException("Permission denied: the '" + scope + "' API scope is disabled for " + callingPkg + " in Shizuku+");
+            }
+        }
+
+        // Scope rules can only be checked on a command they can read. For an app with any tool
+        // scope off, refuse shells fed on stdin, scripts and commands that build what they run.
+        if (rikka.shizuku.server.util.ScopeCommandMatcher.isOpaque(cmd)) {
+            for (String scope : rikka.shizuku.server.util.ScopeCommandMatcher.TOOL_SCOPES) {
+                if (isAppScopeDisabled(callingUid, callingPkg, scope)) {
+                    LOGGER.w("newProcess blocked: uncheckable command from %s with '%s' scope off", callingPkg, scope);
+                    throw new SecurityException("Permission denied: " + callingPkg + " has the '" + scope
+                            + "' API scope off in Shizuku+, and this command can't be checked against it");
+                }
+            }
+        }
 
         // Catastrophic Command Interceptor (Storage Safety)
         if (isCatastrophicCommand(cmd)) {
@@ -1629,7 +2002,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                     LOGGER.i("SUBridge: intercepting mount remount. Delegating to OverlayManager Proxy.");
                     if (isFeatureEnabled("overlay_fs_proxy_enabled") && (fullCmd.contains("/system") || fullCmd.contains("/vendor"))) {
                         try {
-                            overlayManagerPlus.prepareShadowMount(callingPkg, "/system");
+                            overlayManagerPlus.get().prepareShadowMount(callingPkg, "/system");
                         } catch (Exception e) {
                             LOGGER.e("SUBridge: shadow mount proxy failed", e);
                         }
@@ -1710,6 +2083,8 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                         try {
                             // Primary: direct Binder IPC — works at shell UID, no exec/fork needed.
                             Android17Compat.grantRuntimePermission(targetPkg, perm, grantUserId);
+                            // Tracked so turning auto-grant off can revoke it again.
+                            configManager.addAutoGrantedPermissions(java.util.Collections.singletonList(targetPkg + "|" + perm + "|" + grantUserId));
                             return newProcessInternal(new String[]{"true"}, env, dir);
                         } catch (Exception e) {
                             LOGGER.w(e, "SUBridge: grantRuntimePermission IPC failed for %s/%s, falling back to exec", targetPkg, perm);
@@ -2042,7 +2417,9 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                         String fullCmd = String.join(" ", cmd);
                         LOGGER.i("SUBridge: mapping backup command to native bu utility: " + fullCmd);
                         java.util.regex.Matcher m = java.util.regex.Pattern.compile("/data/(?:data|app|user/\\d+)/([^/\\-\\s]+)").matcher(fullCmd);
-                        if (m.find()) {
+                        // The package name goes into a sh -c string below; anything that isn't a
+                        // plain package name (`x;reboot`, `$(...)`) skips the mapping.
+                        if (m.find() && rikka.shizuku.server.util.InputValidationUtils.isValidPackageName(m.group(1))) {
                             String targetPkg = m.group(1);
                             String archivePath = null;
                             for (int i = 1; i < cmd.length; i++) {
@@ -2060,14 +2437,14 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                             if (archivePath != null) {
                                 if (isRestore) {
                                     String restoreCmd = "(printf 'ANDROID BACKUP\\n1\\n1\\nnone\\n' ; ";
-                                    if (isGzip) restoreCmd += "gunzip -c " + archivePath;
-                                    else restoreCmd += "cat " + archivePath;
+                                    if (isGzip) restoreCmd += "gunzip -c " + shellQuote(archivePath);
+                                    else restoreCmd += "cat " + shellQuote(archivePath);
                                     restoreCmd += ") | bu restore";
                                     return newProcessInternal(new String[]{"sh", "-c", restoreCmd}, env, dir);
                                 } else {
                                     String backupCmd = "bu backup -apk -obb " + targetPkg + " | tail -c +25 ";
                                     if (isGzip) backupCmd += "| gzip -c ";
-                                    backupCmd += "> " + archivePath;
+                                    backupCmd += "> " + shellQuote(archivePath);
                                     return newProcessInternal(new String[]{"sh", "-c", backupCmd}, env, dir);
                                 }
                             } else {
@@ -2094,13 +2471,13 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 if (cmd[1].equals("force-stop")) {
                     String pkg = cmd[2];
                     LOGGER.i("Plus Optimization: am force-stop " + pkg + " via ActivityManagerPlus");
-                    if (activityManagerPlus.deepForceStop(pkg)) {
+                    if (activityManagerPlus.get().deepForceStop(pkg)) {
                         return newProcessInternal(new String[]{"true"}, env, dir);
                     }
                 } else if (cmd[1].equals("freeze") || cmd[1].equals("suspend")) {
                     String pkg = cmd[2];
                     LOGGER.i("Plus Optimization: am freeze " + pkg + " -> restricted bucket");
-                    if (activityManagerPlus.setAppStandbyBucket(pkg, 45)) { // 45 = RESTRICTED
+                    if (activityManagerPlus.get().setAppStandbyBucket(pkg, 45)) { // 45 = RESTRICTED
                         return newProcessInternal(new String[]{"true"}, env, dir);
                     }
                 }
@@ -2125,7 +2502,8 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                         rikka.shizuku.server.api.IContentProviderUtils.callCompat(provider, null, "settings", "PUT_" + namespace, key, extras);
                     }
                 } catch (Throwable tr) {
-                    LOGGER.e(tr, "Plus Optimization: settings put pre-write failed (native will retry)");
+                    // Expected on some ROMs; the real `settings put` below still runs (SHIZUKUPLUS-9M).
+                    LOGGER.w(tr, "Plus Optimization: settings put pre-write failed (native will retry)");
                 }
                 // Fall through to super.newProcessInternal() for authoritative execution.
             } else if (baseCmd.equals("pm") && cmd.length >= 2 && cmd[1].equals("install")) {
@@ -2174,9 +2552,22 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                         if (binder != null) {
                             Class<?> stub = Class.forName("com.android.internal.app.IAppOpsService$Stub");
                             Object service = stub.getMethod("asInterface", IBinder.class).invoke(null, binder);
-                            int intOp = (int) service.getClass().getMethod("strOpToOp", String.class).invoke(service, modeOrOp);
-                            int intMode = value.equals("allow") ? 0 : (value.equals("ignore") || value.equals("deny")) ? 1 : 2; 
-                            
+                            // strOpToOp wants "android:system_alert_window"; users type the op name
+                            // (SYSTEM_ALERT_WINDOW), which the real appops tool also accepts.
+                            String opStr = modeOrOp.startsWith("android:") ? modeOrOp : "android:" + modeOrOp.toLowerCase(java.util.Locale.ROOT);
+                            int intOp = (int) service.getClass().getMethod("strOpToOp", String.class).invoke(service, opStr);
+                            // AppOpsManager.MODE_*: "default" used to fall into 2 (errored), so
+                            // resetting an op errored it instead (#648).
+                            int intMode;
+                            switch (value) {
+                                case "allow": intMode = 0; break;
+                                case "ignore": intMode = 1; break;
+                                case "deny": case "errored": intMode = 2; break;
+                                case "default": intMode = 3; break;
+                                case "foreground": intMode = 4; break;
+                                default: intMode = -1;
+                            }
+
                             int targetUid = -1;
                             try {
                                 targetUid = Integer.parseInt(pkg);
@@ -2185,13 +2576,14 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                                 if (ai != null) targetUid = ai.uid;
                             }
                             
-                            if (targetUid != -1) {
+                            // Anything unrecognized runs the real appops tool below instead.
+                            if (targetUid != -1 && intOp >= 0 && intMode >= 0) {
                                 service.getClass().getMethod("setMode", int.class, int.class, String.class, int.class).invoke(service, intOp, targetUid, pkg, intMode);
                                 return syntheticProcess(0, "");
                             }
                         }
                     } catch (Throwable tr) {
-                        LOGGER.e(tr, "Plus Optimization: appops failed");
+                        LOGGER.w(tr, "Plus Optimization: appops shortcut failed, running appops itself");
                     }
                 }
             } else if (baseCmd.equals("service") && cmd.length >= 4 && cmd[1].equals("call")) {
@@ -2205,7 +2597,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                     try {
                         IBinder target = ServiceManager.getService(serviceName);
                         if (target != null) {
-                            String descriptor = target.getInterfaceDescriptor();
+                            String descriptor = descriptorOf(target);
                             if (descriptor != null) {
                                 // 1. Pass raw IPCs through Shizuku's Binder firewall
                                 if (isBinderCallBlocked(callingUid, descriptor, code)) {
@@ -2237,28 +2629,28 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                     LOGGER.i("Plus Optimization (Storage Bridge): mapping " + baseCmd + " " + path);
                     try {
                         if (baseCmd.equals("ls")) {
-                            java.util.List<String> files = storageProxy.listFiles(path);
+                            java.util.List<String> files = storageProxy.get().listFiles(path);
                             if (files != null) {
                                 String joined = String.join("\n", files);
                                 return syntheticProcess(0, joined.isEmpty() ? "" : joined + "\n");
                             }
                         } else if (baseCmd.equals("cat")) {
-                            android.os.ParcelFileDescriptor pfd = storageProxy.openFile(path, android.os.ParcelFileDescriptor.MODE_READ_ONLY);
+                            android.os.ParcelFileDescriptor pfd = storageProxy.get().openFile(path, android.os.ParcelFileDescriptor.MODE_READ_ONLY);
                             if (pfd != null) {
                                 return new ProxyRemoteProcess(pfd, 0);
                             }
                         } else if (baseCmd.equals("stat")) {
-                            android.os.Bundle info = storageProxy.getFileInfo(path);
+                            android.os.Bundle info = storageProxy.get().getFileInfo(path);
                             if (info.getBoolean("exists")) {
                                 String statOut = "File: " + path + "\nSize: " + info.getLong("size") + "\nModify: " + info.getLong("lastModified") + "\n";
                                 return syntheticProcess(0, statOut);
                             }
                         } else if (baseCmd.equals("rm")) {
-                            if (storageProxy.delete(path)) {
+                            if (storageProxy.get().delete(path)) {
                                 return syntheticProcess(0, "");
                             }
                         } else if (baseCmd.equals("mkdir")) {
-                            if (storageProxy.mkdir(path)) {
+                            if (storageProxy.get().mkdir(path)) {
                                 return syntheticProcess(0, "");
                             }
                         }
@@ -2295,8 +2687,9 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                                     }
                                 }
                             }
-                        } else {
-                            // Name-based pkill/killall: treat target as package name
+                        } else if (rikka.shizuku.server.util.InputValidationUtils.isValidPackageName(target)) {
+                            // Name-based pkill/killall: treat target as package name. Anything else
+                            // (a flag, a process name with ':') runs as the real command instead.
                             LOGGER.i("Plus: %s %s → am force-stop", baseCmd, target);
                             ActivityManagerApis.forceStopPackageNoThrow(target,
                                 UserHandleCompat.getUserId(callingUid));
@@ -2350,18 +2743,18 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                     if (("enable".equals(overlaySubCmd) || "enable-exclusive".equals(overlaySubCmd)) && cmd.length >= 4) {
                         // Package name is always the last arg; --user N may appear in between
                         String pkg = cmd[cmd.length - 1];
-                        boolean ok = overlayManagerPlus.setOverlayEnabled(pkg, true);
+                        boolean ok = overlayManagerPlus.get().setOverlayEnabled(pkg, true);
                         return syntheticProcess(ok ? 0 : 1, "");
                     } else if ("disable".equals(overlaySubCmd) && cmd.length >= 4) {
                         String pkg = cmd[cmd.length - 1];
-                        boolean ok = overlayManagerPlus.setOverlayEnabled(pkg, false);
+                        boolean ok = overlayManagerPlus.get().setOverlayEnabled(pkg, false);
                         return syntheticProcess(ok ? 0 : 1, "");
                     } else if ("set-priority".equals(overlaySubCmd) && cmd.length >= 5 && "highest".equals(cmd[cmd.length - 1])) {
                         String pkg = cmd[cmd.length - 2];
-                        boolean ok = overlayManagerPlus.setHighestPriority(pkg);
+                        boolean ok = overlayManagerPlus.get().setHighestPriority(pkg);
                         return syntheticProcess(ok ? 0 : 1, "");
                     } else if ("list".equals(overlaySubCmd)) {
-                        java.util.List<String> overlays = overlayManagerPlus.getAllOverlays();
+                        java.util.List<String> overlays = overlayManagerPlus.get().getAllOverlays();
                         StringBuilder sb = new StringBuilder();
                         for (String entry : overlays) {
                             // Internal format is "packageName:true/false"; output mirrors cmd overlay list
@@ -2421,7 +2814,19 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         // dialog instead of dropping the request.
         ApplicationInfo ai = Android17Compat.getApplicationInfo(clientRecord.packageName, 0, userId);
 
-        PackageInfo pi = Android17Compat.getPackageInfo(MANAGER_APPLICATION_ID, 0, userId);
+        String targetManagerPkg = MANAGER_APPLICATION_ID;
+        if (secondaryManagerAppId != -1 &&
+                clientManager.findClients(managerAppId).isEmpty() &&
+                !clientManager.findClients(secondaryManagerAppId).isEmpty()) {
+            targetManagerPkg = ServerConstants.DROPIN_APPLICATION_ID.equals(MANAGER_APPLICATION_ID)
+                    ? ServerConstants.PLUS_APPLICATION_ID
+                    : ServerConstants.DROPIN_APPLICATION_ID;
+        }
+        PackageInfo pi = Android17Compat.getPackageInfo(targetManagerPkg, 0, userId);
+        if (pi == null && !targetManagerPkg.equals(MANAGER_APPLICATION_ID)) {
+            targetManagerPkg = MANAGER_APPLICATION_ID;
+            pi = Android17Compat.getPackageInfo(targetManagerPkg, 0, userId);
+        }
         UserInfo userInfo = UserManagerApis.getUserInfo(userId);
         boolean isWorkProfileUser = BuildUtils.INSTANCE.getAtLeast30() ?
                 "android.os.usertype.profile.MANAGED".equals(userInfo.userType) :
@@ -2432,8 +2837,8 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             return;
         }
 
-        Intent intent = new Intent(ServerConstants.getRequestPermissionAction())
-                .setPackage(MANAGER_APPLICATION_ID)
+        Intent intent = new Intent(targetManagerPkg + ".intent.action.REQUEST_PERMISSION")
+                .setPackage(targetManagerPkg)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
                 .putExtra("uid", callingUid)
                 .putExtra("pid", callingPid)
@@ -2576,12 +2981,19 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 }
 
                 try {
+<<<<<<< HEAD
                     if ((Android17Compat.checkPermission(PERMISSION, uid) == PackageManager.PERMISSION_GRANTED
                             && PermissionDefiners.isTrusted(PERMISSION, this::isManagerAppId)) ||
                         (Android17Compat.checkPermission(ServerConstants.PERMISSION_LEGACY, uid) == PackageManager.PERMISSION_GRANTED
                             && PermissionDefiners.isTrusted(ServerConstants.PERMISSION_LEGACY, this::isManagerAppId)) ||
                         (Android17Compat.checkPermission(ServerConstants.PERMISSION_ORIGINAL, uid) == PackageManager.PERMISSION_GRANTED
                             && PermissionDefiners.isTrusted(ServerConstants.PERMISSION_ORIGINAL, this::isManagerAppId))) {
+=======
+                    // Same trust rule as checkCallingPermission().
+                    if ((isTrustedPermission(PERMISSION) && Android17Compat.checkPermission(PERMISSION, uid) == PackageManager.PERMISSION_GRANTED) ||
+                        (isTrustedPermission(ServerConstants.PERMISSION_ORIGINAL) &&
+                            Android17Compat.checkPermission(ServerConstants.PERMISSION_ORIGINAL, uid) == PackageManager.PERMISSION_GRANTED)) {
+>>>>>>> upstream/master
                         return ConfigManager.FLAG_ALLOWED;
                     }
                 } catch (Throwable e) {
@@ -2760,7 +3172,8 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 )) {
                     list.add(pi);
                 } else if (pi.applicationInfo.metaData != null
-                        && pi.applicationInfo.metaData.getBoolean("af.shizuku.client.V3_SUPPORT", false)) {
+                        && (pi.applicationInfo.metaData.getBoolean("af.shizuku.client.V3_SUPPORT", false)
+                        || pi.applicationInfo.metaData.getBoolean("moe.shizuku.client.V3_SUPPORT", false))) {
                     list.add(pi);
                 }
             }
@@ -2857,15 +3270,23 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             reply.writeNoException();
             reply.writeInt(version);
             return true;
+<<<<<<< HEAD
         } else if (code == IBinder.FIRST_CALL_TRANSACTION + 16 /* 17: two different calls share this code */) {
+=======
+        } else if (code == IBinder.FIRST_CALL_TRANSACTION + 16 /* two different calls share this code */) {
+>>>>>>> upstream/master
             data.enforceInterface(ShizukuApiConstants.BINDER_DESCRIPTOR);
             // Told apart by the parcel, never by the caller. The generated
             // shouldShowRequestPermissionRationale() of every client library sends 17 with no
             // arguments. The ShizukuPlus client library's attachApplication sends a bare 17 with
             // (binder, int, Bundle) (api Shizuku.java attachApplicationV13): that one falls through
+<<<<<<< HEAD
             // to Service.onTransact, which rewinds the parcel and attaches. Answering it as the
             // rationale left every ShizukuPlus-library client, this manager and its rish shell
             // included, unattached.
+=======
+            // to Service.onTransact, which rewinds the parcel and attaches.
+>>>>>>> upstream/master
             if (data.dataAvail() == 0) {
                 boolean rationale = shouldShowRequestPermissionRationale();
                 reply.writeNoException();
@@ -2882,6 +3303,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             reply.writeNoException();
             return true;
         }
+<<<<<<< HEAD
         if (code == TrustedSigners.CONFIRMATION_TRANSACTION && (flags & IBinder.FLAG_ONEWAY) == 0) {
             // The manager sends Deny without FLAG_ONEWAY to learn what took effect; the AIDL
             // handler for this oneway method would run it but write no reply. Same parcel layout.
@@ -2933,6 +3355,19 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         for (ClientRecord record : unallowed) {
             record.allowed = true;
         }
+=======
+        try {
+            return super.onTransact(code, data, reply, flags);
+        } catch (SecurityException e) {
+            // Permission denials are already logged by enforceCallingPermission().
+            throw e;
+        } catch (RuntimeException e) {
+            // Binder writes the exception into the reply for the caller and logs nothing on this
+            // side, so the client sees e.g. IllegalStateException with no server-side trace.
+            LOGGER.w(e, "onTransact code=%d from uid=%d pid=%d failed", code, Binder.getCallingUid(), Binder.getCallingPid());
+            throw e;
+        }
+>>>>>>> upstream/master
     }
 
     void sendBinderToClient() {
@@ -2970,16 +3405,19 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             } catch (Throwable ignored) {
             }
 
+            // Only running apps get the binder now, so look up just those (tens of packages)
+            // instead of every installed package with its full permission list (1000+ on a
+            // typical phone) - this was most of the time between "starting server" and the
+            // first binder delivery. The manager is skipped: sendBinderToManager() covers it,
+            // with its own retry, and sending here too delivered it twice.
             Stream<PackageInfo> packages =
-                InstalledPackagesCompat.getInstalledPackagesNoThrow(
-                    PackageManager.GET_PERMISSIONS, userId
-                )
-                .stream()
+                runningPackages.stream()
+                .filter(name -> !MANAGER_APPLICATION_ID.equals(name))
+                .map(name -> Android17Compat.getPackageInfo(name, PackageManager.GET_PERMISSIONS, userId))
                 .filter(pi -> pi != null && pi.requestedPermissions != null)
-                .filter(pi -> ArraysKt.contains(pi.requestedPermissions, PERMISSION) || 
+                .filter(pi -> ArraysKt.contains(pi.requestedPermissions, PERMISSION) ||
                               ArraysKt.contains(pi.requestedPermissions, ServerConstants.PERMISSION_LEGACY) ||
-                              ArraysKt.contains(pi.requestedPermissions, ServerConstants.PERMISSION_ORIGINAL))
-                .filter(pi -> runningPackages.contains(pi.packageName));
+                              ArraysKt.contains(pi.requestedPermissions, ServerConstants.PERMISSION_ORIGINAL));
 
             // NOT sendBinderToUserAppWithRetry: the same force-stop hazard that caused the
             // PackageInstaller NPE on the live observer path (#386) applies here too — an app
@@ -3003,12 +3441,24 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         sendBinderToManager(this);
     }
 
+    private static String getSecondaryManagerPackage() {
+        String other = ServerConstants.DROPIN_APPLICATION_ID.equals(MANAGER_APPLICATION_ID)
+                ? ServerConstants.PLUS_APPLICATION_ID
+                : ServerConstants.DROPIN_APPLICATION_ID;
+        ApplicationInfo ai = Android17Compat.getApplicationInfo(other, 0, 0);
+        return (ai != null && isSignedLikeManager(other)) ? other : null;
+    }
+
     private static void sendBinderToManager(Binder binder) {
+        String secondaryPkg = getSecondaryManagerPackage();
         java.util.List<Integer> failedUserIds = new java.util.ArrayList<>();
         for (int userId : UserManagerApis.getUserIdsNoThrow()) {
             boolean success = sendBinderToUserApp(binder, MANAGER_APPLICATION_ID, userId);
             if (!success) {
                 failedUserIds.add(userId);
+            }
+            if (secondaryPkg != null) {
+                sendBinderToUserApp(binder, secondaryPkg, userId);
             }
         }
         if (!failedUserIds.isEmpty()) {
@@ -3044,6 +3494,10 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     }
 
     static void sendBinderToManager(Binder binder, int userId) {
+        String secondaryPkg = getSecondaryManagerPackage();
+        if (secondaryPkg != null) {
+            sendBinderToUserApp(binder, secondaryPkg, userId);
+        }
         boolean success = sendBinderToUserApp(binder, MANAGER_APPLICATION_ID, userId);
         if (!success) {
             // For unknown reason, sometimes this could happens
@@ -3108,7 +3562,9 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         try {
             provider = ActivityManagerApis.getContentProviderExternal(name, userId, token, "com.android.shell");
             if (provider == null) {
-                LOGGER.e("provider is null %s %d", name, userId);
+                // The client app has no exported ShizukuProvider for this user: its setup, not a
+                // server fault. WARN stays out of crash reports (SHIZUKUPLUS-8R/8P/9P).
+                LOGGER.w("provider is null %s %d", name, userId);
                 return false;
             }
             if (!provider.asBinder().pingBinder()) {
@@ -3225,20 +3681,25 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     public IVirtualMachineManager getVirtualMachineManager() {
         enforceCallingPermission("getVirtualMachineManager");
         if (!isFeatureEnabled("avf_manager")) return null;
-        return virtualMachineManager;
+        return virtualMachineManager.get();
     }
 
     @Override
     public IStorageProxy getStorageProxy() {
         enforceCallingPermission("getStorageProxy");
         if (!isFeatureEnabled("storage_proxy")) return null;
-        return storageProxy;
+        return storageProxy.get();
     }
 
     @Override
     public IAICorePlus getAICorePlus() {
         enforceCallingPermission("getAICorePlus");
-        if (!isFeatureEnabled("ai_core_plus")) return null;
+        // The manager always gets it (System Hub reads getServerStats() through it); third-party
+        // clients only while the user has AICore+ enabled.
+        if (!isFeatureEnabled("ai_core_plus")
+                && !checkCallerManagerPermission("getAICorePlus", Binder.getCallingUid(), Binder.getCallingPid())) {
+            return null;
+        }
         return aiCorePlus;
     }
 
@@ -3246,86 +3707,108 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     public IWindowManagerPlus getWindowManagerPlus() {
         enforceCallingPermission("getWindowManagerPlus");
         if (!isFeatureEnabled("window_manager_plus")) return null;
-        return windowManagerPlus;
+        return windowManagerPlus.get();
     }
 
     @Override
     public IContinuityBridge getContinuityBridge() {
         enforceCallingPermission("getContinuityBridge");
         if (!isFeatureEnabled("continuity_bridge")) return null;
-        return continuityBridge;
+        return continuityBridge.get();
     }
 
     @Override
     public IOverlayManagerPlus getOverlayManagerPlus() {
         enforceCallingPermission("getOverlayManagerPlus");
         if (!isFeatureEnabled("overlay_manager_plus")) return null;
-        return overlayManagerPlus;
+        return overlayManagerPlus.get();
     }
 
     @Override
     public INetworkGovernorPlus getNetworkGovernorPlus() {
         enforceCallingPermission("getNetworkGovernorPlus");
+        if (isAppScopeDisabled(Binder.getCallingUid(), null, "system_settings")) return null;
         if (!isFeatureEnabled("network_governor_plus")) return null;
-        return networkGovernorPlus;
+        return networkGovernorPlus.get();
     }
 
     @Override
     public IActivityManagerPlus getActivityManagerPlus() {
         enforceCallingPermission("getActivityManagerPlus");
+        if (isAppScopeDisabled(Binder.getCallingUid(), null, "activity_manager")) return null;
         if (!isFeatureEnabled("activity_manager_plus")) return null;
-        return activityManagerPlus;
+        return activityManagerPlus.get();
     }
 
     @Override
     public IStatusBarGovernorPlus getStatusBarGovernorPlus() {
         enforceCallingPermission("getStatusBarGovernorPlus");
+        if (isAppScopeDisabled(Binder.getCallingUid(), null, "system_settings")) return null;
         if (!isFeatureEnabled("status_bar_governor_plus")) return null;
-        return statusBarGovernorPlus;
+        return statusBarGovernorPlus.get();
     }
 
     @Override
     public IPackageGovernorPlus getPackageGovernorPlus() {
         enforceCallingPermission("getPackageGovernorPlus");
+        if (isAppScopeDisabled(Binder.getCallingUid(), null, "package_manager")) return null;
         if (!isFeatureEnabled("package_governor_plus")) return null;
-        return packageGovernorPlus;
+        return packageGovernorPlus.get();
     }
 
     @Override
     public IDisplayTunerPlus getDisplayTunerPlus() {
         enforceCallingPermission("getDisplayTunerPlus");
+        if (isAppScopeDisabled(Binder.getCallingUid(), null, "system_settings")) return null;
         if (!isFeatureEnabled("display_tuner_plus")) return null;
-        return displayTunerPlus;
+        return displayTunerPlus.get();
     }
 
     @Override
     public IAppInspector getAppInspector() {
         enforceCallingPermission("getAppInspector");
-        return appInspector;
+        if (isAppScopeDisabled(Binder.getCallingUid(), null, "activity_manager")) return null;
+        if (!isRiskyBinderAllowed("getAppInspector", FEATURE_UNRESTRICTED_PERSONAL_DATA)) return null;
+        return appInspector.get();
     }
 
     @Override
     public IPrivilegedDataSource getPrivilegedDataSource() {
         enforceCallingPermission("getPrivilegedDataSource");
-        return privilegedDataSource;
+        if (!isRiskyBinderAllowed("getPrivilegedDataSource", FEATURE_UNRESTRICTED_PERSONAL_DATA)) return null;
+        return privilegedDataSource.get();
     }
 
     @Override
     public IBackupRestorePlus getBackupRestorePlus() {
         enforceCallingPermission("getBackupRestorePlus");
-        return backupRestorePlus;
+        if (isAppScopeDisabled(Binder.getCallingUid(), null, "package_manager")) return null;
+        if (!isRiskyBinderAllowed("getBackupRestorePlus", FEATURE_UNRESTRICTED_APP_DATA)) return null;
+        return backupRestorePlus.get();
+    }
+
+    /**
+     * The manager always gets the risky sub-binders (its own backup screen uses BackupRestorePlus);
+     * third-party apps only while the user has turned on the matching developer option.
+     */
+    private boolean isRiskyBinderAllowed(String func, String featureKey) {
+        if (isFeatureEnabled(featureKey)) return true;
+        return checkCallerManagerPermission(func, Binder.getCallingUid(), Binder.getCallingPid());
     }
 
     @Override
     public IApkPatcher getApkPatcher() {
         enforceCallingPermission("getApkPatcher");
-        return apkPatcher;
+        if (isAppScopeDisabled(Binder.getCallingUid(), null, "package_manager")) return null;
+        return apkPatcher.get();
     }
 
     @Override
     public IDeviceControlPlus getDeviceControlPlus() {
         enforceCallingPermission("getDeviceControlPlus");
-        return deviceControlPlus;
+        if (isAppScopeDisabled(Binder.getCallingUid(), null, "system_settings")) return null;
+        if (!isRiskyBinderAllowed("getDeviceControlPlus", FEATURE_UNRESTRICTED_PERSONAL_DATA)) return null;
+        return deviceControlPlus.get();
     }
 
     @Override
@@ -3348,27 +3831,69 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         performAppOpsElevation(packageName, ai.uid);
     }
 
+    /** AppOps the manager itself needs; see grantManagerEssentialPermissions(). */
+    private static final String[] MANAGER_APP_OPS = {
+        "android:get_usage_stats",
+        "android:schedule_exact_alarm",
+    };
+
+    /** Resolves an AppOps name ("android:...") to this Android version's op code, or -1. */
+    private static int appOpFromName(String name) {
+        try {
+            Object op = android.app.AppOpsManager.class.getMethod("strOpToOp", String.class).invoke(null, name);
+            return op instanceof Integer ? (Integer) op : -1;
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    /**
+     * Sets each named op to MODE_ALLOWED for [uid]. Names, never numbers: op codes move between
+     * Android versions, so a hard-coded number can grant something else entirely.
+     */
+    private void setAppOpsAllowedByName(String packageName, int uid, String[] opNames) {
+        try {
+            IBinder binder = ServiceManager.getService("appops");
+            if (binder == null) return;
+            Object service = Class.forName("com.android.internal.app.IAppOpsService$Stub")
+                .getMethod("asInterface", IBinder.class).invoke(null, binder);
+            java.lang.reflect.Method setMode = service.getClass().getMethod("setMode", int.class, int.class, String.class, int.class);
+            for (String name : opNames) {
+                int op = appOpFromName(name);
+                if (op < 0) {
+                    LOGGER.w("Plus: AppOps %s doesn't exist on this Android version, skipped", name);
+                    continue;
+                }
+                try {
+                    setMode.invoke(service, op, uid, packageName, 0); // 0 = MODE_ALLOWED
+                } catch (Exception e) {
+                    LOGGER.e(e, "Plus: Failed to allow %s for uid %d", name, uid);
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.e(e, "Plus: AppOps update failed for " + packageName);
+        }
+    }
+
+    /**
+     * What elevateApp() (an authorized client elevating its own package) and the SU Bridge's
+     * SELinux mapping grant - the ops the old numeric list documented, by name. 107, 111 and 119
+     * had no documented meaning and are gone.
+     */
+    private static final String[] CLIENT_ELEVATION_APP_OPS = {
+        "android:system_alert_window",
+        "android:get_usage_stats",
+        "android:write_settings",
+        "android:request_install_packages",
+        "android:manage_external_storage",
+        "android:access_restricted_settings",
+        "android:schedule_exact_alarm",
+    };
+
     private void performAppOpsElevation(String packageName, int uid) {
         LOGGER.i("Plus: elevating AppOps and permissions for " + packageName + " (UID " + uid + ")");
         try {
-            IBinder binder = ServiceManager.getService("appops");
-            if (binder != null) {
-                Object service = Class.forName("com.android.internal.app.IAppOpsService$Stub")
-                    .getMethod("asInterface", IBinder.class).invoke(null, binder);
-                java.lang.reflect.Method setMode = service.getClass().getMethod("setMode", int.class, int.class, String.class, int.class);
-                // 24 = OP_SYSTEM_ALERT_WINDOW, 43 = OP_GET_USAGE_STATS, 63 = OP_WRITE_SETTINGS,
-                // 65 = OP_SYSTEM_ALERT_WINDOW (fallback), 66 = OP_REQUEST_INSTALL_PACKAGES,
-                // 100 = OP_MANAGE_EXTERNAL_STORAGE, 103 = OP_ACCESS_RESTRICTED_SETTINGS, 
-                // 121 = OP_SCHEDULE_EXACT_ALARM (privileged)
-                int[] opsToElevate = {24, 43, 63, 65, 66, 100, 103, 107, 111, 119, 121};
-                for (int op : opsToElevate) {
-                    try {
-                        setMode.invoke(service, op, uid, packageName, 0); // 0 = MODE_ALLOWED
-                    } catch (Exception e) {
-                        LOGGER.e(e, "Plus: Failed to set AppOps mode %d for uid %d", op, uid);
-                    }
-                }
-            }
+            setAppOpsAllowedByName(packageName, uid, CLIENT_ELEVATION_APP_OPS);
             // Also grant WRITE_SECURE_SETTINGS and DUMP via Binder IPC — no exec/fork required.
             for (String perm : new String[]{"android.permission.WRITE_SECURE_SETTINGS", "android.permission.DUMP"}) {
                 try {
@@ -3400,14 +3925,18 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     @Override
     public boolean isPlusFeatureEnabled(String key) {
         enforceCallingPermission("isPlusFeatureEnabled");
-        return checkPlusFeatureEnabled(key);
+        // The real flag, not the transact gate: per-app scopes must not make clients see the
+        // firewall as switched on.
+        return isFeatureEnabled(key);
     }
 
     private af.shizuku.server.IAIAutomationBridge aiAutomationBridge;
 
     @Override
     public void registerAIAutomationBridge(af.shizuku.server.IAIAutomationBridge bridge) {
-        enforceCallingPermission("registerAIAutomationBridge");
+        // Manager only: the bridge answers other clients' UI-hierarchy, touch and text requests,
+        // so any granted app registering its own would intercept them.
+        enforceManagerPermission("registerAIAutomationBridge");
         this.aiAutomationBridge = bridge;
         if (aiCorePlus != null) {
             aiCorePlus.setAutomationBridge(bridge);
@@ -3435,5 +3964,29 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         // shared prefs. Any binder holder may call this for any uid, so if hidden state is ever
         // synced here, read the stored entry, not find(), which can start a signer lookup.
         return false;
+    }
+
+    /** Minimal thread-safe lazy holder (binder threads may race on first access). */
+    private static final class Lazy<T> {
+        private final java.util.function.Supplier<T> factory;
+        private volatile T value;
+
+        Lazy(java.util.function.Supplier<T> factory) {
+            this.factory = factory;
+        }
+
+        T get() {
+            T v = value;
+            if (v == null) {
+                synchronized (this) {
+                    v = value;
+                    if (v == null) {
+                        v = factory.get();
+                        value = v;
+                    }
+                }
+            }
+            return v;
+        }
     }
 }

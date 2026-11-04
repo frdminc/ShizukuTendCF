@@ -46,6 +46,7 @@ class AdbClient(
     /** Called once, right after the public key was offered to adbd and the connection starts
      *  waiting for the user to accept the "Allow USB debugging?" dialog. */
     private val onAuthorizationPending: (() -> Unit)? = null,
+<<<<<<< HEAD
     /**
      * Whether this port may answer the hello with the legacy token challenge instead of TLS, asked
      * when it does. Only adbd's own TCP port (adb tcpip) speaks it. Wireless debugging always
@@ -78,6 +79,9 @@ class AdbClient(
             runCatching { socket?.close() }
         }
 
+=======
+) : Closeable {
+>>>>>>> upstream/master
     @Volatile
     private var socket: Socket? = null
     private var plainInputStream: DataInputStream? = null
@@ -213,8 +217,13 @@ class AdbClient(
         var expired = false
         try {
             Timber.tag(TAG).i("Waiting up to %d ms for the user to accept the adbd authorisation dialog", timeoutMs)
+<<<<<<< HEAD
             // A socket timeout bounds each read call, not the whole wait, so a peer trickling bytes
             // could hold the connection (and the process-wide gate) open. Close the socket at a
+=======
+            // A socket timeout bounds each read call, not the whole wait, so the connection (and the
+            // process-wide gate) could stay held past it. Close the socket at a
+>>>>>>> upstream/master
             // deadline instead, restarted by each offer so a re-offered key gets the whole wait.
             val timer = Timer("adb-auth-deadline", true).also { deadline = it }
             var deadlineTask: TimerTask? = null
@@ -309,12 +318,15 @@ class AdbClient(
         }
     }
 
+<<<<<<< HEAD
     /**
      * Runs [cmd] and streams its output to [listener]. The read timeout bounds each read, not the
      * command, so the command as a whole is bounded too: at most [maxOutputBytes] of output and
      * [deadlineMs] from the start, checked as each message arrives (so up to one read timeout
      * later). Past either bound the connection is closed and an [AdbCommandLimitException] thrown.
      */
+=======
+>>>>>>> upstream/master
     fun command(
         cmd: String,
         maxOutputBytes: Int = COMMAND_MAX_OUTPUT_BYTES,

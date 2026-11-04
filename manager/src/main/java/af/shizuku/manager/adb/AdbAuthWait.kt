@@ -17,7 +17,11 @@ import java.util.concurrent.atomic.AtomicInteger
  * adbd raises a new dialog for every connection that offers an unknown key, so while this is set
  * nothing may open another connection: [af.shizuku.manager.receiver.ShizukuReceiverStarter.start],
  * [af.shizuku.manager.worker.AdbStartWorker.enqueue] (which would otherwise REPLACE, i.e. cancel,
+<<<<<<< HEAD
  * the waiting worker) and the headless start receiver all check [isWaiting]. Those checks are
+=======
+ * the waiting worker) and the notification's "Attempt now" all check [isWaiting]. Those checks are
+>>>>>>> upstream/master
  * advisory early-outs; the binding claim is [tryBegin], a single compare-and-set taken immediately
  * before the key is offered, so two starts racing past the advisory checks still cannot raise two
  * dialogs.
@@ -188,9 +192,15 @@ object AdbAuthWait {
     internal fun prompt(): StartNotificationState.Display.Prompt? = heldPrompt?.copy(askAgain = askAgain(), endsAtMs = deadlineWallMs)
 
     /** The key has been offered and adbd's dialog is up; it shows over everything until [end]. */
+<<<<<<< HEAD
     internal fun postAuthPrompt(fingerprint: String?) {
         if (!isWaiting()) return
         heldPrompt = StartNotificationState.Display.Prompt(fingerprint)
+=======
+    internal fun postAuthPrompt() {
+        if (!isWaiting()) return
+        heldPrompt = StartNotificationState.Display.Prompt()
+>>>>>>> upstream/master
         ShizukuReceiverStarter.refreshNotification()
     }
 
@@ -208,11 +218,18 @@ object AdbAuthWait {
     /**
      * Set just before this manager's ADB key is offered (AdbClient) and cleared only when adbd
      * accepts it, so it stands for "a key offer has not been accepted", however that wait ended.
+<<<<<<< HEAD
      * The boot retry loop, every background (non-forced) start and a plain headless start stop
      * while it is set, so an unattended device gets one dialog per boot or explicit start rather
      * than one per retry. Besides acceptance it is cleared at BOOT_COMPLETED, by the
      * notification's "Attempt now", by the token-authenticated start broadcast, and by a headless
      * start sent with --ez force true. A running server does not clear it. While set, not
+=======
+     * Every background (non-forced) start stops while it is set, so an unattended device gets one
+     * dialog per boot or explicit start rather than one per retry. Besides acceptance it is cleared
+     * at BOOT_COMPLETED, by the notification's "Attempt now" and by the token-authenticated start
+     * broadcast. A running server does not clear it. While set, not
+>>>>>>> upstream/master
      * dismissed, no wait held and no server running, it is also the shared start notification's
      * "not answered" notice.
      */

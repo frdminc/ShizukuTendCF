@@ -24,11 +24,18 @@ object SettingsShareManager {
 
     private const val TAG = "SettingsShareManager"
 
+    fun isDropIn(context: Context): Boolean =
+        context.packageName == DROPIN_PACKAGE
+
     fun getPeerPackage(context: Context): String =
         if (context.packageName == DROPIN_PACKAGE) OFFICIAL_PLUS_PACKAGE else DROPIN_PACKAGE
 
     fun getPeerLabel(context: Context): String =
+<<<<<<< HEAD
         if (context.packageName == DROPIN_PACKAGE) "ShizukuTendCF" else "Shizuku"
+=======
+        if (context.packageName == DROPIN_PACKAGE) "Shizuku+ (Standalone App)" else "Shizuku+ (Drop-In)"
+>>>>>>> upstream/master
 
     fun getPeerAuthority(context: Context): String =
         "${getPeerPackage(context)}.settings.share"
@@ -92,7 +99,7 @@ object SettingsShareManager {
             val reply = context.contentResolver.call(uri, SettingsSharingProvider.METHOD_GET_SETTINGS, null, null)
             val json = reply?.getString(SettingsSharingProvider.EXTRA_SETTINGS_JSON) ?: return false
             val lastMod = reply.getLong(SettingsSharingProvider.EXTRA_LAST_MODIFIED, System.currentTimeMillis())
-            val success = SettingsBackupManager.import(context, json)
+            val success = SettingsBackupManager.import(context, json, trustPrivileged = true)
             if (success) {
                 ShizukuSettings.setSettingsLastModified(lastMod)
                 ShizukuSettings

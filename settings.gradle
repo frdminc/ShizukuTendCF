@@ -1,8 +1,8 @@
 pluginManagement {
     repositories {
         google()
-        mavenLocal()
         mavenCentral()
+        mavenLocal()
         maven {
             url = "https://plugins.gradle.org/m2/"
         }
@@ -16,7 +16,6 @@ pluginManagement {
         id "dev.rikka.tools.refine" version "4.4.0"
         id "io.sentry.android.gradle" version "6.2.0" apply false
         id "com.diffplug.spotless" version "6.25.0"
-        id "com.mikepenz.aboutlibraries.plugin" version "11.6.3"
     }
 
 }
@@ -24,12 +23,13 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
-        mavenLocal()
         mavenCentral()
+        mavenLocal()
         maven {
             url = "https://jitpack.io"
             content {
                 includeGroup("com.github.topjohnwu.libsu")
+                includeGroup("com.github.Dimezis")
             }
         }
     }
@@ -52,6 +52,12 @@ if (propFile.canRead()) {
             root = props["api.dir"]
         }
     }
+}
+
+// The API modules live in the api/ git submodule. Without it Gradle fails with "Configuring
+// project ':rish' without an existing directory"; say what to do instead.
+if (!file("$root${File.separator}api").isDirectory()) {
+    throw new GradleException("The api submodule is missing. Run: git submodule update --init --recursive")
 }
 
 include ":aidl"

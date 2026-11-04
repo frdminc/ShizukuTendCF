@@ -16,11 +16,11 @@ import timber.log.Timber
 
 object RootCompatHelper {
 
-    /** Returns true if [packageName] supports Magic Setup in the current privilege mode.
-     *  Pass [rootMode] = true when Shizuku is running as UID 0 or ADB mode (UID 2000).
-     *  This is the single source of truth for whether the Magic Setup button should be enabled. */
-    fun canAutoSetup(packageName: String, rootMode: Boolean): Boolean =
-        packageName in GLOBAL_SETTINGS_APPS || (rootMode && packageName in ROOT_PREFS_APPS)
+    /** Returns true if [packageName] supports Magic Setup.
+     *  In non-root ADB mode (UID 2000), global settings apps are updated directly via system settings,
+     *  and shared_prefs apps attempt privileged shell / run-as / temp-root escalation. */
+    fun canAutoSetup(packageName: String, privilegeAvailable: Boolean): Boolean =
+        packageName in GLOBAL_SETTINGS_APPS || (privilegeAvailable && packageName in ROOT_PREFS_APPS)
 
     private fun escapeSed(s: String) = s
         .replace("\\", "\\\\")
@@ -47,7 +47,8 @@ object RootCompatHelper {
         "com.ghisler.android.TotalCommander" to Pair("tcandroid3", "supath"),
         "com.jrummy.root.browserfree"    to Pair("es_preferences", "su_path"),
         "com.estrongs.android.pop"       to Pair("es_preferences", "su_path"),
-        "com.github.machiav3lli.backup"  to Pair("com.github.machiav3lli.backup_preferences", "custom_su_path")
+        "com.github.machiav3lli.backup"  to Pair("com.github.machiav3lli.backup_preferences", "custom_su_path"),
+        "com.machiav3lli.backup"         to Pair("com.machiav3lli.backup_preferences", "custom_su_path")
     )
 
     /**
@@ -86,9 +87,16 @@ object RootCompatHelper {
                             else
                                 sed -i 's|</map>|    <string name="$escapedKey">$escapedPath</string>\n</map>|' '$target'
                             fi
+                        elif [ -d '/data/data/$packageName' ]; then
+                            mkdir -p '/data/data/$packageName/shared_prefs' 2>/dev/null
+                            if [ ! -f '$target' ]; then
+                                echo '<?xml version="1.0" encoding="utf-8" standalone="yes" ?><map><string name="$escapedKey">$escapedPath</string></map>' > '$target'
+                                chmod 660 '$target' 2>/dev/null
+                            fi
                         else
-                            run-as $packageName sh -c "if [ -f shared_prefs/$prefsFile.xml ]; then if grep -q 'name=\"$escapedKey\"' shared_prefs/$prefsFile.xml; then sed -i 's|<string name=\"$escapedKey\">.*</string>|<string name=\"$escapedKey\">$escapedPath</string>|' shared_prefs/$prefsFile.xml; else sed -i 's|</map>|    <string name=\"$escapedKey\">$escapedPath</string>\n</map>|' shared_prefs/$prefsFile.xml; fi; fi" 2>/dev/null
+                            run-as $packageName sh -c "mkdir -p shared_prefs 2>/dev/null; if [ -f shared_prefs/$prefsFile.xml ]; then if grep -q 'name=\"$escapedKey\"' shared_prefs/$prefsFile.xml; then sed -i 's|<string name=\"$escapedKey\">.*</string>|<string name=\"$escapedKey\">$escapedPath</string>|' shared_prefs/$prefsFile.xml; else sed -i 's|</map>|    <string name=\"$escapedKey\">$escapedPath</string>\n</map>|' shared_prefs/$prefsFile.xml; fi; else echo '<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\" ?><map><string name=\"$escapedKey\">$escapedPath</string></map>' > shared_prefs/$prefsFile.xml; fi" 2>/dev/null
                         fi
+                        grep -q 'name="$escapedKey"' '$target' 2>/dev/null || run-as $packageName grep -q 'name="$escapedKey"' shared_prefs/$prefsFile.xml 2>/dev/null
                     """.trimIndent()
                     success = executePrivileged(arrayOf("sh", "-c", cmd))
                 }
@@ -104,9 +112,9 @@ object RootCompatHelper {
         success
     }
 
-    private fun isShizukuRoot(): Boolean {
+    private fun isShizukuTrueRoot(): Boolean {
         return try {
-            Shizuku.pingBinder() && (Shizuku.getUid() == 0 || Shizuku.getUid() == 2000)
+            Shizuku.pingBinder() && Shizuku.getUid() == 0
         } catch (_: Exception) {
             false
         }
@@ -120,6 +128,20 @@ object RootCompatHelper {
         }
     }
 
+    /** True when KernelSU manager is installed (package me.weishu.kernelsu present). */
+    fun isKernelSuInstalled(context: Context): Boolean = try {
+        context.packageManager.getPackageInfo("me.weishu.kernelsu", 0)
+        true
+    } catch (_: PackageManager.NameNotFoundException) { false }
+
+    /**
+     * True when KernelSU is installed AND Shizuku is already running as root (uid=0).
+     * False when KernelSU is installed but Shizuku is still ADB-mode (uid=2000) — in
+     * that case the bridge can be upgraded by restarting Shizuku under KernelSU.
+     */
+    fun isKernelSuActive(context: Context): Boolean =
+        isKernelSuInstalled(context) && isShizukuTrueRoot()
+
     suspend fun autoSetupAll(context: Context, suPath: String): Int = withContext(Dispatchers.IO) {
         if (!isShizukuAvailable()) return@withContext 0
 
@@ -132,7 +154,7 @@ object RootCompatHelper {
         val installedPackages = pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
         var processedCount = 0
 
-        val automatable = GLOBAL_SETTINGS_APPS.keys + if (isShizukuRoot()) ROOT_PREFS_APPS.keys else emptySet()
+        val automatable = GLOBAL_SETTINGS_APPS.keys + ROOT_PREFS_APPS.keys
 
         for (pkgInfo in installedPackages) {
             val pkg = pkgInfo.packageName
@@ -536,9 +558,31 @@ object RootCompatHelper {
         )
     }
 
-    /** Result of [selfTest]: [ok] is a coarse pass/fail; [report] is a human-readable multi-line
-     *  summary meant to be shown verbatim in a dialog. */
-    data class BridgeSelfTest(val ok: Boolean, val report: String)
+    /** Result of [selfTest]. [ok] is a coarse pass/fail; the manager turns the rest into localized
+     *  text (this module has no resources). [failure] set means the test stopped before the probes. */
+    data class BridgeSelfTest(
+        val ok: Boolean,
+        val failure: Failure? = null,
+        /** Why the deploy failed, from the deploy step (raw command output, not localized). */
+        val deployFailureDetail: String? = null,
+        /** Server runs as shell (uid 2000); changes the advice after a failed deploy. */
+        val shellMode: Boolean = false,
+        val tmpDir: String? = null,
+        val deployed: Boolean = false,
+        /** Real uid of the privileged process, from /proc/self/status. */
+        val uid: Int? = null,
+        val appExec: AppExec? = null,
+    ) {
+        enum class Failure { NOT_CONNECTED, DEPLOY_FAILED }
+
+        sealed class AppExec {
+            data class Ok(val uid: Int?) : AppExec()
+            /** Ran but didn't echo back; [output] is the trimmed stdout + stderr. */
+            data class NoRoundTrip(val output: String) : AppExec()
+            /** exec itself threw, most likely SELinux. */
+            data class Blocked(val message: String) : AppExec()
+        }
+    }
 
     /**
      * Diagnoses the SU Bridge on THIS device without needing a third-party app. Runs two probes:
@@ -558,23 +602,18 @@ object RootCompatHelper {
      */
     suspend fun selfTest(context: Context): BridgeSelfTest = withContext(Dispatchers.IO) {
         if (!isShizukuAvailable()) {
-            return@withContext BridgeSelfTest(false,
-                "Shizuku isn't connected. Start the Shizuku service from the home screen, then try again.")
+            return@withContext BridgeSelfTest(false, BridgeSelfTest.Failure.NOT_CONNECTED)
         }
         val deployResult = deployBridgeToTmpDetailed(context)
         val tmpSu = deployResult.suPath
             ?: run {
                 val serverUid = try { Shizuku.getUid() } catch (_: Exception) { -1 }
-                val detail = deployResult.failureDetail?.let { "Reason: $it\n\n" } ?: ""
-                val action = if (serverUid == 2000) {
-                    "ADB/shell mode detected. If your device restricts writes to /data/local/tmp from " +
-                        "the shell process, use the exported path instead. Tap \"Export\" in the " +
-                        "compatibility hub and direct root apps to that path, or switch to root mode for full access."
-                } else {
-                    "Make sure the Shizuku service is running, then retry."
-                }
-                return@withContext BridgeSelfTest(false,
-                    "❌ Could not deploy the bridge to /data/local/tmp.\n\n$detail$action")
+                return@withContext BridgeSelfTest(
+                    false,
+                    BridgeSelfTest.Failure.DEPLOY_FAILED,
+                    deployFailureDetail = deployResult.failureDetail,
+                    shellMode = serverUid == 2000,
+                )
             }
         val tmpDir = tmpSu.substringBeforeLast('/')
 
@@ -584,16 +623,6 @@ object RootCompatHelper {
                 "echo '---'; grep -m1 '^Uid:' /proc/self/status"))
         val deployed = lsOut.isNotBlank() && !lsOut.contains("No such file")
         val uid = Regex("Uid:\\s+(\\d+)").find(lsOut)?.groupValues?.get(1)?.toIntOrNull()
-        val privLabel = when (uid) {
-            0 -> "root (uid 0) — full privileges"
-            2000 -> "shell / ADB (uid 2000)"
-            null -> "unknown"
-            else -> "uid $uid"
-        }
-
-        val sb = StringBuilder()
-        sb.append(if (deployed) "✅ Bridge deployed to $tmpDir\n" else "❌ Bridge files missing under $tmpDir\n")
-        sb.append("• Privilege level: $privLabel\n")
 
         // Probe B — real app-exec flow (best-effort).
         val appExec = try {
@@ -605,29 +634,23 @@ object RootCompatHelper {
                 p.waitFor()
                 if (out.contains("APP_OK")) {
                     val auid = Regex("Uid:\\s+(\\d+)").find(out)?.groupValues?.get(1)?.toIntOrNull()
-                    "✅ ran end-to-end (uid ${auid ?: "?"})"
+                    BridgeSelfTest.AppExec.Ok(auid)
                 } else {
-                    "⚠️ didn't round-trip — an exec-style app may fail here:\n${(out + err).trim().take(220)}"
+                    BridgeSelfTest.AppExec.NoRoundTrip((out + err).trim().take(220))
                 }
             } finally {
                 p.destroy()
             }
         } catch (e: Exception) {
-            "⚠️ blocked on this device (likely SELinux): ${e.message?.take(160)}"
+            BridgeSelfTest.AppExec.Blocked(e.message?.take(160).orEmpty())
         }
-        sb.append("• App-exec test: $appExec\n\n")
-
-        if (uid == 0) {
-            sb.append("Root-level bridge: apps needing true root can work through it.")
-        } else {
-            sb.append("Shell-level bridge (like ADB): app features needing only shell/ADB will work; " +
-                "features that require true root — e.g. reading another app's private data — cannot, " +
-                "even though the app may detect \"root\".")
-        }
+<<<<<<< HEAD
         sb.append("\n\nRemember: the calling app must be authorized in ShizukuTendCF before its own commands " +
             "through the bridge succeed.")
+=======
+>>>>>>> upstream/master
 
-        BridgeSelfTest(deployed && uid != null, sb.toString())
+        BridgeSelfTest(deployed && uid != null, tmpDir = tmpDir, deployed = deployed, uid = uid, appExec = appExec)
     }
 
     /** Runs a privileged command and returns (exitCode, stdout, stderr) via the shared

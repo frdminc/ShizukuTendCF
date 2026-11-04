@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The released, hand-made accent overlays (12 roles each). Used while Experimental features >
+     "Full colour schemes" is off; with it on, the generated schemes in themes_accents.xml are used.
+     Hand-written: gen-accent-palettes.sh does not touch this file. -->
+<resources>
+    <!-- Violet Accent Overlay -->
+    <style name="ThemeOverlay.AccentClassic.Violet" parent="">
+        <item name="colorPrimary">#7B1FA2</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#F3E5F5</item>
+        <item name="colorOnPrimaryContainer">#4A148C</item>
+        <item name="colorSecondary">#63538A</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#E8DEF8</item>
+        <item name="colorOnSecondaryContainer">#1F0E3D</item>
+        <item name="colorTertiary">#7E4E77</item>
+        <item name="colorOnTertiary">#FFFFFF</item>
+        <item name="colorTertiaryContainer">#FCDAF6</item>
+        <item name="colorOnTertiaryContainer">#33002A</item>
+    </style>
+    <style name="ThemeOverlay.AccentClassic.Violet.Dark" parent="">
+        <item name="colorPrimary">#E040FB</item>
+        <item name="colorOnPrimary">#330050</item>
+        <item name="colorPrimaryContainer">#4A148C</item>
+        <item name="colorOnPrimaryContainer">#F3E5F5</item>
+        <item name="colorSecondary">#CABFE4</item>
+        <item name="colorOnSecondary">#352554</item>
+        <item name="colorSecondaryContainer">#4B3B62</item>
+        <item name="colorOnSecondaryContainer">#E8DEF8</item>
+        <item name="colorTertiary">#EFBEE4</item>
+        <item name="colorOnTertiary">#4A1F46</item>
+        <item name="colorTertiaryContainer">#633B5E</item>
+        <item name="colorOnTertiaryContainer">#FCDAF6</item>
+    </style>
+
+    <!-- Green Accent Overlay -->
+    <style name="ThemeOverlay.AccentClassic.Green" parent="">
+        <item name="colorPrimary">#00796B</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#E0F2F1</item>
+        <item name="colorOnPrimaryContainer">#004D40</item>
+        <item name="colorSecondary">#4A6660</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#CCE8E3</item>
+        <item name="colorOnSecondaryContainer">#04201D</item>
+        <item name="colorTertiary">#446279</item>
+        <item name="colorOnTertiary">#FFFFFF</item>
+        <item name="colorTertiaryContainer">#C8E4F9</item>
+        <item name="colorOnTertiaryContainer">#001E2D</item>
+    </style>
+    <style name="ThemeOverlay.AccentClassic.Green.Dark" parent="">
+        <item name="colorPrimary">#64FFDA</item>
+        <item name="colorOnPrimary">#003730</item>
+        <item name="colorPrimaryContainer">#004D40</item>
+        <item name="colorOnPrimaryContainer">#E0F2F1</item>
+        <item name="colorSecondary">#B1CECA</item>
+        <item name="colorOnSecondary">#1D3532</item>
+        <item name="colorSecondaryContainer">#324E4A</item>
+        <item name="colorOnSecondaryContainer">#CCE8E3</item>
+        <item name="colorTertiary">#ACC9E4</item>
+        <item name="colorOnTertiary">#153244</item>
+        <item name="colorTertiaryContainer">#2D4A61</item>
+        <item name="colorOnTertiaryContainer">#C8E4F9</item>
+    </style>
+
+    <!-- Crimson Accent Overlay -->
+    <style name="ThemeOverlay.AccentClassic.Crimson" parent="">
+        <item name="colorPrimary">#C2185B</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#FCE4EC</item>
+        <item name="colorOnPrimaryContainer">#880E4F</item>
+        <item name="colorSecondary">#74565E</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#FFDADF</item>
+        <item name="colorOnSecondaryContainer">#2B1519</item>
+        <item name="colorTertiary">#6D5C00</item>
+        <item name="colorOnTertiary">#FFFFFF</item>
+        <item name="colorTertiaryContainer">#FAE474</item>
+        <item name="colorOnTertiaryContainer">#211B00</item>
+    </style>
+    <style name="ThemeOverlay.AccentClassic.Crimson.Dark" parent="">
+        <item name="colorPrimary">#FF4081</item>
+        <item name="colorOnPrimary">#5C0033</item>
+        <item name="colorPrimaryContainer">#880E4F</item>
+        <item name="colorOnPrimaryContainer">#FCE4EC</item>
+        <item name="colorSecondary">#E3BDC4</item>
+        <item name="colorOnSecondary">#432830</item>
+        <item name="colorSecondaryContainer">#5B3F46</item>
+        <item name="colorOnSecondaryContainer">#FFDADF</item>
+        <item name="colorTertiary">#D7C541</item>
+        <item name="colorOnTertiary">#393000</item>
+        <item name="colorTertiaryContainer">#524400</item>
+        <item name="colorOnTertiaryContainer">#FAE474</item>
+    </style>
+
+    <!-- Ocean Accent Overlay -->
+    <style name="ThemeOverlay.AccentClassic.Ocean" parent="">
+        <item name="colorPrimary">#0288D1</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#E1F5FE</item>
+        <item name="colorOnPrimaryContainer">#01579B</item>
+        <item name="colorSecondary">#4E5F70</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#D1E5F9</item>
+        <item name="colorOnSecondaryContainer">#0A1D29</item>
+        <item name="colorTertiary">#5C5B8B</item>
+        <item name="colorOnTertiary">#FFFFFF</item>
+        <item name="colorTertiaryContainer">#E2DEFF</item>
+        <item name="colorOnTertiaryContainer">#151451</item>
+    </style>
+    <style name="ThemeOverlay.AccentClassic.Ocean.Dark" parent="">
+        <item name="colorPrimary">#40C4FF</item>
+        <item name="colorOnPrimary">#003549</item>
+        <item name="colorPrimaryContainer">#01579B</item>
+        <item name="colorOnPrimaryContainer">#E1F5FE</item>
+        <item name="colorSecondary">#B5C9DC</item>
+        <item name="colorOnSecondary">#213141</item>
+        <item name="colorSecondaryContainer">#364759</item>
+        <item name="colorOnSecondaryContainer">#D1E5F9</item>
+        <item name="colorTertiary">#C5C3F0</item>
+        <item name="colorOnTertiary">#2D2F55</item>
+        <item name="colorTertiaryContainer">#44436B</item>
+        <item name="colorOnTertiaryContainer">#E2DEFF</item>
+    </style>
+
+    <!-- Amber Accent Overlay — warm golden-orange -->
+    <style name="ThemeOverlay.AccentClassic.Amber" parent="">
+        <item name="colorPrimary">#8B4000</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#FFDCC1</item>
+        <item name="colorOnPrimaryContainer">#2D1600</item>
+        <item name="colorSecondary">#77574A</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#FFD9CC</item>
+        <item name="colorOnSecondaryContainer">#2D1400</item>
+        <item name="colorTertiary">#695F30</item>
+        <item name="colorOnTertiary">#FFFFFF</item>
+        <item name="colorTertiaryContainer">#F2E4AB</item>
+        <item name="colorOnTertiaryContainer">#221B00</item>
+    </style>
+    <style name="ThemeOverlay.AccentClassic.Amber.Dark" parent="">
+        <item name="colorPrimary">#FFB68A</item>
+        <item name="colorOnPrimary">#4D2000</item>
+        <item name="colorPrimaryContainer">#6E3200</item>
+        <item name="colorOnPrimaryContainer">#FFDCC1</item>
+        <item name="colorSecondary">#E6BEAF</item>
+        <item name="colorOnSecondary">#442B1F</item>
+        <item name="colorSecondaryContainer">#5D4034</item>
+        <item name="colorOnSecondaryContainer">#FFD9CC</item>
+        <item name="colorTertiary">#D5C882</item>
+        <item name="colorOnTertiary">#352E04</item>
+        <item name="colorTertiaryContainer">#4C4419</item>
+        <item name="colorOnTertiaryContainer">#F2E4AB</item>
+    </style>
+
+    <!-- Rose Accent Overlay — vibrant warm pink, distinct from Crimson's cooler red -->
+    <style name="ThemeOverlay.AccentClassic.Rose" parent="">
+        <item name="colorPrimary">#9D2C3D</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#FFDADF</item>
+        <item name="colorOnPrimaryContainer">#40000F</item>
+        <item name="colorSecondary">#75565F</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#FFD9E0</item>
+        <item name="colorOnSecondaryContainer">#2C1520</item>
+        <item name="colorTertiary">#7B5539</item>
+        <item name="colorOnTertiary">#FFFFFF</item>
+        <item name="colorTertiaryContainer">#FFD9BB</item>
+        <item name="colorOnTertiaryContainer">#2F1500</item>
+    </style>
+    <style name="ThemeOverlay.AccentClassic.Rose.Dark" parent="">
+        <item name="colorPrimary">#FFB2BE</item>
+        <item name="colorOnPrimary">#5E1125</item>
+        <item name="colorPrimaryContainer">#7B1C35</item>
+        <item name="colorOnPrimaryContainer">#FFDADF</item>
+        <item name="colorSecondary">#E3BDC6</item>
+        <item name="colorOnSecondary">#44202B</item>
+        <item name="colorSecondaryContainer">#5D3541</item>
+        <item name="colorOnSecondaryContainer">#FFD9E0</item>
+        <item name="colorTertiary">#EDB98A</item>
+        <item name="colorOnTertiary">#462912</item>
+        <item name="colorTertiaryContainer">#5F3E26</item>
+        <item name="colorOnTertiaryContainer">#FFD9BB</item>
+    </style>
+
+    <!-- Midnight Slate Overlay — deep cool indigo-slate -->
+    <style name="ThemeOverlay.AccentClassic.Slate" parent="">
+        <item name="colorPrimary">#3B4CB8</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#DEE0FF</item>
+        <item name="colorOnPrimaryContainer">#000F60</item>
+        <item name="colorSecondary">#585E8D</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#DDE1FF</item>
+        <item name="colorOnSecondaryContainer">#141844</item>
+        <item name="colorTertiary">#7550A0</item>
+        <item name="colorOnTertiary">#FFFFFF</item>
+        <item name="colorTertiaryContainer">#ECDCFF</item>
+        <item name="colorOnTertiaryContainer">#29004F</item>
+    </style>
+    <style name="ThemeOverlay.AccentClassic.Slate.Dark" parent="">
+        <item name="colorPrimary">#BAC1FF</item>
+        <item name="colorOnPrimary">#04189D</item>
+        <item name="colorPrimaryContainer">#1E2F9C</item>
+        <item name="colorOnPrimaryContainer">#DEE0FF</item>
+        <item name="colorSecondary">#BFC4F8</item>
+        <item name="colorOnSecondary">#28306B</item>
+        <item name="colorSecondaryContainer">#3F4782</item>
+        <item name="colorOnSecondaryContainer">#DDE1FF</item>
+        <item name="colorTertiary">#D5B9FC</item>
+        <item name="colorOnTertiary">#421A6B</item>
+        <item name="colorTertiaryContainer">#5B3282</item>
+        <item name="colorOnTertiaryContainer">#ECDCFF</item>
+    </style>
+
+    <!-- Cyber Neon Cyan Overlay — electric modern cyan -->
+    <style name="ThemeOverlay.AccentClassic.Cyan" parent="">
+        <item name="colorPrimary">#00838F</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#E0F7FA</item>
+        <item name="colorOnPrimaryContainer">#002024</item>
+        <item name="colorSecondary">#00695C</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#E0F2F1</item>
+        <item name="colorOnSecondaryContainer">#001F1A</item>
+        <item name="colorTertiary">#0277BD</item>
+        <item name="colorOnTertiary">#FFFFFF</item>
+        <item name="colorTertiaryContainer">#E1F5FE</item>
+        <item name="colorOnTertiaryContainer">#001D2E</item>
+    </style>
+    <style name="ThemeOverlay.AccentClassic.Cyan.Dark" parent="">
+        <item name="colorPrimary">#00E5FF</item>
+        <item name="colorOnPrimary">#00363D</item>
+        <item name="colorPrimaryContainer">#004F58</item>
+        <item name="colorOnPrimaryContainer">#E0F7FA</item>
+        <item name="colorSecondary">#64FFDA</item>
+        <item name="colorOnSecondary">#003730</item>
+        <item name="colorSecondaryContainer">#004D40</item>
+        <item name="colorOnSecondaryContainer">#E0F2F1</item>
+        <item name="colorTertiary">#40C4FF</item>
+        <item name="colorOnTertiary">#00344F</item>
+        <item name="colorTertiaryContainer">#004C73</item>
+        <item name="colorOnTertiaryContainer">#E1F5FE</item>
+    </style>
+
+    <!-- Synthwave Neon Violet Overlay — vivid purple & hot pink -->
+    <style name="ThemeOverlay.AccentClassic.Neon" parent="">
+        <item name="colorPrimary">#7C4DFF</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#EDE7F6</item>
+        <item name="colorOnPrimaryContainer">#311B92</item>
+        <item name="colorSecondary">#651FFF</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#D1C4E9</item>
+        <item name="colorOnSecondaryContainer">#1A0059</item>
+        <item name="colorTertiary">#FF4081</item>
+        <item name="colorOnTertiary">#FFFFFF</item>
+        <item name="colorTertiaryContainer">#FCE4EC</item>
+        <item name="colorOnTertiaryContainer">#4A001F</item>
+    </style>
+    <style name="ThemeOverlay.AccentClassic.Neon.Dark" parent="">
+        <item name="colorPrimary">#B388FF</item>
+        <item name="colorOnPrimary">#2A0080</item>
+        <item name="colorPrimaryContainer">#4527A0</item>
+        <item name="colorOnPrimaryContainer">#EDE7F6</item>
+        <item name="colorSecondary">#8C9EFF</item>
+        <item name="colorOnSecondary">#1A237E</item>
+        <item name="colorSecondaryContainer">#283593</item>
+        <item name="colorOnSecondaryContainer">#C5CAE9</item>
+        <item name="colorTertiary">#FF80AB</item>
+        <item name="colorOnTertiary">#5C0028</item>
+        <item name="colorTertiaryContainer">#880E4F</item>
+        <item name="colorOnTertiaryContainer">#FCE4EC</item>
+    </style>
+
+    <!-- Light, dark - indexed by ThemeDelegateImpl. -->
+    <array name="theme_overlay_accent_classic_violet">
+        <item>@style/ThemeOverlay.AccentClassic.Violet</item>
+        <item>@style/ThemeOverlay.AccentClassic.Violet.Dark</item>
+    </array>
+    <array name="theme_overlay_accent_classic_green">
+        <item>@style/ThemeOverlay.AccentClassic.Green</item>
+        <item>@style/ThemeOverlay.AccentClassic.Green.Dark</item>
+    </array>
+    <array name="theme_overlay_accent_classic_crimson">
+        <item>@style/ThemeOverlay.AccentClassic.Crimson</item>
+        <item>@style/ThemeOverlay.AccentClassic.Crimson.Dark</item>
+    </array>
+    <array name="theme_overlay_accent_classic_ocean">
+        <item>@style/ThemeOverlay.AccentClassic.Ocean</item>
+        <item>@style/ThemeOverlay.AccentClassic.Ocean.Dark</item>
+    </array>
+    <array name="theme_overlay_accent_classic_amber">
+        <item>@style/ThemeOverlay.AccentClassic.Amber</item>
+        <item>@style/ThemeOverlay.AccentClassic.Amber.Dark</item>
+    </array>
+    <array name="theme_overlay_accent_classic_rose">
+        <item>@style/ThemeOverlay.AccentClassic.Rose</item>
+        <item>@style/ThemeOverlay.AccentClassic.Rose.Dark</item>
+    </array>
+    <array name="theme_overlay_accent_classic_slate">
+        <item>@style/ThemeOverlay.AccentClassic.Slate</item>
+        <item>@style/ThemeOverlay.AccentClassic.Slate.Dark</item>
+    </array>
+    <array name="theme_overlay_accent_classic_cyan">
+        <item>@style/ThemeOverlay.AccentClassic.Cyan</item>
+        <item>@style/ThemeOverlay.AccentClassic.Cyan.Dark</item>
+    </array>
+    <array name="theme_overlay_accent_classic_neon">
+        <item>@style/ThemeOverlay.AccentClassic.Neon</item>
+        <item>@style/ThemeOverlay.AccentClassic.Neon.Dark</item>
+    </array>
+</resources>

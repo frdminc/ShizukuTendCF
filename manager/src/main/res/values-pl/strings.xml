@@ -65,13 +65,11 @@
         systemu były widoczne jednocześnie.</string>
     <string name="adb_error_key_store">Nie mogę wygenerować klucza do bezprzewodowego
         debugowania.\nMoże to wynikać z awarii mechanizmu KeyStore tego urządzenia.</string>
-    <string name="adb_stopping_tcp">Zamykanie portu TCP</string>
     <string name="adb_error_stop_tcp">Nie udało się zatrzymać ADB przez TCP</string>
     <string name="adb_pair_required">Najpierw przeprowadź parowanie.</string>
     <string name="enable">Włącz</string>
     <string name="development_settings">Opcje programisty</string>
     <string name="notification_settings">Opcje powiadomień</string>
-    <string name="adb_pairing_tutorial_title">Sparuj Shizuku z urządzeniem</string>
     <string name="adb_pairing_tutorial_content_notification">Powiadomienie od Shizuku pomoże ci
         ukończyć parowanie.</string>
     <string name="adb_pairing_tutorial_content_steps">Przejdź do „Opcji programistycznych”, a
@@ -113,10 +111,6 @@
     <string name="home_automation_description">Aplikacje takie jak Tasker i MacroDroid mogą wysyłać
         intencje automatycznego uruchamiania/zatrzymywania Shizuku.</string>
     <string name="home_automation_button_view_intents">Wyświetl intencje</string>
-    <string name="home_automation_dialog_label_action">Działanie</string>
-    <string name="home_automation_dialog_label_package">Pakiet</string>
-    <string name="home_automation_dialog_label_class">Klasa</string>
-    <string name="home_automation_dialog_label_target">Cel</string>
     <!-- Home - Learn more -->
     <string name="home_learn_more_title">Przewodnik dla programistów</string>
     <string name="home_learn_more_description">Dowiedz się, jak tworzyć aplikacje z wykorzystaniem
@@ -155,7 +149,6 @@
     <string name="rish_description"><![CDATA[Za pomocą %1$smożesz uruchamiać polecenia powłoki w dowolnej aplikacji terminalowej.<p>Kliknij, aby dowiedzieć się więcej o sposobie korzystania z tej opcji.]]></string>
     <!-- Settings -->
     <string name="settings_title">Ustawienia</string>
-    <string name="settings_behavior">Zachowanie</string>
     <string name="settings_start_on_boot">Uruchamiaj przy starcie</string>
     <string name="settings_start_on_boot_summary">Wymaga Androida 11+ lub roota</string>
     <string name="settings_start_on_boot_bug">Z powodu błędu w systemie Android 11-12 debugowanie
@@ -166,7 +159,6 @@
     <string name="settings_watchdog">Nadzorowanie</string>
     <string name="settings_watchdog_summary">Automatycznie uruchom ponownie Shizuku, jeśli ulegnie
         awarii</string>
-    <string name="settings_tcp_mode">Tryb TCP</string>
     <string name="settings_tcp_mode_summary">"Pozwala zrestartować Shizuku bez Wi-Fi (Shizuku musi
         zostać uruchomione przynajmniej raz po restarcie urządzenia)."</string>
     <string name="settings_tcp_mode_dialog_close_port">"Port TCP zostanie natychmiast zamknięty. Aby
@@ -176,23 +168,11 @@
     <string name="settings_restart_dialog_message">Shizuku musi zacząć od nowa, żeby zastosować to
         ustawienie.</string>
     <string name="settings_restart_dialog_message_wifi_required"><![CDATA[<br><br><b>Wi-Fi jest wymagane. Shizuku będzie dalej działać i czekać na połączenie Wi-Fi, zanim zrestartuje się w tle.</b>]]></string>
-    <string name="settings_tcp_port">Port TCP</string>
-    <string name="settings_tcp_port_default">Domyślne (5555)</string>
-    <string name="settings_tcp_port_hint">Zostaw puste, aby użyć domyślnego (5555)</string>
-    <string name="settings_tcp_learn_more">Dowiedz się więcej o sterowaniu Shizuku za pomocą
-        aplikacji do automatyzacji</string>
     <string name="settings_language">Język</string>
-    <string name="settings_translation_contributors">Współtwórcy tłumaczenia</string>
     <string name="settings_translation">Pomóż w tłumaczeniu</string>
     <string name="settings_translation_summary">Pomóż nam tłumaczyć %s na Twój język</string>
-    <string name="settings_user_interface">Wygląd</string>
-    <string name="settings_black_night_theme">Czysta czerń</string>
-    <string name="settings_black_night_theme_summary">Używaj czystej czerni, gdy włączony jest tryb
-        nocny</string>
-    <string name="settings_support">Wsparcie</string>
     <string name="settings_help">Pomoc</string>
     <string name="settings_report_bug">Zgłoś błąd</string>
-    <string name="settings_advanced">Zaawansowane</string>
     <string name="settings_legacy_pairing">Starsza metoda parowania</string>
     <string name="settings_legacy_pairing_summary">Wpisz kod parowania w oknie dialogowym zamiast w
         powiadomieniu</string>
@@ -220,26 +200,16 @@
     <string name="toast_no_email_app">Nie znaleziono aplikacji pocztowej</string>
     <string name="toast_shizuku_already_starting">Shizuku już uruchamia się w tle</string>
     <string name="toast_accessibility_tv_only">Ta usługa jest obsługiwana tylko na urządzeniach TV.</string>
-    <string name="toast_pairing_timeout">Upłynął limit czasu usługi parowania Shizuku.</string>
     <!-- Dark Mode Setting Override -->
     <string name="dark_theme">Motyw</string>
     <string name="dark_theme_off">Zawsze jasny</string>
     <string name="dark_theme_on">Zawsze ciemny</string>
     <!-- About -->
-    <string name="action_about">O aplikacji</string>
-    <string name="about_dialog_button_close">Zamknij</string>
-    <string name="about_view_source_code"><![CDATA[Zobacz kod źródłowy na %s]]></string>
     <!-- Start -->
-    <string name="action_start">Uruchom Shizuku</string>
     <!-- Stop -->
     <string name="action_stop">Zatrzymaj Shizuku</string>
     <string name="dialog_stop_message">Usługa Shizuku zostanie zatrzymana.</string>
     <!-- Notification -->
-    <string name="notification_channel_service_status">Status uruchamiania usługi</string>
-    <string name="notification_service_starting">Uruchamianie usługi Shizuku…</string>
-    <string name="notification_service_start_failed">Uruchamianie usługi Shizuku nie powiodło się.</string>
-    <string name="notification_service_start_no_root">Nie udało się uzyskać uprawnień roota.</string>
-    <string name="notification_working">Działa…</string>
     <string name="notification_channel_adb_pairing">Parowanie debugowania bezprzewodowego</string>
     <string name="notification_adb_pairing_input_paring_code">Wpisz kod parowania</string>
     <string name="notification_adb_pairing_searching_for_service_title">Szukanie usługi parowania</string>
@@ -266,19 +236,16 @@
         kontynuowaniem</string>
     <string name="wadb_notification_retry">Czekam na ponowną próbę</string>
     <string name="wadb_error_title">Błąd podczas uruchamiania przy starcie systemu</string>
-    <string name="wadb_error_notify_dev">Dotknij, aby powiadomić programistę.</string>
     <string name="wadb_permission_error_notification_title">Błąd uprawnień</string>
     <string name="wadb_permission_error_notification_content">Shizuku wymaga uprawnienia
         WRITE_SECURE_SETTINGS, aby uruchamiać się przy starcie. Dotknij, aby dowiedzieć się, jak je
         nadać.</string>
-    <string name="wadb_notification_channel">Usługa autostartu ADB</string>
     <!-- Watchdog -->
     <string name="watchdog_running">Nadzorowanie działa</string>
     <string name="watchdog_turn_off">Wyłącz</string>
     <string name="watchdog_shizuku_crashed_title">Shizuku niedawno uległo awarii</string>
     <string name="watchdog_shizuku_crashed_text">Nadzorowanie zrestartowało usługę. Dotknij, aby
         poznać rozwiązania, które mogą zapobiec awariom w przyszłości.</string>
-    <string name="watchdog_shizuku_crashed_action_turn_off_alerts">Wyłącz alerty</string>
     <!-- Misc -->
     <string name="dialog_cannot_open_browser_title">Nie można uruchomić przeglądarki</string>
     <string name="toast_copied_to_clipboard">Skopiowano do schowka</string>

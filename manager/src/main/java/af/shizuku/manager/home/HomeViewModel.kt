@@ -8,7 +8,6 @@ import af.shizuku.manager.adb.AdbMdns
 import af.shizuku.manager.model.ServiceStatus
 import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.Logger.LOGGER
-import af.shizuku.manager.utils.SettingsHelper
 import af.shizuku.manager.utils.ShizukuSystemApis
 import af.shizuku.manager.utils.StockShizukuCompat
 import android.content.Context
@@ -218,8 +217,18 @@ class HomeViewModel(
     fun checkBatteryOptimization() {
         if (EnvironmentUtils.isTelevision()) return
         if (!ShizukuSettings.getStartOnBoot(appContext) && !ShizukuSettings.getWatchdog()) return
-        val isIgnoring = SettingsHelper.isIgnoringBatteryOptimizations(appContext)
-        setState { copy(shouldShowBatteryOptimizationSnackbar = !isIgnoring) }
+        // Judge by what the system actually does to the app, not only the Android doze flag: on
+        // Samsung the "Never sleeping apps" list does not flip isIgnoringBatteryOptimizations, so
+        // a fixed device kept getting the prompt on every launch.
+        val protected =
+            af.shizuku.manager.utils.DeviceOptimizer
+                .backgroundState(appContext) ==
+                af.shizuku.manager.utils.DeviceOptimizer.BackgroundState.PROTECTED
+        val show =
+            !protected &&
+                !af.shizuku.manager.utils.DeviceOptimizer
+                    .isNagSnoozed()
+        setState { copy(shouldShowBatteryOptimizationSnackbar = show) }
     }
 
     fun setEditMode(active: Boolean) {
@@ -227,6 +236,7 @@ class HomeViewModel(
     }
 
     fun updateGrantedAppCount(count: Int) {
+        ShizukuSettings.setLastGrantedAppCount(count)
         setState { copy(grantedAppCount = count) }
     }
 
@@ -235,6 +245,15 @@ class HomeViewModel(
         override fun create(
             viewModelContext: com.airbnb.mvrx.ViewModelContext,
             state: HomeState,
-        ): HomeViewModel = HomeViewModel(state)
+        ): HomeViewModel {
+            val cached = ShizukuSettings.getLastGrantedAppCount()
+            val initial =
+                if (state.grantedAppCount == null && cached >= 0) {
+                    state.copy(grantedAppCount = cached)
+                } else {
+                    state
+                }
+            return HomeViewModel(initial)
+        }
     }
 }

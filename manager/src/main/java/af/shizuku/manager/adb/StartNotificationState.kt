@@ -51,7 +51,10 @@ internal object StartNotificationState {
          * connection can re-offer; [endsAtMs] is the wall-clock time the wait ends, if known.
          */
         data class Prompt(
+<<<<<<< HEAD
             val fingerprint: String?,
+=======
+>>>>>>> upstream/master
             val askAgain: AskAgain? = null,
             val endsAtMs: Long? = null,
         ) : Display

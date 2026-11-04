@@ -49,7 +49,9 @@ class LegacyIsNotSupportedActivity : AppActivity() {
                 ai.packageName
             }
 
-        val v3Support = ai.metaData?.getBoolean("af.shizuku.client.V3_SUPPORT") == true
+        val v3Support =
+            ai.metaData?.getBoolean("af.shizuku.client.V3_SUPPORT") == true ||
+                ai.metaData?.getBoolean("moe.shizuku.client.V3_SUPPORT") == true
         if (v3Support) {
             MaterialAlertDialogBuilder(this)
                 .setTitle(getString(R.string.dialog_requesting_legacy_title, label))

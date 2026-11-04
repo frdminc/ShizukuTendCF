@@ -517,6 +517,22 @@ class AdbKey(
         SSLContext.getInstance("TLSv1.3").apply {
             init(arrayOf(keyManager), arrayOf(trustManager), SecureRandom())
         }
+<<<<<<< HEAD
+=======
+
+    @delegate:RequiresApi(Build.VERSION_CODES.R)
+    val sslContext: SSLContext by unsafeLazy {
+        val sslContext =
+            try {
+                SSLContext.getInstance("TLSv1.3")
+            } catch (e: Exception) {
+                Timber.tag(TAG).w(e, "TLSv1.3 not supported on this device/provider, falling back to TLS")
+                SSLContext.getInstance("TLS")
+            }
+        sslContext.init(arrayOf(keyManager), arrayOf(trustManager), SecureRandom())
+        sslContext
+    }
+>>>>>>> upstream/master
 }
 
 interface AdbKeyStore {

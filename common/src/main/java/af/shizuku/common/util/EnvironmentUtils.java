@@ -38,6 +38,9 @@ public class EnvironmentUtils {
             return ((int) field.get(null) - 90000) / 10000;
         } catch (Exception e) {
             if (Build.VERSION.SDK_INT >= 36) return 8;
+            if (Build.VERSION.SDK_INT == 35) return 7;
+            if (Build.VERSION.SDK_INT == 34) return 6;
+            if (Build.VERSION.SDK_INT == 33) return 5;
             return -1;
         }
     }

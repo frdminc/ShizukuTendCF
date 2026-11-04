@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Experimental features: safe, still-being-polished options anyone can try. Distinct from
+     Developer options (hidden behind 7 taps) which holds the riskier, dev-style toggles. -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <af.shizuku.manager.settings.CollapsiblePreferenceCategory
+        android:key="category_experimental_features"
+        android:title="@string/settings_experimental_category_personalization"
+        android:icon="@drawable/ic_science_24"
+        app:collapsible="false"
+        xmlns:app="http://schemas.android.com/apk/res-auto">
+
+        <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="experimental_app_identity"
+            android:persistent="false"
+            android:title="@string/settings_experimental_app_identity_title"
+            android:summary="@string/settings_experimental_app_identity_summary"
+            android:icon="@drawable/ic_sparkle_24" />
+
+        <af.shizuku.manager.settings.PlusFeaturePreference
+            android:key="device_control_home_enabled"
+            android:title="@string/settings_device_control_home_title"
+            android:summary="@string/settings_device_control_home_summary"
+            android:icon="@drawable/ic_devices_24"
+            android:defaultValue="false"
+            app:badgeType="experimental" />
+
+    </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
+
+    <af.shizuku.manager.settings.CollapsiblePreferenceCategory
+        android:key="category_experimental_color"
+        android:title="@string/settings_experimental_category_color"
+        android:icon="@drawable/ic_palette_24"
+        app:collapsible="false"
+        xmlns:app="http://schemas.android.com/apk/res-auto">
+
+        <af.shizuku.manager.settings.PlusFeaturePreference
+            android:key="experimental_color_schemes"
+            android:title="@string/settings_experimental_color_schemes_title"
+            android:summary="@string/settings_experimental_color_schemes_summary"
+            android:icon="@drawable/ic_palette_24"
+            android:defaultValue="false"
+            app:badgeType="experimental" />
+
+        <af.shizuku.manager.settings.PlusFeaturePreference
+            android:key="experimental_screen_transitions"
+            android:title="@string/settings_experimental_screen_transitions_title"
+            android:summary="@string/settings_experimental_screen_transitions_summary"
+            android:icon="@drawable/ic_speed_24"
+            android:defaultValue="false"
+            app:badgeType="experimental" />
+
+        <!-- Switch rows only (GrayableIconSwitchPreference); Compose switches keep the standard look. -->
+        <rikka.preference.SimpleMenuPreference
+            android:key="switch_row_design"
+            android:title="@string/settings_switch_row_design_title"
+            android:entries="@array/switch_row_designs"
+            android:entryValues="@array/switch_row_designs_values"
+            android:defaultValue="standard"
+            android:icon="@drawable/ic_animation_24" />
+
+    </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
+
+    <af.shizuku.manager.settings.CollapsiblePreferenceCategory
+        android:key="category_experimental_nav"
+        android:title="@string/settings_experimental_category_nav"
+        android:icon="@drawable/ic_nav_apps_24"
+        app:collapsible="false"
+        xmlns:app="http://schemas.android.com/apk/res-auto">
+
+
+
+        <af.shizuku.manager.settings.PlusFeaturePreference
+            android:key="floating_nav_enabled"
+            android:title="@string/settings_floating_nav"
+            android:summary="@string/settings_floating_nav_summary"
+            android:icon="@drawable/ic_nav_apps_24"
+            android:defaultValue="false"
+            app:infoTitle="@string/settings_floating_nav"
+            app:infoDetail="@string/settings_floating_nav_info"
+            app:badgeType="experimental" />
+
+        <af.shizuku.manager.settings.SegmentedControlPreference
+            android:key="floating_nav_style"
+            android:title="@string/settings_floating_nav_style_title"
+            android:icon="@drawable/ic_space_dashboard_24"
+            android:entries="@array/floating_nav_styles"
+            android:entryValues="@array/floating_nav_styles_value"
+            android:defaultValue="docked"
+            android:dependency="floating_nav_enabled" />
+
+        <androidx.preference.MultiSelectListPreference
+            android:key="floating_nav_tabs"
+            android:title="@string/settings_floating_nav_tabs_title"
+            android:icon="@drawable/ic_label_24"
+            android:entries="@array/floating_nav_optional_tabs"
+            android:entryValues="@array/floating_nav_optional_tabs_value"
+            android:defaultValue="@array/floating_nav_optional_tabs_value"
+            android:dependency="floating_nav_enabled" />
+
+
+        <af.shizuku.manager.settings.SegmentedControlPreference
+            android:key="floating_nav_label_mode"
+            android:title="@string/settings_floating_nav_label_mode"
+            android:summary="@string/settings_floating_nav_label_mode_summary"
+            android:defaultValue="labeled"
+            android:entries="@array/floating_nav_label_modes"
+            android:entryValues="@array/floating_nav_label_modes_value"
+            android:dependency="floating_nav_enabled"
+            android:icon="@drawable/ic_label_24" />
+
+        <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="floating_nav_autohide"
+            android:title="@string/settings_floating_nav_autohide"
+            android:summary="@string/settings_floating_nav_autohide_summary"
+            android:defaultValue="true"
+            android:dependency="floating_nav_enabled"
+            android:icon="@drawable/ic_vertical_align_bottom_24" />
+
+    </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
+</PreferenceScreen>

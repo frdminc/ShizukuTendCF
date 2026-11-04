@@ -11,7 +11,10 @@ import af.shizuku.manager.adb.AdbProtocol.A_MAXDATA
 import af.shizuku.manager.adb.AdbProtocol.A_OKAY
 import af.shizuku.manager.adb.AdbProtocol.A_OPEN
 import af.shizuku.manager.adb.AdbProtocol.A_VERSION
+<<<<<<< HEAD
 import af.shizuku.manager.adb.AdbProtocol.A_WRTE
+=======
+>>>>>>> upstream/master
 import java.io.Closeable
 import java.io.DataInputStream
 import java.io.EOFException
@@ -19,7 +22,10 @@ import java.io.IOException
 import java.io.OutputStream
 import java.io.PushbackInputStream
 import java.net.InetAddress
+<<<<<<< HEAD
 import java.net.InetSocketAddress
+=======
+>>>>>>> upstream/master
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
@@ -32,8 +38,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
+<<<<<<< HEAD
  * A loopback adbd speaking AUTH by default, or optional STLS with a fresh certificate per
  * connection. Each key offer made while the key
+=======
+ * A loopback adbd speaking the plain (non-TLS) AUTH handshake. Each key offer made while the key
+>>>>>>> upstream/master
  * is not yet authorised counts as one dialog ([offers]) and then waits, as adbd does, for the
  * user's answer. [accept] completes the handshake. [reject] and [silent] look the same on the
  * wire, as on a real device: adbd sends nothing for a denied dialog and keeps the connection open
@@ -46,6 +56,7 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class FakeAdbd(
     private val onShell: (String) -> Unit = {},
+<<<<<<< HEAD
     port: Int = 0,
     authorized: Boolean = false,
     // "tcpip:<port>": adbd restarts listening on that port (the caller opens it).
@@ -68,10 +79,17 @@ class FakeAdbd(
             reuseAddress = true
             bind(InetSocketAddress(InetAddress.getLoopbackAddress(), port), 50)
         }
+=======
+) : Closeable {
+    enum class Answer { ACCEPT, REJECT, SILENT }
+
+    private val server = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
+>>>>>>> upstream/master
     val port: Int get() = server.localPort
 
     private val offerCount = AtomicInteger(0)
     val offers: Int get() = offerCount.get()
+<<<<<<< HEAD
     private val signatureCount = AtomicInteger(0)
     val signatures: Int get() = signatureCount.get()
     val activeConnections: Int get() = open.size
@@ -85,6 +103,8 @@ class FakeAdbd(
     private val fixedContext by lazy { newTlsContext() }
     val certificates = CopyOnWriteArrayList<java.security.cert.X509Certificate>()
     val greetingSizes = CopyOnWriteArrayList<Int>()
+=======
+>>>>>>> upstream/master
 
     private val helloCount = AtomicInteger(0)
 
@@ -96,7 +116,11 @@ class FakeAdbd(
 
     /** The key has been accepted once; adbd then answers its signature without a dialog. */
     @Volatile
+<<<<<<< HEAD
     var authorized = authorized
+=======
+    var authorized = false
+>>>>>>> upstream/master
 
     /** Runs on adbd's thread when a client says hello, before it can record or offer anything. */
     @Volatile
@@ -157,6 +181,7 @@ class FakeAdbd(
     private fun serve(s: Socket) {
         try {
             val stream = PushbackInputStream(s.getInputStream())
+<<<<<<< HEAD
             var input = DataInputStream(stream)
             var output = s.getOutputStream()
             val hello = read(input) ?: return
@@ -201,6 +226,33 @@ class FakeAdbd(
                     }
                     authorized = true
                 }
+=======
+            val input = DataInputStream(stream)
+            val output = s.getOutputStream()
+            val hello = read(input) ?: return
+            if (hello.command != A_CNXN) return
+            helloCount.incrementAndGet()
+            onHello()
+            write(output, AdbMessage(A_AUTH, ADB_AUTH_TOKEN, 0, ByteArray(20)))
+            val signature = read(input) ?: return
+            check(signature.command == A_AUTH && signature.arg0 == ADB_AUTH_SIGNATURE) { "expected the token signature" }
+            if (!authorized) {
+                write(output, AdbMessage(A_AUTH, ADB_AUTH_TOKEN, 0, ByteArray(20)))
+                while (true) {
+                    val key = read(input) ?: return
+                    check(key.command == A_AUTH && key.arg0 == ADB_AUTH_RSAPUBLICKEY) { "expected the public key" }
+                    offerCount.incrementAndGet()
+                    offered.release()
+                    when (awaitAnswer(s, stream)) {
+                        Answer.ACCEPT -> break
+                        // Nothing is sent: the connection stays open until the client closes it
+                        // or offers the key again.
+                        Answer.REJECT, Answer.SILENT -> continue
+                        null -> return
+                    }
+                }
+                authorized = true
+>>>>>>> upstream/master
             }
             write(output, AdbMessage(A_CNXN, A_VERSION, A_MAXDATA, "device::"))
             while (true) {
@@ -210,6 +262,7 @@ class FakeAdbd(
                 if (message.command != A_OPEN) continue
                 val command = message.data?.let { String(it).trimEnd('\u0000') }.orEmpty()
                 if (command.startsWith("shell:")) onShell(command)
+<<<<<<< HEAD
                 if (command.startsWith("tcpip:")) onTcpip(command.removePrefix("tcpip:").toIntOrNull() ?: 0)
                 write(output, AdbMessage(A_OKAY, REMOTE_ID, message.arg0, ByteArray(0)))
                 if (endlessOutput != null) {
@@ -218,6 +271,9 @@ class FakeAdbd(
                         if (outputGapMs > 0) Thread.sleep(outputGapMs)
                     }
                 }
+=======
+                write(output, AdbMessage(A_OKAY, REMOTE_ID, message.arg0, ByteArray(0)))
+>>>>>>> upstream/master
                 write(output, AdbMessage(A_CLSE, REMOTE_ID, message.arg0, ByteArray(0)))
             }
         } catch (_: IOException) {
@@ -227,6 +283,7 @@ class FakeAdbd(
         }
     }
 
+<<<<<<< HEAD
     /** Each accepted connection gets a fresh self-signed certificate, like adbd. */
     private fun newTlsContext(): javax.net.ssl.SSLContext {
         val pair =
@@ -297,6 +354,8 @@ class FakeAdbd(
             .apply { init(keys.keyManagers, arrayOf(trust), null) }
     }
 
+=======
+>>>>>>> upstream/master
     // Polls rather than blocking on the queue so that a connection the client has already closed
     // gives up and cannot consume an answer meant for a later one. Null: the peer went away. A byte
     // the client sends meanwhile (a key offered again) is pushed back for the next read.

@@ -203,7 +203,11 @@ class AdbDialogFragment : DialogFragment() {
         /**
          * A discovery dialog opened by a tap on the Home card's Start button: the start it makes
          * once a port resolves is that tap's, so it carries [StarterActivity.EXTRA_USER_GESTURE].
+<<<<<<< HEAD
          * Every other route (start_service_via_wadb, which another app can send too, the launcher
+=======
+         * Every other route (start_service_via_wadb, the launcher
+>>>>>>> upstream/master
          * shortcut, onboarding) uses the plain constructor and stays unconfirmed.
          */
         fun forUserGesture(): AdbDialogFragment =

@@ -29,8 +29,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textAppearance="?textAppearanceTitleSmall"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            android:maxLines="2" />
 
         <TextView
             android:id="@+id/script_preview"
@@ -40,8 +39,7 @@
             android:textAppearance="?textAppearanceBodySmall"
             android:textColor="?colorOnSurfaceVariant"
             android:fontFamily="monospace"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            android:maxLines="3" />
 
     </LinearLayout>
 

@@ -41,34 +41,52 @@ object AuthorizationManager {
         }
     }
 
+    private fun isShizukuClientPackage(pi: PackageInfo): Boolean {
+        if (BuildConfig.APPLICATION_ID == pi.packageName) return false
+        val perms = pi.requestedPermissions
+        if (perms?.contains(Manifest.permission.API_V23) == true ||
+            perms?.contains(ServerConstants.PERMISSION_LEGACY) == true ||
+            perms?.contains(ServerConstants.PERMISSION_ORIGINAL) == true
+        ) {
+            return true
+        }
+        val meta = pi.applicationInfo?.metaData
+        return meta?.getBoolean("af.shizuku.client.V3_SUPPORT", false) == true ||
+            meta?.getBoolean("moe.shizuku.client.V3_SUPPORT", false) == true
+    }
+
+    private fun getPackagesLegacy(): List<PackageInfo> {
+        val result = mutableListOf<PackageInfo>()
+        for (user in ShizukuSystemApis.getUsers(useCache = false)) {
+            try {
+                val all = ShizukuSystemApis.getInstalledPackages((PackageManager.GET_META_DATA or PackageManager.GET_PERMISSIONS).toLong(), user.id)
+                for (pi in all) {
+                    if (isShizukuClientPackage(pi)) {
+                        result.add(pi)
+                    }
+                }
+            } catch (e: Throwable) {
+                LOGGER.w(e, "getInstalledPackages")
+            }
+        }
+        return result
+    }
+
     fun getPackages(): List<PackageInfo> {
         val packages: MutableList<PackageInfo> = ArrayList()
         try {
             if (Shizuku.isPreV11() || (Shizuku.getVersion() == 11 && Shizuku.getServerPatchVersion() < 3)) {
-                val allPackages: MutableList<PackageInfo> = ArrayList()
-                for (user in ShizukuSystemApis.getUsers(useCache = false)) {
-                    try {
-                        allPackages.addAll(ShizukuSystemApis.getInstalledPackages((PackageManager.GET_META_DATA or PackageManager.GET_PERMISSIONS).toLong(), user.id))
-                    } catch (e: Throwable) {
-                        LOGGER.w(e, "getInstalledPackages")
-                    }
-                }
-                for (pi in allPackages) {
-                    if (BuildConfig.APPLICATION_ID == pi.packageName) continue
-                    val perms = pi.requestedPermissions
-                    if (perms?.contains(Manifest.permission.API_V23) != true &&
-                        perms?.contains(ServerConstants.PERMISSION_LEGACY) != true &&
-                        perms?.contains(ServerConstants.PERMISSION_ORIGINAL) != true
-                    ) {
-                        continue
-                    }
-                    packages.add(pi)
-                }
+                packages.addAll(getPackagesLegacy())
             } else {
                 packages.addAll(getApplications(-1))
             }
         } catch (e: Throwable) {
-            LOGGER.w(e, "getPackages failed, possibly due to ghost stock server")
+            LOGGER.w(e, "getApplications failed, falling back to installed packages scan")
+            try {
+                packages.addAll(getPackagesLegacy())
+            } catch (fallbackError: Throwable) {
+                LOGGER.w(fallbackError, "Fallback installed packages scan also failed")
+            }
         }
         return packages
     }
@@ -105,6 +123,7 @@ object AuthorizationManager {
         }
     }
 
+    /** @throws SecurityException when the service isn't allowed to change it (limited ADB). */
     fun grant(
         packageName: String,
         uid: Int,
@@ -115,11 +134,16 @@ object AuthorizationManager {
             } else {
                 Shizuku.updateFlagsForUid(uid, MASK_PERMISSION, FLAG_ALLOWED)
             }
-        } catch (_: Throwable) {
-            // Ignore error from incompatible server
+        } catch (e: SecurityException) {
+            // The caller tells the user (e.g. the "ADB is limited" dialog); swallowing it here
+            // made a failed change look like it worked.
+            throw e
+        } catch (t: Throwable) {
+            timber.log.Timber.w(t, "%s failed for %s (incompatible server?)", "grant", packageName)
         }
     }
 
+    /** @throws SecurityException when the service isn't allowed to change it (limited ADB). */
     fun revoke(
         packageName: String,
         uid: Int,
@@ -130,8 +154,12 @@ object AuthorizationManager {
             } else {
                 Shizuku.updateFlagsForUid(uid, MASK_PERMISSION, 0)
             }
-        } catch (_: Throwable) {
-            // Ignore error from incompatible server
+        } catch (e: SecurityException) {
+            // The caller tells the user (e.g. the "ADB is limited" dialog); swallowing it here
+            // made a failed change look like it worked.
+            throw e
+        } catch (t: Throwable) {
+            timber.log.Timber.w(t, "%s failed for %s (incompatible server?)", "revoke", packageName)
         }
     }
 }

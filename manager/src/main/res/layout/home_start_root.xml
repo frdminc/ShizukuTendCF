@@ -44,10 +44,9 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@android:id/button1"
-            style="@style/CardButton"
+            style="@style/CardButton.Primary"
             android:enabled="false"
             android:text="@string/home_root_button_start"
-            android:contentDescription="@string/accessibility_button_start"
             app:icon="@drawable/ic_server_start_24" />
 
         <com.airbnb.lottie.LottieAnimationView
@@ -66,7 +65,6 @@
             android:enabled="false"
             android:text="@string/home_root_button_restart"
             android:visibility="gone"
-            android:contentDescription="@string/accessibility_button_restart"
             app:icon="@drawable/ic_server_restart"
             tools:visibility="visible" />
 

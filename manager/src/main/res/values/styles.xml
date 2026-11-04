@@ -27,11 +27,21 @@
         <item name="android:textColor">?colorOnSecondaryContainer</item>
         <item name="iconTint">?colorOnSecondaryContainer</item>
         <item name="iconPadding">12dp</item>
-        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.Material3.Corner.Full</item>
     </style>
 
+    <!-- The card's main action (Start): M3 allows one filled button per surface; the others
+         stay tonal (CardButton). -->
+    <style name="CardButton.Primary">
+        <item name="android:backgroundTint">?colorPrimary</item>
+        <item name="android:textColor">?colorOnPrimary</item>
+        <item name="iconTint">?colorOnPrimary</item>
+    </style>
+
+    <!-- TitleLarge + medium, matching the server status card: HeadlineSmall (24sp regular)
+         read as oversized and thin next to it, and wrapped longer card titles. -->
     <style name="CardTitle">
-        <item name="android:textAppearance">?textAppearanceHeadlineSmall</item>
+        <item name="android:textAppearance">?textAppearanceTitleLarge</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:textColor">?colorOnSurface</item>
         <item name="android:lineSpacingExtra">1sp</item>
     </style>
@@ -63,6 +73,7 @@
     </style>
 
     <style name="GrantPermissions" parent="Theme.Material3Expressive.Light.Shizuku">
+        <item name="materialSwitchStyle">@style/Widget.App.MaterialSwitch</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:colorBackground">?colorBackgroundFloating</item>
         <item name="android:colorBackgroundCacheHint">@null</item>
@@ -135,6 +146,7 @@
     </style>
 
     <style name="Theme.App.DialogHost" parent="Theme.Material3Expressive.Light.Shizuku">
+        <item name="materialSwitchStyle">@style/Widget.App.MaterialSwitch</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>
@@ -160,6 +172,12 @@
         <item name="android:textSize">13sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">0.04</item>
+    </style>
+
+    <!-- Every switch: check / X on the thumb (M3 "icon on both states"), tinted by MDC's state
+         colours. A ?colorOnPrimary tint used to paint the check the same colour as the thumb. -->
+    <style name="Widget.App.MaterialSwitch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
+        <item name="thumbIcon">@drawable/m3_switch_thumb_icon</item>
     </style>
 
 </resources>

@@ -2,12 +2,10 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <!-- Version & Updates -->
     <af.shizuku.manager.settings.CollapsiblePreferenceCategory
-        android:title="@string/settings_about"
-        android:key="category_about_info"
-        android:icon="@drawable/ic_info_24"
-        android:defaultValue="true">
+        android:key="category_about_app"
+        android:title="@string/settings_about_category_app_info"
+        app:collapsible="false">
 
         <Preference
             android:key="version"
@@ -23,89 +21,81 @@
             android:visible="false" />
 
         <Preference
-            android:key="check_for_update"
-            android:title="@string/settings_check_for_update_title"
-            android:summary="@string/settings_check_for_update_summary"
-            android:icon="@drawable/ic_refresh_24" />
-
-        <Preference
             android:key="changelog"
             android:title="@string/changelog_title"
             android:summary="@string/changelog_earlier_releases"
             android:icon="@drawable/ic_history_24" />
 
-        <af.shizuku.manager.settings.GrayableIconSwitchPreference
-            android:key="auto_update_enabled"
-            android:title="@string/settings_auto_update_title"
-            android:summary="@string/settings_auto_update_summary"
-            android:icon="@drawable/ic_update_24"
-            android:defaultValue="true" />
+        <Preference
+            android:key="feature_tour"
+            android:title="@string/onboarding_take_tour"
+            android:summary="@string/onboarding_take_tour_summary"
+            android:icon="@drawable/ic_sparkle_24" />
 
-        <af.shizuku.manager.settings.GrayableIconSwitchPreference
-            android:key="auto_install_enabled"
-            android:title="@string/settings_auto_install_title"
-            android:summary="@string/settings_auto_install_summary"
-            android:icon="@drawable/ic_install_24"
-            android:defaultValue="false"
-            android:dependency="auto_update_enabled" />
+    </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
 
-        <rikka.preference.SimpleMenuPreference
+    <af.shizuku.manager.settings.CollapsiblePreferenceCategory
+        android:key="category_about_updates"
+        android:title="@string/settings_about_category_updates"
+        app:collapsible="false">
+
+        <Preference
+            android:key="check_for_update"
+            android:title="@string/settings_check_for_update_title"
+            android:summary="@string/settings_check_for_update_summary"
+            android:icon="@drawable/ic_update_24" />
+
+        <Preference
+            android:key="update_app_database"
+            android:title="@string/settings_update_app_database"
+            android:summary="@string/settings_update_app_database_summary"
+            android:icon="@drawable/ic_autorenew" />
+
+        <af.shizuku.manager.settings.SegmentedControlPreference
             android:key="update_channel"
             android:title="@string/settings_update_channel_title"
-            app:useSimpleSummaryProvider="true"
             android:icon="@drawable/ic_science_24"
             android:entries="@array/update_channel_entries"
             android:entryValues="@array/update_channel_values"
             android:defaultValue="stable" />
 
-    </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
-
-    <!-- Backup & Restore -->
-    <af.shizuku.manager.settings.CollapsiblePreferenceCategory
-        android:key="category_backup"
-        android:title="@string/settings_plus_category_backup_restore"
-        android:icon="@drawable/ic_folder_24"
-        android:defaultValue="false">
-
-        <Preference
-            android:key="backup_settings"
-            android:title="@string/settings_backup_settings"
-            android:summary="@string/settings_backup_settings_summary"
-            android:icon="@drawable/ic_folder_24" />
-
-        <Preference
-            android:key="restore_settings"
-            android:title="@string/settings_restore_settings"
-            android:summary="@string/settings_restore_settings_summary"
-            android:icon="@drawable/ic_install_24" />
-
-        <Preference
-            android:key="sync_peer_settings"
-            android:title="@string/settings_sync_peer_title"
-            android:summary="@string/settings_sync_peer_summary_installed"
-            android:icon="@drawable/ic_autorenew" />
-
         <af.shizuku.manager.settings.GrayableIconSwitchPreference
-            android:key="auto_sync_peer_settings"
-            android:title="@string/settings_auto_sync_peer_title"
-            android:summary="@string/settings_auto_sync_peer_summary"
+            android:key="auto_update_enabled"
+            android:title="@string/settings_auto_update_title"
+            android:summary="@string/settings_auto_update_summary"
             android:icon="@drawable/ic_autorenew"
             android:defaultValue="true" />
 
+        <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="auto_install_enabled"
+            android:dependency="auto_update_enabled"
+            android:title="@string/settings_auto_install_title"
+            android:summary="@string/settings_auto_install_summary"
+            android:icon="@drawable/ic_install_24"
+            android:defaultValue="false" />
+
     </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
 
-    <!-- Project & Legal -->
     <af.shizuku.manager.settings.CollapsiblePreferenceCategory
-        android:title="@string/settings_open_source_licenses"
-        android:key="category_about_links"
-        android:icon="@drawable/ic_article_24"
-        android:defaultValue="true">
+        android:key="category_about_project"
+        android:title="@string/settings_about_category_project"
+        app:collapsible="false">
 
         <Preference
             android:key="source_code"
             android:title="@string/about_view_source_code_title"
             android:summary="https://github.com/frdminc/ShizukuTendCF"
             android:icon="@drawable/ic_baseline_link_24" />
+
+        <Preference
+            android:key="help"
+            android:title="@string/settings_help"
+            android:icon="@drawable/ic_help_outline_24" />
+
+        <Preference
+            android:key="report_bug"
+            android:title="@string/settings_report_bug"
+            android:icon="@drawable/ic_bug_report_24" />
 
         <Preference
             android:key="open_source_licenses"

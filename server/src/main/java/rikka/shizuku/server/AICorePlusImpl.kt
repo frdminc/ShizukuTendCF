@@ -63,14 +63,11 @@ class AICorePlusImpl(
         if (!service.isPlusFeatureEnabled("ai_core_master") || !service.isPlusFeatureEnabled("npu_acceleration")) return null
         if (taskData == null) return null
         
-        try {
-            // android.provider.Settings.System.putInt(service.contentResolver, "processing_speed", 2)
-            val response = Bundle()
-            response.putBoolean("success", true)
-            return response
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to schedule NPU task", e)
-            return null
+        // Not implemented (#633): there is no public NPU-priority API, and this used to report
+        // success while doing nothing. Say so honestly so clients can fall back.
+        return Bundle().apply {
+            putBoolean("success", false)
+            putString("reason", "not_supported")
         }
     }
 

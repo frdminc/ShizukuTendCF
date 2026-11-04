@@ -7,12 +7,11 @@ import af.shizuku.manager.databinding.HomeStartRootBinding
 import af.shizuku.manager.ktx.startWithSceneTransition
 import af.shizuku.manager.ktx.toHtml
 import af.shizuku.manager.starter.StarterActivity
+import af.shizuku.manager.utils.HapticUtils
 import af.shizuku.manager.utils.IconStyleHelper
-import af.shizuku.manager.utils.MotionUtils.applySpringTouch
 import android.content.Intent
 import android.text.method.LinkMovementMethod
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.isVisible
@@ -41,28 +40,15 @@ class StartRootViewHolder(
     private val originalIcon = binding.icon.drawable
 
     init {
-        containerBinding.root.applySpringTouch()
-        containerBinding.root.setOnLongClickListener {
-            HomeEditMode.enter()
-            true
-        }
+        HomeEditMode.bindCardGestures(containerBinding, this)
         val listener = View.OnClickListener { v: View -> onStartClicked(v) }
         start.setOnClickListener(listener)
         restart.setOnClickListener(listener)
         binding.text1.movementMethod = LinkMovementMethod.getInstance()
-        containerBinding.dragHandle.apply {
-            setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_DOWN) HomeEditMode.startDragCallback?.invoke(this@StartRootViewHolder)
-                false
-            }
-            setOnLongClickListener {
-                HomeEditMode.enter()
-                true
-            }
-        }
     }
 
     private fun onStartClicked(v: View) {
+        HapticUtils.tap(v)
         val activity = v.context.asActivity<android.app.Activity>() ?: return
         val isRooted =
             af.shizuku.manager.utils.EnvironmentUtils
@@ -110,16 +96,22 @@ class StartRootViewHolder(
             }
         }
 
-        val sb =
-            StringBuilder()
-                .append(
-                    context.getString(
+        val isSamsungMode =
+            af.shizuku.manager.ShizukuSettings
+                .isSamsungSystemUidEscalationEnabled() &&
+                !af.shizuku.manager.utils.EnvironmentUtils
+                    .isRooted()
+        binding.title.setText(if (isSamsungMode) R.string.home_samsung_system_uid_title else R.string.home_root_title)
+        binding.text1.text =
+            if (isSamsungMode) {
+                context.getString(R.string.home_root_description_samsung)
+            } else {
+                context
+                    .getString(
                         R.string.home_root_description,
                         "<b><a href=\"${Helps.SUI.get()}\">Sui</a></b>",
                         "Sui",
-                    ),
-                )
-
-        binding.text1.text = sb.toHtml(HtmlCompat.FROM_HTML_OPTION_TRIM_WHITESPACE)
+                    ).toHtml(HtmlCompat.FROM_HTML_OPTION_TRIM_WHITESPACE)
+            }
     }
 }

@@ -21,6 +21,5 @@
     <string name="compat_hub_install_signature_conflict">Nie można zainstalować: inna aplikacja (np. oryginalny Shizuku) jest już zainstalowana jako moe.shizuku.privileged.api z niezgodnym podpisem. Najpierw ją odinstaluj.</string>
     <string name="compat_hub_install_fail_storage">Nie można zainstalować: za mało wolnego miejsca w pamięci urządzenia.</string>
     <string name="compat_hub_install_fail_abi">Nie można zainstalować: Compat Hub nie obsługuje architektury procesora tego urządzenia.</string>
-    <string name="compat_hub_install_manual_launched">Otwieranie instalatora — postępuj zgodnie z instrukcjami na ekranie, aby dokończyć instalację.</string>
     <string name="compat_hub_install_fail_newprocess">Twoje urządzenie ogranicza interfejs API Shizuku do tworzenia procesów. Otwieranie instalatora systemowego — kliknij Zainstaluj po wyświetleniu monitu.</string>
 </resources>

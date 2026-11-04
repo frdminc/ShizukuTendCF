@@ -69,13 +69,11 @@
         நேரத்தில் காண அனுமதிக்கும் ஒரே வழியாகும்.</string>
     <string name="adb_error_key_store">கம்பியில்லா பிழைத்திருத்தத்திற்கான விசையை உருவாக்க
         இயலவில்லை.\nஇந்த சாதனத்தின் கீஸ்டோர் பொறிமுறை உடைந்துவிட்டதால் இது இருக்கலாம்.</string>
-    <string name="adb_stopping_tcp">TCP போர்ட்டை மூடுகிறது</string>
     <string name="adb_error_stop_tcp">TCP வழியாக ADB ஐ நிறுத்த முடியவில்லை.</string>
     <string name="adb_pair_required">முதலில் இணைத்தல் படிக்குச் செல்லவும்.</string>
     <string name="enable">இயக்கு</string>
     <string name="development_settings">டெவலப்பர் விருப்பங்கள்</string>
     <string name="notification_settings">அறிவிப்பு விருப்பங்கள்</string>
-    <string name="adb_pairing_tutorial_title">உங்கள் சாதனத்துடன் ஷிசுகுவை இணைக்கவும்</string>
     <string name="adb_pairing_tutorial_content_notification">ஷிசுகுவிலிருந்து வரும் அறிவிப்பு,
         இணைப்பை முடிக்க உங்களுக்கு உதவும்.</string>
     <string name="adb_pairing_tutorial_content_steps">\"டெவலப்பர் விருப்பங்கள்\" என்பதற்குச் சென்று,
@@ -117,10 +115,6 @@
     <string name="home_automation_description">Tasker மற்றும் MacroDroid போன்ற பயன்பாடுகள் Shizuku ஐ
         தானாகத் தொடங்க/நிறுத்த இன்டென்ட்களை அனுப்ப முடியும்.</string>
     <string name="home_automation_button_view_intents">நோக்கங்களைக் காண்க</string>
-    <string name="home_automation_dialog_label_action">செயல்</string>
-    <string name="home_automation_dialog_label_package">தொகுப்பு</string>
-    <string name="home_automation_dialog_label_class">வர்க்கம்</string>
-    <string name="home_automation_dialog_label_target">இலக்கு</string>
     <!-- Home - Learn more -->
     <string name="home_learn_more_title">டெவலப்பர் வழிகாட்டி</string>
     <string name="home_learn_more_description">ஷிசுகுவுடன் எவ்வாறு உருவாக்குவது என்பதை அறிக</string>
@@ -161,7 +155,6 @@
     <string name="rish_description"><![CDATA[%1$sஉடன், நீங்கள் எந்த முனைய பயன்பாட்டிலும் ஷெல் கட்டளைகளை இயக்கலாம்.<p>அதை எவ்வாறு பயன்படுத்துவது என்பது பற்றி மேலும் அறிய தட்டவும்.]]></string>
     <!-- Settings -->
     <string name="settings_title">அமைப்புகள்</string>
-    <string name="settings_behavior">நடத்தை</string>
     <string name="settings_start_on_boot">துவக்கத்தில் தொடங்கு</string>
     <string name="settings_start_on_boot_summary">Android 11+ அல்லது ரூட் தேவை</string>
     <string name="settings_start_on_boot_bug">ஆண்ட்ராய்டு 11-12 இல் பிழை காரணமாக, வயர்லெஸ்
@@ -171,7 +164,6 @@
     <string name="settings_use_system_color">சிஸ்டம் தீம் நிறத்தைப் பயன்படுத்து</string>
     <string name="settings_watchdog">கண்காணிப்பு நாய்</string>
     <string name="settings_watchdog_summary">ஷிசுகு செயலிழந்தால் தானாகவே மறுதொடக்கம் செய்யுங்கள்.</string>
-    <string name="settings_tcp_mode">TCP பயன்முறை</string>
     <string name="settings_tcp_mode_summary">"Wi-Fi இல்லாமல் Shizukuவை மறுதொடக்கம் செய்ய
         அனுமதிக்கிறது. (மறுதொடக்கம் செய்யப்பட்டதிலிருந்து Shizuku ஒரு முறை தொடங்கியிருக்க வேண்டும்)"</string>
     <string name="settings_tcp_mode_dialog_close_port">"TCP போர்ட் உடனடியாக மூடப்படும். TCP
@@ -181,24 +173,12 @@
     <string name="settings_restart_dialog_message">இந்த அமைப்பைப் பயன்படுத்த Shizuku மறுதொடக்கம்
         செய்ய வேண்டும்.</string>
     <string name="settings_restart_dialog_message_wifi_required"><![CDATA[<br><br><b>Wi-Fi தேவை. Shizuku தொடர்ந்து இயங்கும் மற்றும் பின்னணியில் மறுதொடக்கம் செய்வதற்கு முன் Wi-Fi இணைப்புக்காக காத்திருக்கும்.</b>]]></string>
-    <string name="settings_tcp_port">TCP போர்ட்</string>
-    <string name="settings_tcp_port_default">இயல்புநிலை (5555)</string>
-    <string name="settings_tcp_port_hint">இயல்புநிலையைப் பயன்படுத்த காலியாக விடவும் (5555)</string>
-    <string name="settings_tcp_learn_more">ஷிசுகுவை கட்டுப்படுத்த ஆட்டோமேஷன் பயன்பாடுகளைப்
-        பயன்படுத்துவது பற்றி மேலும் அறிக.</string>
     <string name="settings_language">மொழி</string>
-    <string name="settings_translation_contributors">மொழிபெயர்ப்பு பங்களிப்பாளர்கள்</string>
     <string name="settings_translation">மொழிபெயர்ப்பில் பங்கேற்கவும்.</string>
     <string name="settings_translation_summary">%s ஐ உங்கள் மொழியில் மொழிபெயர்க்க எங்களுக்கு
         உதவுங்கள்.</string>
-    <string name="settings_user_interface">தோற்றம்</string>
-    <string name="settings_black_night_theme">கருப்பு இரவு தீம்</string>
-    <string name="settings_black_night_theme_summary">இரவு முறை இயக்கப்பட்டிருந்தால், தூய கருப்பு
-        கருப்பொருளைப் பயன்படுத்தவும்.</string>
-    <string name="settings_support">ஆதரவு</string>
     <string name="settings_help">உதவி</string>
     <string name="settings_report_bug">பிழையைப் புகாரளிக்கவும்</string>
-    <string name="settings_advanced">மேம்பட்டது</string>
     <string name="settings_legacy_pairing">லெகஸி இணைத்தல்</string>
     <string name="settings_legacy_pairing_summary">அறிவிப்புக்குப் பதிலாக உரையாடலில் இணைத்தல்
         குறியீட்டை உள்ளிடவும்.</string>
@@ -228,26 +208,16 @@
     <string name="toast_no_email_app">மின்னஞ்சல் பயன்பாடு எதுவும் கிடைக்கவில்லை.</string>
     <string name="toast_shizuku_already_starting">ஷிசுகு ஏற்கனவே பின்னணியில் தொடங்குகிறது.</string>
     <string name="toast_accessibility_tv_only">இந்த சேவை டிவி சாதனங்களில் மட்டுமே ஆதரிக்கப்படுகிறது.</string>
-    <string name="toast_pairing_timeout">Shizuku இணைத்தல் சேவை நேரம் முடிந்துவிட்டது.</string>
     <!-- Dark Mode Setting Override -->
     <string name="dark_theme">தீம்</string>
     <string name="dark_theme_off">எப்போதும் வெளிச்சம்</string>
     <string name="dark_theme_on">எப்போதும் இருள்</string>
     <!-- About -->
-    <string name="action_about">பற்றி</string>
-    <string name="about_dialog_button_close">மூடு</string>
-    <string name="about_view_source_code"><![CDATA[%sஇல் மூலக் குறியீட்டைக் காண்க]]></string>
     <!-- Start -->
-    <string name="action_start">Shizuku ஐத் தொடங்கவும்</string>
     <!-- Stop -->
     <string name="action_stop">ஷிசுகுவை நிறுத்து</string>
     <string name="dialog_stop_message">ஷிசுகு சேவை நிறுத்தப்படும்.</string>
     <!-- Notification -->
-    <string name="notification_channel_service_status">சேவை தொடக்க நிலை</string>
-    <string name="notification_service_starting">ஷிசுகு சேவை தொடங்குகிறது…</string>
-    <string name="notification_service_start_failed">ஷிசுகு சேவையைத் தொடங்குவது தோல்வியடைந்தது.</string>
-    <string name="notification_service_start_no_root">ரூட் அனுமதியைக் கோர முடியவில்லை.</string>
-    <string name="notification_working">…வேலை செய்கிறது</string>
     <string name="notification_channel_adb_pairing">வயர்லெஸ் பிழைத்திருத்த இணைத்தல்</string>
     <string name="notification_adb_pairing_input_paring_code">இணைத்தல் குறியீட்டை உள்ளிடவும்</string>
     <string name="notification_adb_pairing_searching_for_service_title">இணைத்தல் சேவையைத் தேடுகிறது</string>
@@ -274,18 +244,15 @@
         காத்திருக்கிறது</string>
     <string name="wadb_notification_retry">மீண்டும் முயற்சிக்கக் காத்திருக்கிறது</string>
     <string name="wadb_error_title">துவக்கத்தில் தொடங்கும் போது பிழை</string>
-    <string name="wadb_error_notify_dev">டெவலப்பருக்குத் தெரிவிக்க தட்டவும்.</string>
     <string name="wadb_permission_error_notification_title">அனுமதி பிழை</string>
     <string name="wadb_permission_error_notification_content">துவக்கத்தில் தொடங்க ஷிசுகுவுக்கு
         WRITE_SECURE_SETTINGS தேவை. அதை எப்படி வழங்குவது என்பதை அறிய தட்டவும்.</string>
-    <string name="wadb_notification_channel">ADB தானியங்கு தொடக்க சேவை</string>
     <!-- Watchdog -->
     <string name="watchdog_running">கண்காணிப்புக் குழு இயங்குகிறது.</string>
     <string name="watchdog_turn_off">அணைத்திடு</string>
     <string name="watchdog_shizuku_crashed_title">ஷிசுகு சமீபத்தில் விபத்துக்குள்ளானது.</string>
     <string name="watchdog_shizuku_crashed_text">வாட்ச்டாக் சேவையை மீண்டும் தொடங்கியது. எதிர்கால
         விபத்துகளைத் தடுப்பதற்கான சாத்தியமான திருத்தங்களைப் பற்றி அறிய தட்டவும்.</string>
-    <string name="watchdog_shizuku_crashed_action_turn_off_alerts">விழிப்பூட்டல்களை முடக்கு</string>
     <!-- Misc -->
     <string name="dialog_cannot_open_browser_title">உலாவியைத் தொடங்க முடியவில்லை.</string>
     <string name="toast_copied_to_clipboard">நகலகத்துக்கு நகலெடுக்கப்பட்டது</string>

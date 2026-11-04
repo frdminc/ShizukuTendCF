@@ -6,30 +6,20 @@
     <string name="server_clients_connected">%1$d aplicativos conectados</string>
 
     <!--Para tradutores: você pode deixar o seu aqui-->
-    <string name="translation_contributors">thejaustin</string>
     <string name="translation_url">https://github.com/thejaustin/ShizukuPlus</string>
 
     <!--Configurações da interface - Expressiva-->
-    <string name="settings_expressive_title">Design Expressivo (M3E)</string>
     <string name="settings_expressive_shapes">Formas de Ícone Expressivas</string>
     <string name="settings_expressive_shapes_summary">Usar formas assimétricas de folha e gota para os ícones</string>
     <string name="settings_expressive_animations">Animações Elásticas</string>
     <string name="settings_expressive_animations_summary">Ativar retorno preditivo elástico e escala de arrasto do M3</string>
-    <string name="settings_haptic_feedback">Feedback tátil</string>
-    <string name="settings_haptic_feedback_summary">Vibrar ao tocar e usar gestos</string>
     <string name="settings_icon_style">Estilo de Ícone</string>
-    <string name="settings_icon_style_summary">Escolha o estilo visual dos ícones do sistema</string>
     <string name="settings_shape_style">Estilo de Forma do Contêiner</string>
-    <string name="settings_shape_style_summary">Personalize o arredondamento das bordas de cartões e diálogos</string>
     <string name="settings_animation_intensity">Intensidade da Animação</string>
-    <string name="settings_animation_intensity_summary">Ajuste a velocidade e o "efeito de mola" das transições da interface</string>
 
     <!--Configurações da interface - Tela-->
-    <string name="settings_display_category">Tela</string>
     <string name="settings_edge_to_edge">Layout de ponta a ponta</string>
-    <string name="settings_edge_to_edge_summary">Estender o conteúdo por trás das barras do sistema. Desative se as barras do sistema sobrepuserem controles importantes</string>
     <string name="settings_blur_ui">Efeito de vidro fosco</string>
-    <string name="settings_blur_ui_summary">Aplicar desfoque e transparência aos diálogos e à barra superior. Melhor no Android 12+</string>
 
     <!--Configurações da interface - Tema One UI-->
     <string name="settings_oneui_theme">Estilo One UI</string>
@@ -42,11 +32,6 @@
         <item>Contornado</item>
         <item>Duas Cores</item>
     </string-array>
-    <string-array name="icon_styles_value">
-        <item>standard</item>
-        <item>outlined</item>
-        <item>twotone</item>
-    </string-array>
 
     <string name="settings_icon_color_mode">Cores dos Ícones em Duas Cores</string>
     <string name="settings_icon_color_mode_summary">Como o plano de fundo dos ícones em Duas Cores é colorido</string>
@@ -55,24 +40,7 @@
         <item>Mesma cor para todos</item>
         <item>Cor diferente para cada um</item>
     </string-array>
-    <string-array name="icon_color_modes_value">
-        <item>none</item>
-        <item>uniform</item>
-        <item>per_icon</item>
-    </string-array>
 
-    <string-array name="shape_styles">
-        <item>Zen (Artístico)</item>
-        <item>Moderno (Material 3)</item>
-        <item>Clássico (Material 2)</item>
-        <item>Orgânico (Squircle)</item>
-    </string-array>
-    <string-array name="shape_styles_value">
-        <item>zen</item>
-        <item>modern</item>
-        <item>classic</item>
-        <item>squircle</item>
-    </string-array>
 
     <string-array name="animation_intensities">
         <item>Nenhuma</item>
@@ -80,15 +48,7 @@
         <item>Padrão</item>
         <item>Expressiva</item>
     </string-array>
-    <string-array name="animation_intensities_value">
-        <item>0</item>
-        <item>1</item>
-        <item>2</item>
-        <item>3</item>
-    </string-array>
 
-    <string name="home_status_service_running_tile_sublabel">Em execução</string>
-    <string name="home_status_service_stopped_tile_sublabel">Parado</string>
 
     <!--Tela inicial - Status-->
     <string name="home_status_service_is_running">%1$s está em execução</string>
@@ -134,7 +94,6 @@
 
     <!--Diagnóstico do serviço-->
     <string name="doctor_check_samsung_autoblocker">Bloqueador Automático Samsung</string>
-    <string name="doctor_check_samsung_battery_protection">Proteção de Bateria Samsung</string>
     <string name="doctor_check_secondary_user">Usuário Secundário / Pasta Segura</string>
     <string name="doctor_check_phantom_process">Eliminador de Processos Fantasma</string>
     <string name="doctor_status_manual_check">Requer Verificação Manual</string>
@@ -157,7 +116,6 @@
 
     <!--Tutorial do Shell-->
     <string name="terminal_tutorial_export_summary">Exporte os arquivos (%1$s, %2$s, %3$s e %4$s) para uma nova pasta.</string>
-    <string name="terminal_tutorial_copy_command">cp /sdcard/chosen-folder/* /data/data/terminal.package.name/files</string>
     <string name="terminal_tutorial_copy_summary">Isso copia os arquivos exportados para o armazenamento privado do seu aplicativo de terminal. Você também pode adicionar aliases para %1$s, %2$s e %3$s no seu &lt;font face=\"monospace\"&gt;.bashrc&lt;/font&gt; ou &lt;font face=\"monospace\"&gt;.zshrc&lt;/font&gt;.</string>
     <string name="terminal_tutorial_run_command">sh /path/to/%1$s</string>
     <string name="terminal_tutorial_run_plus_command">sh /path/to/plus [comando]</string>
@@ -168,19 +126,16 @@
     <string name="adb_pairing_status_failed">Falha no pareamento.</string>
 
     <!--Gerenciamento de aplicativos-->
-    <string name="app_management_badge_format">&lt;b&gt;&lt;font color=\"%1$s\"&gt;[%2$s]&lt;/font&gt;&lt;/b&gt; %3$s</string>
     <string name="dialog_adb_pairing_accessibility_enable">Ative o serviço de acessibilidade para iniciar o processo de pareamento. Isso permite que o Shizuku detecte o código de pareamento.\n\nO serviço de acessibilidade será desligado quando o código for encontrado ou após 1 minuto para economizar energia.</string>
     <string name="dialog_adb_pairing_accessibility_navigate">Por favor, inicie o pareamento seguindo estas etapas:\n- Acesse "Opções do desenvolvedor"\n- Ative "Depuração USB" e "Depuração sem fio"\n- Toque no lado esquerdo de "Depuração sem fio"\n- Toque em "Parear dispositivo com código de pareamento." O Shizuku detectará automaticamente o código de pareamento.</string>
     <string name="adb_pairing_requires_multi_window">Por favor, entre primeiro no modo de tela dividida (multi-janela).</string>
     <string name="adb_pairing_requires_multi_window_reason">O sistema exige que o diálogo de pareamento esteja sempre visível. Usar o modo de tela dividida é a única forma de manter este aplicativo e o diálogo do sistema visíveis ao mesmo tempo.</string>
     <string name="adb_error_key_store">Não foi possível gerar a chave para a depuração sem fio.\nIsso pode ocorrer porque o mecanismo KeyStore deste dispositivo está corrompido.</string>
-    <string name="adb_stopping_tcp">Fechando porta TCP</string>
     <string name="adb_error_stop_tcp">Falha ao interromper o ADB por TCP</string>
     <string name="adb_pair_required">Por favor, conclua a etapa de pareamento primeiro.</string>
     <string name="enable">Ativar</string>
     <string name="development_settings">Opções do desenvolvedor</string>
     <string name="notification_settings">Opções de notificação</string>
-    <string name="adb_pairing_tutorial_title">Parear o Shizuku com seu dispositivo</string>
     <string name="adb_pairing_tutorial_content_notification">Uma notificação do Shizuku vai ajudar você a concluir o pareamento.</string>
     <string name="adb_pairing_tutorial_content_steps">Acesse "Opções do desenvolvedor" e ative "Depuração USB" e "Depuração sem fio".</string>
     <string name="adb_pairing_tutorial_content_enter_pairing_code">Toque no lado esquerdo de "Depuração sem fio" e, em seguida, toque em "Parear dispositivo com código de pareamento." Digite o código exibido na notificação para concluir o pareamento.</string>
@@ -237,8 +192,6 @@
     <string name="app_management_no_launcher">Este aplicativo não possui atalho de inicialização</string>
     <string name="app_management_package_copied">Nome do pacote copiado</string>
     <string name="app_management_log_permission_toggle">Alternar permissão: %s</string>
-    <string name="app_management_log_hide">Ocultar da lista</string>
-    <string name="app_management_log_unhide">Reexibir na lista</string>
     <string name="app_management_hidden">Aplicativo oculto</string>
     <string name="app_management_selected">%d selecionado(s)</string>
     <string name="app_management_undo">Desfazer</string>
@@ -261,11 +214,6 @@
     <string name="app_management_item_summary_requires_root">* requer que o Shizuku seja executado com root</string>
     <string name="app_management_item_summary_partial_root">⚠ Suporte parcial — algumas funções ainda precisam do Shizuku com root</string>
     <string name="app_management_item_summary_requires_plus">* requer a API Avançada do Shizuku+</string>
-    <string name="app_management_item_context">Sobre este aplicativo: %s</string>
-    <string name="app_management_enhancements">Aprimoramentos</string>
-    <string name="app_management_enhancements_desc">Ative os recursos Plus para este aplicativo para melhorar o desempenho e a compatibilidade.</string>
-    <string name="app_management_badge_enhanced">Aprimorado</string>
-    <string name="app_management_badge_upgrade">Atualização Plus disponível</string>
     <string name="app_management_toggle_all">Alternar todos</string>
     <string name="app_management_bulk_grant">Conceder aos selecionados</string>
     <string name="app_management_bulk_revoke">Revogar dos selecionados</string>
@@ -286,8 +234,6 @@
     <string name="rish_description"><![CDATA[Com o %1$s, você pode executar comandos de shell em qualquer aplicativo de terminal.<p>Toque para saber mais sobre como usá-lo.]]></string>
 
     <!--Configurações — personalização de deslize-->
-    <string name="settings_swipe_right">Ação ao deslizar para a direita</string>
-    <string name="settings_swipe_left">Ação ao deslizar para a esquerda</string>
     <string name="settings_action_none">Nenhuma</string>
     <string name="settings_action_open_app">Abrir aplicativo</string>
     <string name="settings_action_app_info">Informações do aplicativo</string>
@@ -295,7 +241,6 @@
     <string name="settings_action_hide_from_list">Ocultar da lista</string>
 
     <!--Configurações — personalização de toque prolongado-->
-    <string name="settings_app_management">Gerenciamento de aplicativos</string>
     <string name="settings_lp_category_summary">Escolha quais ações aparecem ao pressionar e segurar um aplicativo na lista de gerenciamento. Se apenas uma estiver ativada, ela é acionada diretamente — nenhum menu é exibido.</string>
     <string name="settings_lp_open_app">Abrir aplicativo</string>
     <string name="settings_lp_app_info">Informações do aplicativo</string>
@@ -326,62 +271,40 @@
     <string name="swipe_hint_title">Gestos de deslizar</string>
     <string name="swipe_hint_right">Deslize para a direita para ação rápida</string>
     <string name="swipe_hint_left">Deslize para a esquerda para ação rápida</string>
-    <string name="swipe_hint_dismiss">Toque em qualquer lugar para dispensar</string>
 
     <!--Configurações-->
     <string name="settings_title">Configurações</string>
-    <string name="settings_behavior">Comportamento</string>
     <string name="settings_start_on_boot">Iniciar ao ligar</string>
     <string name="settings_start_on_boot_summary">Requer Android 11+ ou root</string>
     <string name="settings_start_on_boot_bug">Devido a um bug no Android 11-12, a depuração sem fio não memoriza redes autorizadas.\n\nVocê precisará reautorizar a rede a cada reinicialização, tocando em "Permitir" quando a caixa de diálogo de autorização aparecer.</string>
     <string name="settings_use_system_color">Usar cor do tema do sistema</string>
     <string name="settings_watchdog">Watchdog</string>
     <string name="settings_watchdog_summary">Reiniciar automaticamente o Shizuku se ele travar</string>
-    <string name="settings_tcp_mode">Modo TCP</string>
     <string name="settings_tcp_mode_summary">"Permite que o Shizuku reinicie sem Wi-Fi. (O Shizuku deve ter sido iniciado pelo menos uma vez desde a reinicialização)"</string>
     <string name="settings_tcp_mode_dialog_close_port">"A porta TCP será fechada imediatamente. Você precisará de Wi-Fi para ativar o modo TCP novamente. Continuar?"</string>
     <string name="settings_tcp_mode_closing_port">Fechando porta TCP...</string>
     <string name="settings_restart_dialog_title">Reinicialização Necessária</string>
     <string name="settings_restart_dialog_message">O Shizuku precisa reiniciar para aplicar esta configuração.</string>
     <string name="settings_restart_dialog_message_wifi_required"><![CDATA[<br><br><b>É necessário Wi-Fi. O Shizuku continuará em execução e aguardará uma conexão Wi-Fi antes de reiniciar em segundo plano.</b>]]></string>
-    <string name="settings_tcp_port">Porta TCP</string>
-    <string name="settings_tcp_port_default">Padrão (5555)</string>
-    <string name="settings_tcp_port_hint">Deixe em branco para usar o padrão (5555)</string>
     <string name="settings_auto_disable_usb_debugging">Desativar automaticamente a depuração USB</string>
     <string name="settings_auto_disable_usb_debugging_summary">Desativar a depuração USB ao parar o Shizuku</string>
     <string name="settings_language">Idioma</string>
-    <string name="settings_translation_contributors">Colaboradores da tradução</string>
     <string name="settings_translation">Participe da tradução</string>
     <string name="settings_translation_summary">Ajude-nos a traduzir o %s para o seu idioma</string>
-    <string name="settings_user_interface">Aparência</string>
-    <string name="settings_black_night_theme">Tema noturno preto</string>
-    <string name="settings_black_night_theme_summary">Usar o tema preto puro quando o modo noturno estiver ativado</string>
-    <string name="settings_support">Suporte</string>
     <string name="settings_version">Versão</string>
     <string name="settings_developer_options_revealed">Opções do Desenvolvedor reveladas!</string>
     <string name="settings_developer_options_click_more">Toque mais %d vezes para revelar as Opções do Desenvolvedor.</string>
     <string name="settings_diagnostics_category">Diagnósticos</string>
-    <string name="settings_stealth_mode">Modo Furtivo</string>
-    <string name="settings_stealth_mode_summary">Ocultar o ícone do aplicativo e simplificar a interface para privacidade</string>
 
     <string name="settings_report_bug">Reportar um bug</string>
     <string name="settings_activity_log">Registro de atividades</string>
-    <string name="settings_activity_log_empty">Nenhuma atividade registrada ainda.</string>
     <string name="settings_activity_log_clear">Limpar registros</string>
     <string name="settings_enable_activity_log">Ativar registro de atividades</string>
     <string name="settings_enable_activity_log_summary">Registrar e exibir chamadas e eventos da API do Shizuku na tela inicial.</string>
     <string name="settings_show_activity_log_home">Exibir Registro de Atividades</string>
-    <string name="settings_home_visibility">Visibilidade da tela inicial</string>
     <string name="settings_update_app_database">Atualizar banco de dados de aplicativos</string>
     <string name="settings_update_app_database_summary">Buscar as descrições de aplicativos e sugestões de aprimoramento mais recentes do GitHub.</string>
-    <string name="settings_update_app_database_success">Banco de dados atualizado com sucesso</string>
     <string name="settings_update_app_database_error">Falha ao atualizar o banco de dados</string>
-    <string name="settings_show_terminal_home">Exibir Terminal (rish)</string>
-    <string name="settings_show_automation_home">Exibir Automação</string>
-    <string name="settings_show_learn_more_home">Exibir Guia do Desenvolvedor</string>
-    <string name="settings_show_start_adb_home">Exibir Configuração de ADB com Fio</string>
-    <string name="home_edit_mode_hint">Segure a alça para arrastar. Toque em × para remover um cartão.</string>
-    <string name="settings_advanced">Avançado</string>
     <string name="settings_legacy_pairing">Pareamento legado</string>
     <string name="settings_legacy_pairing_summary">Digitar o código de pareamento em uma caixa de diálogo em vez de uma notificação</string>
     <string name="settings_reset_adb_keys">Redefinir Chaves ADB</string>
@@ -404,25 +327,16 @@
     <string name="settings_themed_icon_open_settings">Abrir configurações do ícone</string>
     <string name="settings_shell_interceptor">Acelerador de Shell</string>
     <string name="settings_shell_interceptor_summary">Acelerar comandos de shell via APIs nativas. Melhora o desempenho de tarefas do MacroDroid e do Tasker.</string>
-    <string name="settings_avf_manager">Gerenciador de Máquina Virtual (AVF)</string>
     <string name="settings_avf_manager_summary">Executar VMs isoladas de Microdroid ou Linux. Usado com o Hyperbox e o Termux-VM para gerenciar ambientes virtuais.</string>
     <string name="settings_storage_proxy">Ponte de Armazenamento</string>
-    <string name="settings_storage_proxy_summary">Acessar diretamente /data/data/ e caminhos restritos. Usado pelo Neo Backup e SD Maid para gerenciar dados de aplicativos.</string>
-    <string name="settings_continuity_bridge">Continuidade Multi-Dispositivo</string>
     <string name="settings_continuity_bridge_summary">Sincronizar estados de aplicativos e transferir tarefas privilegiadas entre dispositivos. Funciona com o MacroDroid para automação entre dispositivos.</string>
-    <string name="settings_ai_core_plus">Ponte de Inteligência</string>
     <string name="settings_ai_core_plus_summary">APIs priorizadas de NPU e contexto de tela. Aprimora o Gemini e LLMs locais com reconhecimento privilegiado de tela.</string>
     <string name="settings_window_manager_plus">Ajustador de Janelas</string>
     <string name="settings_window_manager_plus_summary">Controlar janelas e Barras de Bolhas. Usado pelo Taskbar e pelo MacroDroid para gerenciar janelas flutuantes e sobreposições do sistema.</string>
     <string name="settings_overlay_manager_plus">↳ Ponte de Personalização do Sistema</string>
     <string name="settings_overlay_manager_plus_summary">Gerenciar overlays RRO do sistema. Necessário para que o Hex Installer e os temas Substratum funcionem sem root.</string>
-    <string name="settings_network_governor_plus">Governador de Rede e DNS</string>
     <string name="settings_network_governor_plus_summary">Controle privilegiado de rede. Usado pelo AFWall+ para filtragem robusta em todo o sistema.</string>
-    <string name="settings_activity_manager_plus">↳ Controle Profundo de Processos</string>
     <string name="settings_activity_manager_plus_summary">Controle nativo de processos. Permite que o MacroDroid, o Tasker e o Naptime encerrem aplicativos profundamente e definam grupos de espera.</string>
-    <string name="settings_plus_app_found">Aplicativo integrado detectado: %1$s. Toque para configurar.</string>
-    <string name="settings_plus_app_setup_title">Configurar Integração</string>
-    <string name="settings_plus_app_open">Abrir Aplicativo</string>
     <string name="settings_plus_learn_more">Saiba mais</string>
     <string name="settings_plus_feature_help_enable">Ativar recurso</string>
     <string name="settings_plus_feature_help_close">Fechar</string>
@@ -433,7 +347,6 @@
     <string name="diagnostics_warning_automation_stopped">Regras de automação de rede configuradas, mas o serviço está parado — o Binder Firewall não será alternado automaticamente. Toque para reiniciar.</string>
     <string name="diagnostics_automation_start_failed">Não foi possível iniciar o serviço de automação</string>
     <string name="diagnostics_battery_settings_open_failed">Não foi possível abrir as configurações de bateria</string>
-    <string name="diagnostics_shadow_binder_navigate_hint">Acesse Central de Recursos → Segurança e Acesso → Shadow Binder para selecionar aplicativos</string>
     <string name="diagnostics_device_owner_setup_title">Configurar Device Owner</string>
     <string name="diagnostics_device_owner_setup_message">O Modo Dhizuku requer que este aplicativo seja o Device Owner.
 
@@ -460,7 +373,6 @@ Execute este comando no PC (a depuração USB deve estar ativada):
     <string name="help_avf_manager_detail">O Gerenciador do Android Virtualization Framework (AVF) permite executar máquinas virtuais isoladas de Linux ou Microdroid. Em hardware compatível (Snapdragon 8 Gen 1+, Tensor G2+), isso habilita virtualização acelerada por hardware com suporte a VirtIO-GPU para executar ambientes Linux desktop ou tarefas seguras isoladas.</string>
 
     <string name="help_storage_proxy_title">Sobre a Ponte de Armazenamento</string>
-    <string name="help_storage_proxy_detail">A Ponte de Armazenamento fornece acesso autenticado e de alta velocidade a caminhos de sistema de arquivos restritos, como /data/data/ (dados de aplicativos) e /data/app/ (arquivos APK). Isso permite que ferramentas de backup como o Neo Backup funcionem sem acesso root completo, mantendo a segurança por meio do modelo de permissões do Shizuku.</string>
 
     <string name="help_continuity_bridge_title">Sobre a Continuidade Multi-Dispositivo</string>
     <string name="help_continuity_bridge_detail">A Ponte de Continuidade permite que dispositivos com Shizuku+ na mesma rede transfiram tarefas e sincronizem o estado da área de transferência/aplicativos. Isso utiliza as APIs de Handoff do Android 17 (retroportadas quando possível) para permitir transições contínuas de tarefas de automação entre seu telefone e tablet.</string>
@@ -481,14 +393,7 @@ Execute este comando no PC (a depuração USB deve estar ativada):
     <string name="help_activity_manager_plus_detail">O Controle Profundo de Processos permite que o servidor ignore as restrições padrão de hibernação e espera de aplicativos. Ele pode forçar aplicativos ao grupo de espera RESTRICTED ou realizar um verdadeiro deepForceStop (encerrando todos os serviços e tarefas em segundo plano), o que é essencial para ferramentas agressivas de economia de bateria.</string>
 
     <!--Títulos das categorias de configurações Plus-->
-    <string name="settings_plus_category_framework">Estrutura</string>
-    <string name="settings_plus_category_performance">Desempenho e Controle de Processos</string>
-    <string name="settings_plus_category_files">Arquivos e Máquinas Virtuais</string>
-    <string name="settings_plus_category_display">Exibição e Personalização</string>
-    <string name="settings_plus_category_network">Rede e Privacidade</string>
-    <string name="settings_plus_category_intelligence">Inteligência e Continuidade</string>
     <string name="settings_plus_category_developer">Opções do Desenvolvedor (Experimental)</string>
-    <string name="settings_plus_category_root_compat">Módulos de Compatibilidade Root</string>
     <string name="settings_root_magisk_mocking">Simulação de Ambiente Magisk</string>
     <string name="settings_root_magisk_mocking_summary">Simula binários, propriedades e pastas internas do Magisk para enganar aplicativos que detectam root.</string>
     <string name="settings_root_auto_grant">Ponte de Aprovação Automática</string>
@@ -509,28 +414,17 @@ Execute este comando no PC (a depuração USB deve estar ativada):
     <string name="help_root_busybox_title">Sobre a Simulação do BusyBox</string>
     <string name="help_root_busybox_detail">O BusyBox é um conjunto de utilitários Unix comum em dispositivos com root. Alguns aplicativos root mais antigos verificam a existência dele antes de executar sua lógica. Este módulo retorna uma resposta simulada de sucesso para o comando "busybox".</string>
 
-    <string name="settings_hide_disabled_plus_features">Ocultar Recursos Plus desativados</string>
-    <string name="settings_hide_disabled_plus_features_summary">Ocultar recursos Plus que não estão disponíveis neste dispositivo ou configuração</string>
-    <string name="settings_vector">Aceleração Vetorial</string>
     <string name="settings_vector_summary">Ativar renderização vetorial acelerada por hardware para melhor desempenho gráfico</string>
-    <string name="settings_experimental_root">Compatibilidade Root</string>
     <string name="settings_experimental_root_summary">Ativar camada de compatibilidade para operações baseadas em root via Shizuku</string>
-    <string name="settings_spoof_device">Falsificar Identidade do Dispositivo</string>
     <string name="settings_spoof_device_summary">Informar um modelo de dispositivo diferente aos aplicativos para fins de compatibilidade ou testes</string>
-    <string name="settings_avf_manager_experimental">Gerenciador de Máquina Virtual (AVF) (Experimental)</string>
-    <string name="settings_ai_core_plus_experimental">Ponte de Inteligência (Experimental)</string>
     <string name="settings_vector_experimental">Aceleração Vetorial</string>
     <string name="settings_experimental_root_experimental">Compatibilidade Root Experimental</string>
     <string name="settings_spoof_device_experimental">Falsificar Identidade do Dispositivo</string>
     <string name="settings_open_source_licenses">Licenças de código aberto</string>
     <string name="settings_open_source_licenses_summary">Bibliotecas de código aberto usadas pelo Shizuku+</string>
-    <string name="settings_experimental_warning_title">Recurso Experimental</string>
-    <string name="settings_experimental_warning_message">Este recurso é experimental e pode causar instabilidade ou falhas no sistema. Tem certeza de que deseja ativá-lo?</string>
     <string name="settings_spoof_target">Dispositivo de Destino</string>
 
     <!--Integração com Root (renomeada de Compatibilidade Legada)-->
-    <string name="settings_category_root_integration">Integração Root</string>
-    <string name="settings_nav_root_integration_summary">Ponte SU, proxy ADB e gerenciamento de sessão root</string>
     <string name="settings_adb_proxy">Servidor Proxy ADB Local</string>
     <string name="settings_adb_proxy_summary">Emular um servidor ADB na porta 15555 para dar suporte a aplicativos que exigem ADB sem Fio, sem manter o recurso do sistema ativo.</string>
     <string name="settings_on_device_adb_tcp">ADB por TCP no dispositivo</string>
@@ -541,8 +435,6 @@ Execute este comando no PC (a depuração USB deve estar ativada):
     <string name="settings_fake_su_summary">Fornecer um binário "su" baseado no Shizuku para aplicativos root legados que suportam caminhos personalizados.</string>
     <string name="settings_root_integration_hub">Central de Integração Root</string>
     <string name="settings_root_integration_hub_summary">Configure e gerencie aplicativos root para funcionarem com os privilégios do Shizuku+.</string>
-    <string name="settings_root_compatibility_hub">Central de Compatibilidade Root</string>
-    <string name="settings_root_compatibility_hub_summary">Configure e gerencie aplicativos root para funcionarem com os privilégios do Shizuku+.</string>
     <string name="su_bridge_title">Ponte SU</string>
     <string name="su_bridge_description">Fornecer acesso root a aplicativos que não suportam o Shizuku criando um binário "su" personalizado.</string>
     <string name="su_bridge_suggested_apps">Aplicativos Sugeridos</string>
@@ -550,26 +442,18 @@ Execute este comando no PC (a depuração USB deve estar ativada):
     <string name="su_bridge_global_config_title">Configuração Global</string>
     <string name="su_bridge_global_config_desc">Defina um caminho personalizado para o script da ponte SU. Os aplicativos executarão este caminho ao solicitar root.</string>
     <string name="su_bridge_setup_all">Configurar Todos</string>
-    <string name="su_bridge_setup_all_success">Configuração automática tentada para todos os aplicativos compatíveis.</string>
     <string name="su_bridge_magic_setup">Configuração Mágica</string>
     <string name="su_bridge_magic_setup_success">Configuração Mágica concluída! O Shizuku+ configurou %s para você.</string>
-    <string name="su_bridge_magic_setup_fail">A Configuração Mágica falhou. Por favor, use a cópia manual do caminho.</string>
-    <string name="su_bridge_magic_setup_all">Configuração Mágica de Todos</string>
     <string name="su_bridge_magic_setup_all_summary">O Shizuku+ configurou %d aplicativos para você!</string>
     <string name="su_bridge_magic_setup_all_no_apps">Nenhum aplicativo root compatível encontrado para automação.</string>
     <string name="su_bridge_copy_open">Copiar caminho e abrir</string>
     <string name="su_bridge_no_export">Nenhum caminho SU definido. Exporte os arquivos do Shizuku primeiro pela tela inicial.</string>
     <string name="root_hub_shizuku_aware_note">A Ponte SU fornece acesso semelhante a root em dispositivos sem root. No entanto, a "Configuração Mágica" (configuração automática) requer o Shizuku no modo Root para modificar outros aplicativos. No modo ADB, use "Copiar caminho" e configure seus aplicativos manualmente.</string>
-    <string name="su_bridge_magic_setup_root_required">A Configuração Mágica requer o Shizuku no modo Root.</string>
-    <string name="su_bridge_no_custom_path_support">Este aplicativo não possui configuração de caminho personalizado. Requer root real.</string>
-    <string name="su_bridge_manual_setup_required">Configuração manual necessária no modo ADB</string>
     <string name="su_bridge_how_to_use">Como usar:</string>
     <string name="su_bridge_step_1">1. Exporte os arquivos do Shizuku pela tela inicial.</string>
     <string name="su_bridge_step_2">2. No seu aplicativo root, procure "Caminho SU" ou "Caminho Binário" nas configurações.</string>
     <string name="su_bridge_step_3">3. Altere-o para o caminho do arquivo "su" exportado.</string>
     <string name="su_bridge_step_4">4. Para aplicativos sem configuração de caminho personalizado, ative a "Ponte SU" nas configurações do Shizuku+. Isso redireciona automaticamente muitas chamadas su legadas.</string>
-    <string name="su_bridge_app_instruction">Defina o caminho em Configurações &gt; %s</string>
-    <string name="su_bridge_path_label">Caminho su exportado</string>
     <string name="su_bridge_su_path_label">Caminho su exportado</string>
     <string name="su_bridge_copy_path">Copiar caminho</string>
     <string name="su_bridge_default_nav_hint">Definir caminho SU personalizado nas configurações do aplicativo</string>
@@ -590,30 +474,19 @@ Execute este comando no PC (a depuração USB deve estar ativada):
     <!--Aviso de Sentry offline-->
     <string name="sentry_offline_notice_title">Relatório de Falhas Offline</string>
     <string name="sentry_offline_notice_summary">O relatório automático de falhas via Sentry está atualmente desativado devido a limites de cota (redefinição em 1º de maio). Por favor, reporte quaisquer falhas manualmente.</string>
-    <string name="sentry_offline_notice_button">Saiba Mais</string>
-    <string name="sentry_offline_notice_learn_more">O Sentry está atualmente offline. Se o aplicativo travar ou se comportar de forma inesperada, gere um relatório manualmente e publique-o no nosso rastreador de Issues do GitHub. Isso nos ajuda a corrigir bugs mesmo enquanto nossos sistemas automatizados estão pausados.</string>
 
     <string name="manual_report_title">Relatório Manual de Falha</string>
     <string name="manual_report_summary">Gerar um relatório detalhado com registros para nos ajudar a depurar problemas manualmente.</string>
-    <string name="manual_report_button_generate">Gerar e Copiar</string>
     <string name="manual_report_button_github">Copiar Relatório e Ir para o GitHub</string>
     <string name="manual_report_toast_copied">Relatório copiado! Por favor, cole-o na issue do GitHub.</string>
     <string name="manual_report_last_crash_title">Relatar Última Falha</string>
     <string name="manual_report_last_crash_summary">Uma falha persistente foi detectada. Toque para gerar um relatório com o stacktrace salvo.</string>
     <string name="manual_report_clipboard_label">Relatório de Falha</string>
-    <string name="manual_report_clear_dialog_title">Limpar Falha Salva?</string>
-    <string name="manual_report_clear_dialog_message">Agora que o relatório foi copiado, você gostaria de limpar os dados de falha salvos?</string>
-    <string name="manual_report_clear_dialog_clear">Limpar</string>
-    <string name="manual_report_clear_dialog_keep">Manter</string>
-    <string name="manual_report_copied_dialog_title">Relatório Copiado</string>
-    <string name="manual_report_copied_dialog_message">O relatório foi copiado para a área de transferência. Gostaria de abrir as Issues do GitHub agora, ou compartilhar o relatório como um arquivo?</string>
     <string name="manual_report_copied_dialog_share">Compartilhar Arquivo</string>
     <string name="crash_detected_dialog_message">O Shizuku+ detectou uma falha da sua última sessão. Gostaria de gerar um relatório para nos ajudar a corrigi-la?</string>
-    <string name="crash_detected_dialog_short_message">O relatório foi copiado. Abrir o GitHub para colá-lo, ou compartilhar o relatório como um arquivo?</string>
     <string name="crash_detected_dialog_ignore">Ignorar</string>
     <string name="shortcut_open_terminal">Abrir Terminal</string>
 
-    <string name="watchdog_shizuku_crashed_action_report_manually">Reportar Manualmente</string>
 
     <!--Diálogo de relatório de bug-->
     <string name="bug_report_dialog_before_reporting">Primeiro, faça o seguinte:</string>
@@ -673,7 +546,6 @@ Execute este comando no PC (a depuração USB deve estar ativada):
 
 Reinicie completamente o dispositivo para encerrar o servidor original e, em seguida, inicie o Shizuku+ usando ADB ou Root.</string>
     <string name="stock_shizuku_restarting_via_root">Reiniciando via Root…</string>
-    <string name="backup_plain_exported">Backup sem criptografia exportado. Mantenha este arquivo privado — ele não é criptografado.</string>
     <string name="backup_exported_success">Backup exportado com sucesso</string>
     <string name="backup_restored_success">Backup restaurado com sucesso. Reinicie o aplicativo.</string>
     <string name="backup_failed_generic">Falha no backup: %1$s</string>
@@ -681,8 +553,6 @@ Reinicie completamente o dispositivo para encerrar o servidor original e, em seg
     <string name="backup_auth_failed">Falha na autenticação (%1$s)</string>
     <string name="toast_shizuku_already_starting">O Shizuku já está sendo iniciado em segundo plano</string>
     <string name="toast_accessibility_tv_only">Esta automação é para dispositivos TV ou Samsung One UI com suporte a TLS.</string>
-    <string name="toast_pairing_timeout">O tempo limite do serviço de pareamento do Shizuku foi atingido</string>
-    <string name="toast_adb_ssl_error">Falha no handshake do ADB sem fio (erro de protocolo SSL). Por favor, use "Redefinir Chaves ADB" nas Opções do Desenvolvedor e tente novamente.</string>
     <string name="adb_error_ssl_title">Erro de Conexão</string>
     <string name="adb_error_ssl_message">Falha no handshake do ADB sem fio (erro de protocolo SSL). Isso geralmente acontece quando as chaves ADB estão corrompidas. Gostaria de redefini-las nas Opções do Desenvolvedor?</string>
     <string name="adb_error_ssl_button_reset">Ir para Opções do Desenvolvedor</string>
@@ -695,10 +565,7 @@ Reinicie completamente o dispositivo para encerrar o servidor original e, em seg
 
     <!--Sobre-->
     <string name="settings_about">Sobre</string>
-    <string name="action_about">Sobre</string>
-    <string name="about_dialog_button_close">Fechar</string>
     <string name="about_view_source_code_title">Código-fonte</string>
-    <string name="about_view_source_code"><![CDATA[Ver código-fonte em %s]]></string>
 
     <!--Iniciar/Parar-->
      <string name="start">Iniciar</string>
@@ -709,11 +576,6 @@ Reinicie completamente o dispositivo para encerrar o servidor original e, em seg
     <!--Notificação-->
     <string name="notification_channel_automation">Serviço de automação</string>
     <string name="notification_automation_title">Automação em execução</string>
-    <string name="notification_channel_service_status">Status de início do serviço</string>
-    <string name="notification_service_starting">O serviço do Shizuku está iniciando…</string>
-    <string name="notification_service_start_failed">Falha ao iniciar o serviço do Shizuku.</string>
-    <string name="notification_service_start_no_root">Falha ao solicitar permissão root.</string>
-    <string name="notification_working">Trabalhando…</string>
     <string name="notification_channel_adb_pairing">Pareamento de depuração sem fio</string>
     <string name="notification_adb_pairing_input_paring_code">Digite o código de pareamento</string>
     <string name="notification_adb_pairing_searching_for_service_title">Procurando serviço de pareamento</string>
@@ -739,11 +601,8 @@ Reinicie completamente o dispositivo para encerrar o servidor original e, em seg
 
     <!--Inicializador-->
     <string name="starter">Iniciador</string>
-    <string name="starting_root_shell" translatable="false">Starting root shell…</string>
     <string name="start_with_root_failed">Não é possível iniciar o serviço porque a permissão root não foi concedida ou este dispositivo não possui root.</string>
     <string name="starter_waiting">Aguardando o serviço…</string>
-    <string name="starter_waiting_description">Conectando — toque em Cancelar para parar.</string>
-    <string name="starter_retrying">Tentando reconectar…\n</string>
     <string name="starter_retry">Tentar novamente</string>
     <string name="adb_error_timeout">O serviço não iniciou a tempo. Certifique-se de que a Depuração sem fio esteja ativada e tente novamente.</string>
     <string name="adb_error_generic">Ocorreu um erro inesperado. Por favor, tente novamente.</string>
@@ -753,17 +612,14 @@ Reinicie completamente o dispositivo para encerrar o servidor original e, em seg
     <string name="wadb_notification_wifi_required">Aguardando conexão Wi-Fi para prosseguir</string>
     <string name="wadb_notification_retry">Aguardando para tentar novamente</string>
     <string name="wadb_error_title">Erro ao iniciar durante a inicialização</string>
-    <string name="wadb_error_notify_dev">Toque para notificar o desenvolvedor.</string>
     <string name="wadb_permission_error_notification_title">Erro de Permissão</string>
     <string name="wadb_permission_error_notification_content">O Shizuku precisa de WRITE_SECURE_SETTINGS para iniciar durante a inicialização. Toque para saber como concedê-la.</string>
-    <string name="wadb_notification_channel">Serviço de início automático do ADB</string>
 
     <!--Watchdog-->
     <string name="watchdog_running">O Watchdog está em execução</string>
     <string name="watchdog_turn_off">Desativar</string>
     <string name="watchdog_shizuku_crashed_title">O Shizuku travou recentemente</string>
     <string name="watchdog_shizuku_crashed_text">O Watchdog reiniciou o serviço. Toque para saber sobre possíveis correções para evitar futuras falhas.</string>
-    <string name="watchdog_shizuku_crashed_action_turn_off_alerts">Desativar Alertas</string>
 
     <!--Diversos-->
     <string name="dialog_cannot_open_browser_title">Não é possível iniciar o navegador</string>
@@ -780,30 +636,16 @@ Reinicie completamente o dispositivo para encerrar o servidor original e, em seg
     <string name="wadb_notification_attempt_now">Tentar agora</string>
 
 
-    <string name="settings_category_general">Geral</string>
-    <string name="settings_category_dark_mode">Modo Escuro</string>
-    <string name="settings_category_automatic">Automático</string>
 
     <!--Resumos da navegação das configurações-->
-    <string name="settings_category_swipe">Ações de Deslizar</string>
-    <string name="settings_category_long_press">Ações de Pressionar e Segurar</string>
-    <string name="settings_category_home_cards">Cartões da Tela Inicial</string>
     <string name="settings_category_activity_log">Registro de Atividades</string>
-    <string name="settings_category_database">Banco de Dados</string>
-    <string name="settings_category_network">Rede</string>
-    <string name="settings_category_material_you">Material You</string>
-    <string name="settings_category_language">Idioma</string>
     <string name="settings_category_appearance">Aparência</string>
-    <string name="settings_main_category_capabilities">Recursos</string>
     <string name="settings_main_category_personalization">Personalização</string>
     <string name="settings_main_category_system">Sistema</string>
-    <string name="settings_main_nav_feature_hub_title">Central de Recursos</string>
-    <string name="settings_main_nav_feature_hub_summary">Gerencie recursos exclusivos do Plus</string>
     <string name="settings_main_nav_root_compat_title">Root e Compatibilidade</string>
     <string name="settings_main_nav_root_compat_summary">Conexão ADB, ponte SU, integração sem root e compatibilidade com o Shizuku original</string>
     <string name="settings_main_nav_appearance_summary">Tema, formas, ícones, animações, layout da tela inicial e idioma</string>
     <string name="settings_main_nav_app_interactions_title">Interações com aplicativos</string>
-    <string name="settings_main_nav_app_interactions_summary">Gestos, ações de toque prolongado e verificação de instalação</string>
     <string name="settings_main_nav_startup_behavior_title">Inicialização e comportamento</string>
     <string name="settings_main_nav_startup_behavior_summary">Opções de inicialização, watchdog, rede e status de atividade</string>
     <string name="settings_main_nav_advanced_diagnostics_title">Avançado e diagnósticos</string>
@@ -824,15 +666,7 @@ Impressão digital da chave RSA:
 %1$s</string>
     <string name="fake_adb_pairing_allow">Permitir</string>
     <string name="fake_adb_pairing_deny">Negar</string>
-    <string name="settings_category_advanced">Avançado</string>
 
-    <string name="settings_nav_behavior_summary">Iniciar ao ligar, Watchdog e modo TCP</string>
-    <string name="settings_nav_shizuku_plus_summary">API Avançada, interceptador de shell e mais</string>
-    <string name="settings_nav_ui_summary">Tema, cores, idioma</string>
-    <string name="settings_nav_app_management_summary">Ações de deslizar e pressionar e segurar</string>
-    <string name="settings_nav_home_summary">Cartões e atalhos visíveis</string>
-    <string name="settings_nav_legacy_summary">Proxy ADB, ponte su, compatibilidade root</string>
-    <string name="settings_nav_advanced_summary">Diagnósticos, registros, ajuda</string>
 
     <!--Acessibilidade - descrições de conteúdo-->
     <string name="accessibility_icon_server_status">Ícone de status do servidor</string>
@@ -844,88 +678,39 @@ Impressão digital da chave RSA:
     <string name="accessibility_icon_automation">Ícone de automação</string>
     <string name="accessibility_icon_learn_more">Ícone de saiba mais</string>
     <string name="accessibility_icon_warning">Ícone de aviso</string>
-    <string name="accessibility_icon_help">Ícone de ajuda</string>
     <string name="accessibility_icon_drag_handle">Arrastar para reordenar</string>
-    <string name="accessibility_icon_remove">Remover cartão</string>
-    <string name="accessibility_icon_close">Fechar</string>
     <string name="accessibility_icon_info">Informação</string>
-    <string name="accessibility_icon_play">Reproduzir</string>
-    <string name="accessibility_icon_settings">Configurações</string>
-    <string name="accessibility_icon_code">Código</string>
-    <string name="accessibility_icon_open_in_new">Abrir em nova janela</string>
-    <string name="accessibility_icon_link">Link</string>
-    <string name="accessibility_icon_restart">Reiniciar</string>
-    <string name="accessibility_icon_start">Iniciar</string>
     <string name="accessibility_button_start">Botão de iniciar</string>
-    <string name="accessibility_button_restart">Botão de reiniciar</string>
-    <string name="accessibility_button_view_command">Botão de ver comando</string>
-    <string name="accessibility_button_view_guide">Botão de ver guia</string>
     <string name="accessibility_state_expanded">Expandido</string>
     <string name="accessibility_state_collapsed">Recolhido</string>
-    <string name="accessibility_button_view_intents">Botão de ver intents</string>
-    <string name="accessibility_button_pairing">Botão de pareamento</string>
-    <string name="accessibility_button_developer_options">Botão de opções do desenvolvedor</string>
-    <string name="accessibility_button_notification_settings">Botão de configurações de notificação</string>
-    <string name="accessibility_button_export_files">Botão de exportar arquivos</string>
-    <string name="accessibility_button_activity_log">Botão de registro de atividades</string>
-    <string name="accessibility_swipe_right">Deslize para a direita para ação rápida</string>
-    <string name="accessibility_swipe_left">Deslize para a esquerda para ação rápida</string>
-    <string name="accessibility_action_grant_permission">Conceder permissão do Shizuku</string>
-    <string name="accessibility_action_revoke_permission">Revogar permissão do Shizuku</string>
-    <string name="accessibility_action_open_app">Abrir aplicativo</string>
     <string name="accessibility_action_app_info">Abrir configurações de informações do aplicativo</string>
-    <string name="accessibility_action_hide_app">Ocultar da lista</string>
-    <string name="accessibility_action_unhide_app">Reexibir na lista</string>
-    <string name="accessibility_action_toggle_selection">Alternar seleção</string>
-    <string name="accessibility_action_expand">Expandir</string>
-    <string name="accessibility_action_collapse">Recolher</string>
-    <string name="accessibility_status_running">Em execução</string>
-    <string name="accessibility_status_stopped">Parado</string>
-    <string name="accessibility_status_error">Erro</string>
     <string name="accessibility_permission_granted">Permissão concedida</string>
-    <string name="accessibility_permission_denied">Permissão negada</string>
 
     <!--Telas de estado vazio-->
     <string name="empty_state_title_no_results">Nenhum resultado encontrado</string>
     <string name="empty_state_description_no_results">Nenhum aplicativo corresponde ao seu filtro ou critério de pesquisa atual.</string>
-    <string name="empty_state_title_no_apps">Nenhum aplicativo ainda</string>
-    <string name="empty_state_description_no_apps">Aplicativos que solicitaram ou declararam a permissão do Shizuku aparecerão aqui.</string>
     <string name="empty_state_title_no_home_cards">Todos os cartões ocultos</string>
-    <string name="empty_state_description_no_home_cards">Você ocultou todos os cartões da tela inicial. Acesse Configurações para restaurá-los.</string>
     <string name="empty_state_action_restore_home_cards">Restaurar cartões</string>
-    <string name="empty_state_title_no_plus_features">Todos os recursos desativados</string>
-    <string name="empty_state_description_no_plus_features">Você desativou todos os recursos do Shizuku+. Ative os recursos para vê-los aqui.</string>
     <string name="empty_state_title_activity_log_empty">Nenhuma atividade registrada</string>
     <string name="empty_state_description_activity_log_empty">As chamadas e eventos da API do Shizuku aparecerão aqui quando o registro de atividades estiver ativado.</string>
-    <string name="empty_state_title_hidden_apps">Nenhum aplicativo oculto</string>
-    <string name="empty_state_description_hidden_apps">Os aplicativos que você ocultar da lista de gerenciamento aparecerão aqui.</string>
 
     <!--Configurações de atualização-->
-    <string name="settings_update_category">Atualização Automática</string>
-    <string name="settings_update_title">Atualizações</string>
-    <string name="settings_update_summary">Verificar atualizações do aplicativo e configurar a atualização automática</string>
     
     <!--Opções do desenvolvedor-->
     <string name="settings_developer_options">Opções do Desenvolvedor</string>
     <string name="settings_developer_options_summary">Virtualização, falsificação de dispositivo e recursos experimentais</string>
-    <string name="settings_developer_category_virtualization">Virtualização</string>
-    <string name="settings_developer_category_experimental">Experimental</string>
     <string name="settings_auto_update_title">Verificar atualizações automaticamente</string>
     <string name="settings_auto_update_summary">Verificar automaticamente novas versões ao iniciar o aplicativo</string>
     <string name="settings_auto_install_title">Instalar atualizações automaticamente</string>
     <string name="settings_auto_install_summary">Baixar e solicitar automaticamente a instalação de atualizações (requer permissão)</string>
-    <string name="settings_update_channel_category">Canal de Lançamento</string>
     <string name="settings_update_channel_title">Canal de atualização</string>
     <string name="update_channel_stable">Estável</string>
     <string name="update_channel_dev">Desenvolvimento / Pré-lançamento</string>
     <string name="update_channel_dev_warning_title">Mudar para o canal de Desenvolvimento?</string>
     <string name="update_channel_dev_warning_message">Os lançamentos de Desenvolvimento são criados a partir dos commits mais recentes e podem conter bugs, falhas ou mudanças que quebram funcionalidades. Use isso apenas se quiser testar novos recursos antecipadamente.\n\nVocê pode voltar para o canal Estável a qualquer momento.</string>
     <string name="settings_update_manual_category">Atualização Manual</string>
-    <string name="settings_check_for_update_title">Verificar atualização</string>
     <string name="settings_check_for_update_summary">Verificar manualmente se uma nova versão está disponível</string>
-    <string name="settings_current_version_title">Versão atual</string>
     <string name="settings_last_check_title">Última verificação</string>
-    <string name="update_never_checked">Nunca</string>
 
     <!--Notificações de atualização-->
     <string name="update_notification_channel">Notificações de Atualização</string>
@@ -943,17 +728,6 @@ Impressão digital da chave RSA:
     <string name="update_download_failed_http">Um erro de rede interrompeu o download. Verifique sua conexão e tente novamente.</string>
 
     <!--Diálogo de migração-->
-<string name="migration_dialog_title">Importante: Reinstalação Necessária</string>
-    <string name="migration_dialog_message">O Shizuku+ mudou seu ID de pacote de moe.shizuku.privileged.api para af.shizuku.plus.api. Sua versão antiga e esta versão são tratadas como aplicativos separados, portanto uma atualização direta não foi possível.\n\nVocê pode migrar suas configurações da versão antiga e depois desinstalá-la.</string>
-    <string name="migration_dialog_message_root">O Shizuku+ mudou seu ID de pacote de moe.shizuku.privileged.api para af.shizuku.plus.api. Sua versão antiga e esta versão são tratadas como aplicativos separados, portanto uma atualização direta não foi possível.\n\nAcesso root disponível — toque em Migrar Configurações para copiar suas configurações da versão antiga e, em seguida, desinstale-a.</string>
-    <string name="migration_migrate_settings">Migrar Configurações</string>
-    <string name="migration_uninstall_old">Desinstalar Versão Antiga</string>
-    <string name="migration_dismiss">Dispensar</string>
-    <string name="migration_success_title">Configurações Migradas</string>
-    <string name="migration_success_message">Suas configurações foram copiadas da versão antiga. Agora você pode desinstalar com segurança o moe.shizuku.privileged.api.</string>
-    <string name="migration_failure_title">Falha na Migração</string>
-    <string name="migration_failure_message">Não foi possível ler as configurações da versão antiga. Talvez seja necessário reconfigurar suas preferências manualmente.\n\nVocê ainda pode desinstalar a versão antiga com segurança.</string>
-    <string name="migration_no_root_message">O acesso root não está disponível, portanto as configurações não podem ser migradas automaticamente. Você precisará reconfigurar suas preferências manualmente.\n\nVocê pode desinstalar a versão antiga quando estiver pronto.</string>
 
     <!--Diálogos de atualização-->
     <string name="update_available_title">Atualização Disponível</string>
@@ -973,24 +747,12 @@ Impressão digital da chave RSA:
     <string name="update_checking">Verificando atualizações…</string>
     <string name="ok">OK</string>
     <string name="no_file_picker">Nenhum aplicativo seletor de arquivos encontrado neste dispositivo</string>
-    <string name="wadb_notification_discovery_timeout">Tempo limite na descoberta de porta ADB atingido — tentando novamente…</string>
     <string name="shell_export_success">Arquivos exportados com sucesso</string>
     <string name="shell_export_failed">Falha na exportação — nenhum arquivo pôde ser gravado</string>
     <string name="shell_export_partial">%1$d de %2$d arquivos exportados (alguns falharam)</string>
 
     <!--Backup/restauração das configurações-->
-    <string name="settings_backup_category">Backup e Restauração</string>
-    <string name="settings_export_title">Exportar Configurações</string>
-    <string name="settings_export_summary">Salvar todas as configurações do Shizuku+ em um arquivo JSON</string>
-    <string name="settings_import_title">Importar Configurações</string>
-    <string name="settings_import_summary">Restaurar configurações de um arquivo JSON exportado anteriormente</string>
-    <string name="settings_export_success">Configurações exportadas com sucesso</string>
-    <string name="settings_export_failed">Falha na exportação</string>
-    <string name="settings_import_success">Configurações importadas — reinicie o aplicativo para aplicar todas as alterações</string>
-    <string name="settings_import_failed">Falha na importação: arquivo inválido ou incompatível</string>
     <string name="adb_native_unavailable">O pareamento ADB não está disponível neste dispositivo</string>
-    <string name="shizuku_not_available">O serviço do Shizuku não está disponível</string>
-    <string name="su_bridge_magic_setup_success_global_setting">Configuração Mágica concluída! Configuração global do sistema configurada.</string>
 
     <string name="changelog_title">Novidades</string>
     <string name="changelog_close">Fechar</string>
@@ -1023,7 +785,6 @@ Impressão digital da chave RSA:
     <string name="update_no_release_notes">Nenhuma nota de lançamento disponível.</string>
 
     <!--Status do serviço de acessibilidade-->
-    <string name="accessibility_service_monitoring">Serviço de acessibilidade ativo: monitorando o código de pareamento…</string>
 
     <!--Configuração do Device Owner do Dhizuku-->
     <string name="dhizuku_setup_title">Configurar Proprietário do Dispositivo</string>
@@ -1043,21 +804,12 @@ Impressão digital da chave RSA:
     <string name="dhizuku_clear_owner_failure">Falha ao remover o status de Proprietário do Dispositivo. O serviço pode precisar estar em execução primeiro.</string>
 
     <!--Alternativa de pareamento (Issue #204)-->
-    <string name="toast_pair_notifications_required">As notificações estão bloqueadas — usando pareamento manual. Vá em Opções do Desenvolvedor → Depuração sem fio → Parear dispositivo com código de pareamento para obter seu código e depois digite-o aqui.</string>
-    <string name="dialog_notif_permission_title">Notificações Necessárias</string>
-    <string name="dialog_notif_permission_message">O código de pareamento é entregue em uma notificação. Permita que o Shizuku+ envie notificações para concluir o pareamento ADB.</string>
-    <string name="dialog_notif_permission_allow">Permitir Notificações</string>
-    <string name="dialog_notif_permission_manual">Parear Manualmente</string>
-    <string name="dialog_notif_permission_open_settings">Abrir Configurações</string>
     <string name="dialog_notif_permission_denied">Permissão de notificação negada. Você pode ativá-la nas Configurações ou parear manualmente.</string>
     <!--Sincronização remota do banco de aplicativos-->
-    <string name="remote_db_sync_channel_name">Atualizações do Banco de Dados de Aplicativos</string>
 
     <!--Aprimoramentos do Binder (Issue #199)-->
     <string name="settings_binder_firewall">Firewall Binder</string>
     <string name="settings_binder_firewall_summary">Auditar e bloquear transações sensíveis do sistema de aplicativos não autorizados</string>
-    <string name="settings_binder_logging">Registro de Transações AIDL</string>
-    <string name="settings_binder_logging_summary">Registrar todas as transações Binder intermediadas no log do sistema (Logcat) para depuração</string>
     <string name="settings_shadow_binder">Binder Sombra</string>
     <string name="settings_shadow_binder_summary">Interceptar e simular chamadas de serviços do sistema para ocultar informações do dispositivo ou estado do aplicativo</string>
     <string name="settings_shadow_binder_hidden_packages">Pacotes Ocultos</string>
@@ -1069,16 +821,13 @@ Impressão digital da chave RSA:
     </plurals>
 
     <!--Modo Companion-->
-    <string name="settings_category_companion">Modo Complemento</string>
     <string name="settings_companion_mode">Exibir Cartão de Complemento</string>
     <string name="settings_companion_mode_summary">Exibir um cartão para abrir rapidamente o Shizuku padrão. Observação: apenas um serviço Shizuku pode ser executado por vez 2014 use isso para alternar entre eles.</string>
     <string name="settings_companion_fallback">Recuperação de Falha</string>
     <string name="settings_companion_fallback_summary">Após 3 falhas consecutivas, exibir uma opção para abrir o Shizuku padrão na notificação de falha</string>
     <string name="home_companion_title">Shizuku Padrão</string>
     <string name="home_companion_description">O Shizuku padrão está instalado. Apenas um serviço pode ser executado por vez 2014 toque para alternar para o Shizuku padrão quando precisar de aplicativos que exijam ele.</string>
-    <string name="home_companion_not_installed">O Shizuku padrão não está instalado. Instale-o pelo GitHub para usar como alternativa.</string>
     <string name="home_companion_open">Abrir</string>
-    <string name="home_companion_install">Instalar</string>
     <string name="watchdog_open_stock_shizuku">Abrir Shizuku Padrão</string>
 
     <string name="settings_live_activity">Notificações de Atividade ao Vivo</string>
@@ -1088,41 +837,17 @@ Impressão digital da chave RSA:
     <string name="app_management_search_hint">Pesquisar aplicativos</string>
 
     <!--Central de Compatibilidade Root-->
-    <string name="root_hub_title">Central de Compatibilidade Root</string>
-    <string name="root_hub_global_config_title">Caminho SU Global</string>
-    <string name="root_hub_global_config_desc">Todos os aplicativos usam este caminho. A Configuração Automática tentará configurar os aplicativos compatíveis para você.</string>
-    <string name="root_hub_setup_all">Configurar Todos</string>
-    <string name="root_hub_setup_all_success">Configuração automática tentada para todos os aplicativos compatíveis.</string>
-    <string name="root_hub_magic_setup_all_summary">O Shizuku+ configurou %d aplicativos para você!</string>
-    <string name="root_hub_magic_setup_all_no_apps">Nenhum aplicativo root encontrado que suporte configuração automatizada.</string>
-    <string name="root_hub_magic_setup_success">Configuração Mágica concluída! O Shizuku+ configurou %s para você.</string>
-    <string name="root_hub_magic_setup_fail">A Configuração Mágica falhou. Por favor, tente copiar o caminho manualmente.</string>
-    <string name="root_hub_path_copied">Caminho SU copiado para a área de transferência</string>
-    <string name="root_hub_no_export">Caminho SU não definido. Exporte os arquivos do Shizuku pela tela inicial primeiro.</string>
-    <string name="root_hub_device_identity_title">Identidade do Dispositivo</string>
-    <string name="root_hub_device_identity_none">Nenhuma (exibir dispositivo real)</string>
-    <string name="root_hub_device_identity_real">Real: %s</string>
-    <string name="root_hub_device_identity_spoofed">Falsificado: %s</string>
 
     <!--Rótulos do diálogo de automação da tela inicial-->
-    <string name="home_automation_dialog_label_action">Ação</string>
-    <string name="home_automation_dialog_label_class">Classe</string>
-    <string name="home_automation_dialog_label_package">Pacote</string>
-    <string name="home_automation_dialog_label_target">Destino</string>
 
     <!--Diversos-->
-    <string name="action_start">Iniciar</string>
-    <string name="settings_tcp_learn_more">Saiba mais sobre como usar ferramentas de automação para controlar o Shizuku</string>
 
     <string name="settings_help">Ajuda</string>
-    <string name="settings_adb_category">Gerenciamento ADB</string>
 
     <!--Strings de chave de API para verificação de APK-->
     <string name="verify_virustotal_key_title">Chave de API do VirusTotal</string>
     <string name="verify_virustotal_key_required">Uma chave de API é necessária para usar a varredura do VirusTotal</string>
     <string name="verify_pithus_key_title">Chave de API do Pithus (Opcional)</string>
-    <string name="verify_pithus_key_configured">Verificar hashes no Pithus para detectar traços de malware · Chave de API configurada</string>
-    <string name="verify_pithus_default_summary">Verificar hashes no Pithus para detectar traços de malware.</string>
     <string name="verify_api_key_hint">Toque para inserir a chave de API</string>
     <string name="verify_api_key_configured">Chave de API salva · toque para atualizar</string>
     <string name="verify_get_api_key">Obter Chave de API</string>
@@ -1168,19 +893,6 @@ Impressão digital da chave RSA:
     <string name="settings_search_empty_state">Nenhuma configuração encontrada</string>
 
     <!--Redes confiáveis da automação do Firewall de rede-->
-    <string name="settings_binder_firewall_trusted_networks">Redes confiáveis</string>
-    <string name="settings_binder_firewall_trusted_networks_summary_none">Não configurado — o estado do firewall é apenas manual</string>
-    <string name="settings_binder_firewall_trusted_networks_summary_one">Alterna automaticamente em 1 rede confiável</string>
-    <string name="settings_binder_firewall_trusted_networks_summary_many">Alterna automaticamente em %d redes confiáveis</string>
-    <string name="binder_firewall_trusted_networks_title">Redes confiáveis</string>
-    <string name="binder_firewall_trusted_networks_detail">Quando conectado a uma rede confiável (por exemplo, o Wi-Fi de casa), o Binder Firewall é desativado automaticamente. Em qualquer outra rede, ele é reativado automaticamente.
-
-Digite cada SSID de Wi-Fi em uma linha separada. Apenas correspondências exatas são consideradas.</string>
-    <string name="binder_firewall_trusted_networks_hint">Um SSID por linha</string>
-    <string name="binder_firewall_trusted_networks_add_current">Adicionar rede atual</string>
-    <string name="binder_firewall_trusted_networks_save">Salvar</string>
-    <string name="binder_firewall_trusted_networks_no_ssid">Não foi possível detectar o nome da rede atual</string>
-    <string name="binder_firewall_trusted_networks_already_added">"%s" já está na lista</string>
 
     <!--Bloqueio biométrico-->
     <string name="biometric_prompt_title">Desbloquear Shizuku+</string>
@@ -1244,9 +956,6 @@ PERIGO: Flashear uma carga incompatível RESULTARÁ em brick permanente ou bootl
 
     <!--Atividade de automação de Perfis de aplicativos-->
     <string name="app_profiles_title">Perfis de aplicativos</string>
-    <string name="app_profiles_summary_none">Nenhuma substituição do Binder Firewall por aplicativo</string>
-    <string name="app_profiles_summary_count">%1$d substituição(ões) de aplicativo ativa(s)</string>
-    <string name="app_profiles_description">Substitua o Binder Firewall por aplicativo. Toque em uma opção para alternar: Padrão → Bloquear → Permitir. Ativo quando o AutomationService estiver em execução.</string>
     <string name="app_profile_state_default">Padrão</string>
     <string name="app_profile_state_block">Bloquear</string>
     <string name="app_profile_state_allow">Permitir</string>
@@ -1278,16 +987,9 @@ PERIGO: Flashear uma carga incompatível RESULTARÁ em brick permanente ou bootl
     <string name="backup_action_freeze">Congelar</string>
     <string name="backup_action_restore">Restaurar</string>
     <string name="backup_action_unfreeze">Descongelar</string>
-    <string name="backup_activity_title">Backup de aplicativos</string>
     <string name="backup_app_complete">Backup de %1$s → %2$s concluído</string>
-    <string name="backup_app_failed">Falha no backup: %1$s</string>
     <string name="backup_badge_no_backup">no-backup</string>
     <string name="backup_batch_complete">Backup de %1$d apps para %3$s concluído (%2$d com falha)</string>
-    <string name="backup_error_key_invalidated_backup">o bloqueio de tela ou a biometria do seu dispositivo foram alterados desde a criação da chave de criptografia deste backup, o que o invalida permanentemente por design. Tente novamente para gerar uma nova chave.</string>
-    <string name="backup_error_key_invalidated_restore">o bloqueio de tela ou a biometria do seu dispositivo foram alterados desde a criação da chave de criptografia deste backup, o que o invalida permanentemente por design. Este backup não pode mais ser descriptografado.</string>
-    <string name="backup_error_prefix_backup_failed">Falha no backup</string>
-    <string name="backup_error_prefix_restore_failed">Falha na restauração</string>
-    <string name="backup_error_wrong_install">não foi possível descriptografar este backup. Provavelmente foi criado por uma instalação diferente do Shizuku+ — os backups são criptografados por instalação e não podem ser restaurados após reinstalar ou limpar os dados do aplicativo.</string>
     <string name="backup_freeze_success">Aplicativo congelado</string>
     <string name="backup_in_progress">Backup em andamento…</string>
     <string name="backup_menu_backup_all">Fazer backup de todos os apps</string>
@@ -1296,16 +998,10 @@ PERIGO: Flashear uma carga incompatível RESULTARÁ em brick permanente ou bootl
     <string name="backup_restore_complete">Dados externos de %1$s restaurados</string>
     <string name="backup_restored_restart_hint">Configurações restauradas. Reinicie para aplicar as alterações de tema/idioma.</string>
     <string name="backup_restored_restart_now">Reiniciar</string>
-    <string name="backup_service_required">O serviço Shizuku não está em execução</string>
     <string name="backup_unfreeze_success">Aplicativo descongelado</string>
 
     <!-- Corner style options -->
-    <string name="corner_style_extra_large">Extra grande</string>
-    <string name="corner_style_global">Seguir configuração global</string>
-    <string name="corner_style_large">Grande arredondado</string>
-    <string name="corner_style_rounded">Arredondado (M3)</string>
     <string name="corner_style_sharp">Pontudo / Plano</string>
-    <string name="corner_style_squircle">Squircle</string>
 
     <!-- Device Control -->
     <string name="home_device_control_title">Controle do dispositivo</string>
@@ -1377,7 +1073,6 @@ PERIGO: Flashear uma carga incompatível RESULTARÁ em brick permanente ou bootl
     <string name="doctor_status_fix_available">Correção disponível</string>
     <string name="doctor_status_oppo_battery_unknown">Ative a inicialização automática para manter o serviço ativo</string>
     <string name="doctor_status_samsung_max_restrictions_on">Ativado (Deve estar DESATIVADO)</string>
-    <string name="doctor_status_samsung_sleeping_apps">Revisão necessária (Verificar apps dormentes)</string>
     <string name="doctor_status_su_bridge_no_path">Caminho exportado não configurado</string>
     <string name="doctor_status_su_bridge_path_set">caminho exportado definido</string>
     <string name="doctor_status_tcl_autostart_unknown">Adicionar à lista de permissão de inicialização automática</string>
@@ -1439,21 +1134,12 @@ PERIGO: Flashear uma carga incompatível RESULTARÁ em brick permanente ou bootl
     <string name="permission_manager_no_permissions">Nenhuma permissão de tempo de execução ou privilegiada declarada</string>
 
     <!-- Settings: Plus -->
-    <string name="settings_amoled_plus">AMOLED+</string>
-    <string name="settings_amoled_plus_summary">Forçar todos os cards e superfícies ao preto puro para que se misturem com o painel</string>
     <string name="settings_custom_accent_title">Cor de destaque personalizada</string>
-    <string name="settings_plus_category_experimental">Experimental</string>
     <string name="settings_plus_category_backup_restore">Backup e restauração</string>
-    <string name="settings_plus_category_connectivity">Rede e conectividade</string>
     <string name="settings_plus_category_device_owner_tools">Ferramentas de proprietário do dispositivo</string>
     <string name="settings_plus_category_security_access">Segurança e acesso</string>
     <string name="settings_plus_category_system_performance">Sistema e desempenho</string>
-    <string name="settings_home_card_shape">Cantos dos cards da tela inicial</string>
-    <string name="settings_home_card_shape_summary">Substituir o estilo de cantos dos cards da tela inicial independentemente da configuração global</string>
-    <string name="settings_settings_card_shape">Cantos dos cards de configurações</string>
-    <string name="settings_settings_card_shape_summary">Substituir o estilo de cantos para cabeçalhos de seção recolháveis nas configurações</string>
     <string name="settings_behavior_category_startup">Inicialização e recuperação</string>
-    <string name="settings_behavior_category_network_activity">Rede e atividade</string>
     <string name="settings_backup_settings">Backup de configurações</string>
     <string name="settings_backup_settings_summary">Exporte suas configurações e melhorias com segurança usando criptografia biométrica.</string>
     <string name="settings_restore_settings">Restaurar configurações</string>
@@ -1469,29 +1155,17 @@ PERIGO: Flashear uma carga incompatível RESULTARÁ em brick permanente ou bootl
     <string name="settings_personalization_category_color_theme">Cor e tema</string>
     <string name="settings_personalization_category_home_screen">Tela inicial</string>
     <string name="settings_personalization_category_language">Idioma</string>
-    <string name="settings_personalization_category_motion_display">Movimento e tela</string>
     <string name="settings_personalization_category_shape_style">Forma e estilo de ícone</string>
     <string name="settings_bold_typography">Tipografia em negrito</string>
-    <string name="settings_bold_typography_summary">Usar pesos de fonte mais pesados para títulos e cabeçalhos</string>
     <string name="settings_expanded_headers">Cabeçalhos de seção expandidos</string>
-    <string name="settings_expanded_headers_summary">Usar cabeçalhos altos e recolháveis nas telas de configurações</string>
-    <string name="settings_rounded_edges">Bordas arredondadas</string>
-    <string name="settings_rounded_edges_summary">Usar cantos arredondados em cards e containers de diálogo</string>
     <string name="settings_corner_rounding_override">Arredondamento de cantos</string>
     <string name="settings_follow_system_animations">Seguir animações do sistema</string>
     <string name="settings_follow_system_animations_summary">Respeitar a velocidade de animação do dispositivo definida nas Opções do desenvolvedor</string>
-    <string name="settings_follow_system_haptics">Seguir feedback tátil do sistema</string>
-    <string name="settings_follow_system_haptics_summary">Desativar o feedback tátil no app quando o feedback tátil do sistema estiver desligado</string>
     <string name="settings_show_status_card_outline">Contorno do card de status</string>
     <string name="settings_show_status_card_outline_summary">Mostrar um contorno colorido no card de status do serviço</string>
-    <string name="settings_status_card_outline_style">Cor do contorno</string>
     <string-array name="status_card_outline_styles">
         <item>Material (cor do tema)</item>
         <item>Verde / Vermelho (cor do status)</item>
-    </string-array>
-    <string-array name="status_card_outline_styles_value">
-        <item>material</item>
-        <item>status</item>
     </string-array>
 
     <!-- Settings: Governor modules -->
@@ -1507,24 +1181,17 @@ PERIGO: Flashear uma carga incompatível RESULTARÁ em brick permanente ou bootl
     <string name="settings_package_identity_category">Identidade do pacote</string>
     <string name="settings_package_identity_current">Pacote atual: %1$s</string>
     <string name="settings_package_identity_roadmap">Renomeação em tempo de execução completa requer uma build personalizada — veja o issue #469</string>
-    <string name="settings_custom_app_label">Rótulo personalizado do app</string>
-    <string name="settings_custom_app_label_summary">Definir um sufixo de nome de exibição mostrado na tela Sobre. Não altera o nome do pacote instalado.</string>
-    <string name="settings_custom_app_label_hint">ex. Trabalho, Pessoal, Alt</string>
 
     <!-- Settings: Advanced / diagnostic categories -->
     <string name="settings_advanced_category_adb_tools">Ferramentas ADB</string>
     <string name="settings_advanced_category_diagnostics">Diagnósticos</string>
     <string name="settings_developer_category_debug">Depuração e diagnósticos</string>
-    <string name="settings_mode_indicator_adb">Executando em modo ADB — opções exclusivas de root estão ocultas</string>
     <string name="settings_mode_indicator_root">Executando em modo root — opções exclusivas de ADB estão ocultas</string>
-    <string name="settings_app_management_category_gestures">Gestos e ações</string>
-    <string name="settings_app_management_category_verified_install">Instalação verificada</string>
 
     <!-- Settings: Root compatibility -->
     <string name="settings_custom_su_path">Caminho SU personalizado</string>
     <string name="settings_custom_su_path_summary">Caminho que o SU Bridge expõe como o binário \'su\'. Deixe em branco para detectar automaticamente de locais comuns.</string>
     <string name="settings_root_category_su_bridge">Configuração do SU Bridge</string>
-    <string name="settings_root_category_adb_connection">Conexão ADB</string>
     <string name="settings_root_category_bootloader">Integração com bootloader</string>
     <string name="settings_root_category_mocking">Mocking e simulação</string>
     <string name="settings_root_category_rootless_bridges">Bridges sem root</string>
@@ -1557,7 +1224,6 @@ PERIGO: Flashear uma carga incompatível RESULTARÁ em brick permanente ou bootl
     <!-- Settings: AI & NPU -->
     <string name="settings_ai_core_master">AI Core Master</string>
     <string name="settings_ai_core_master_summary">Habilitar operações privilegiadas de IA: agendamento de NPU e acesso à hierarquia de janelas</string>
-    <string name="settings_ai_bridge_npu_title">AI Bridge e NPU</string>
     <string name="settings_npu_acceleration">Aceleração NPU</string>
     <string name="settings_npu_acceleration_summary">Delegar tarefas de inferência de IA à Unidade de Processamento Neural do dispositivo quando disponível</string>
     <string name="settings_ai_automation_experimental">Automação IA experimental</string>
@@ -1577,17 +1243,9 @@ PERIGO: Flashear uma carga incompatível RESULTARÁ em brick permanente ou bootl
     <string name="settings_automation_auto_hide_packages">Ocultar automaticamente quando em primeiro plano</string>
     <string name="settings_automation_auto_hide_packages_summary">Apps adicionados automaticamente à lista oculta do Shadow Binder somente enquanto estiverem abertos, além da lista de pacotes ocultos acima. Deixe em branco para gerenciar pacotes ocultos manualmente.</string>
     <string name="settings_automation_trusted_networks">Redes confiáveis</string>
-    <string name="settings_automation_trusted_networks_summary">Nomes de rede Wi-Fi separados por vírgula (SSIDs). O Firewall Binder é desativado automaticamente ao conectar a uma delas e ativado automaticamente em outros lugares (incluindo dados móveis). Deixe em branco para controlar o Firewall Binder manualmente.</string>
 
     <!-- Settings: APK verification -->
-    <string name="settings_verify_apk_local_title">Correspondência de assinatura local</string>
-    <string name="settings_verify_apk_local_summary">Verificar se as atualizações correspondem à assinatura do app instalado. Rápido e totalmente offline.</string>
     <string name="settings_verify_apk_fdroid_title">Índice F-Droid / IzzyOnDroid</string>
-    <string name="settings_verify_apk_fdroid_summary">Verificar hashes de APK localmente em relação a metadados de código aberto confiáveis.</string>
-    <string name="settings_verify_apk_virustotal_title">Verificação VirusTotal</string>
-    <string name="settings_verify_apk_virustotal_summary">Verificar hashes de APK no VirusTotal antes da instalação. Requer chave de API.</string>
-    <string name="settings_verify_apk_pithus_title">Inteligência de ameaças Pithus</string>
-    <string name="settings_verify_apk_pithus_summary">Verificar hashes no Pithus para detectar características de malware.</string>
 
     <!-- Snackbar -->
     <string name="snackbar_action_check">Verificar</string>
@@ -1621,4 +1279,5 @@ PERIGO: Flashear uma carga incompatível RESULTARÁ em brick permanente ou bootl
     <!-- Device Control home card (Feature Hub → Experimental) -->
     <string name="settings_device_control_home_title">Card de Controle do Dispositivo</string>
     <string name="settings_device_control_home_summary">Exibir o card de Controle do Dispositivo na tela inicial. Permite controle privilegiado de Wi-Fi, Bluetooth, Dados Móveis, tela, áudio e energia. Experimental — pode causar comportamento inesperado em alguns dispositivos.</string>
+    <string name="settings_check_for_update_title">Verificar atualização</string>
 </resources>

@@ -21,15 +21,33 @@ class ShizukuLiveService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
+<<<<<<< HEAD
         // A legacy entry point: live activity is shown only inside the Watchdog's notification
         // (1001), so this service posts nothing and stops as soon as it starts. startForeground()
         // must still be called within 5s of startForegroundService() — a start that stops without
         // it crashes the app on API 26+ (ForegroundServiceDidNotStartInTimeException).
         val notif = LiveActivityNotificationManager.buildNotification(this, "Monitoring...")
+=======
+        // startForeground() must be called within 5s of startForegroundService().
+        // Use current state for the initial notification.
+        val isRunning = ShizukuStateMachine.get() == ShizukuStateMachine.State.RUNNING
+        val notif =
+            LiveActivityNotificationManager.buildNotification(
+                this,
+                if (isRunning) "System Bridge Active" else "Monitoring...",
+            )
+        // startForeground() must be reached first: a startForegroundService() start that stops
+        // without it crashes the app on API 26+ (ForegroundServiceDidNotStartInTimeException).
+>>>>>>> upstream/master
         if (!startForegroundSafely(notif)) {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+<<<<<<< HEAD
+=======
+        // Live activity is only shown inside the Watchdog's notification (1001).
+        // With the Watchdog off (or on), there is no standalone notification: remove and stop.
+>>>>>>> upstream/master
         removeForegroundNotification()
         stopSelf(startId)
         return START_NOT_STICKY
@@ -67,10 +85,15 @@ class ShizukuLiveService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+<<<<<<< HEAD
         // Cancel only notification 9999; never touch the Watchdog's notification (1001) or its
         // live text.
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         manager?.cancel(LiveActivityNotificationManager.NOTIFICATION_ID)
+=======
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        nm?.cancel(LiveActivityNotificationManager.NOTIFICATION_ID)
+>>>>>>> upstream/master
         super.onDestroy()
     }
 }

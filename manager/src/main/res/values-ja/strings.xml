@@ -54,13 +54,11 @@
     <string name="adb_pairing_requires_multi_window_reason">
         このシステムはペアリングダイアログが常に見えることを求めています。分割画面モードを使うことが、このアプリとシステムのダイアログを同時に表示する唯一の方法です。</string>
     <string name="adb_error_key_store">ワイヤレスデバッグ用のキーを生成できません。\nこれはこのデバイスのKeyStore機構が故障しているためかもしれません。</string>
-    <string name="adb_stopping_tcp">TCPポートを閉じる</string>
     <string name="adb_error_stop_tcp">TCP経由のADBを停止できませんでした</string>
     <string name="adb_pair_required">まずはペアリングの手順を行ってください。</string>
     <string name="enable">有効にする</string>
     <string name="development_settings">開発者向けオプション</string>
     <string name="notification_settings">通知オプション</string>
-    <string name="adb_pairing_tutorial_title">お使いのデバイスとShizukuをペアリングする</string>
     <string name="adb_pairing_tutorial_content_notification">Shizukuからの通知でペアリングが完了します。</string>
     <string name="adb_pairing_tutorial_content_steps">「開発者向けオプション」に移動し、「USB デバッグ」と「ワイヤレス
         デバッグ」を有効にします。</string>
@@ -93,10 +91,6 @@
     <string name="home_automation_description">Tasker や MacroDroid などのアプリは、Shizuku
         を自動的に起動/停止するインテントを送信できます。</string>
     <string name="home_automation_button_view_intents">インテントを表示</string>
-    <string name="home_automation_dialog_label_action">アクション</string>
-    <string name="home_automation_dialog_label_package">パッケージ</string>
-    <string name="home_automation_dialog_label_class">クラス</string>
-    <string name="home_automation_dialog_label_target">ターゲット</string>
     <!-- Home - Learn more -->
     <string name="home_learn_more_title">開発者ガイド</string>
     <string name="home_learn_more_description">Shizukuを使った開発方法、Shizukuを使ったアプリの入手方法について学ぶことができます</string>
@@ -132,7 +126,6 @@
     <string name="rish_description"><![CDATA[%1$sを使用すると、任意のターミナル アプリでシェル コマンドを実行できます。<p>タップして、使用方法の詳細を確認してください。]]></string>
     <!-- Settings -->
     <string name="settings_title">設定</string>
-    <string name="settings_behavior">行動</string>
     <string name="settings_start_on_boot">起動時にスタート</string>
     <string name="settings_start_on_boot_summary">Android 11以降またはルート権限が必要です</string>
     <string name="settings_start_on_boot_bug">
@@ -141,7 +134,6 @@
     <string name="settings_use_system_color">ダイナミック カラー</string>
     <string name="settings_watchdog">ウォッチドッグ</string>
     <string name="settings_watchdog_summary">Shizukuがクラッシュした場合に自動的に再起動する</string>
-    <string name="settings_tcp_mode">TCPモード</string>
     <string name="settings_tcp_mode_summary">
         "Wi-FiなしでShizukuを再起動できるようにします。（再起動後、Shizukuが一度起動している必要があります）"</string>
     <string name="settings_tcp_mode_dialog_close_port">
@@ -150,21 +142,11 @@
     <string name="settings_restart_dialog_title">再起動が必要です</string>
     <string name="settings_restart_dialog_message">雫はこの設定を適用するために再起動が必要です。</string>
     <string name="settings_restart_dialog_message_wifi_required"><![CDATA[<br><br><b>Wi-Fiは必須です。雫は走り続け、Wi-Fi接続を待ってからバックグラウンドで再起動する。</b>]]></string>
-    <string name="settings_tcp_port">TCPポート</string>
-    <string name="settings_tcp_port_default">デフォルト(5555)</string>
-    <string name="settings_tcp_port_hint">デフォルト（5555）を使用するには空白のままにしてください</string>
-    <string name="settings_tcp_learn_more">自動化アプリを使用してShizukuを制御する方法について詳しくは、こちらをご覧ください。</string>
     <string name="settings_language">言語</string>
-    <string name="settings_translation_contributors">翻訳協力者</string>
     <string name="settings_translation">翻訳作業に参加</string>
     <string name="settings_translation_summary">%sをあなたの言語に翻訳するのを手伝ってください</string>
-    <string name="settings_user_interface">外観</string>
-    <string name="settings_black_night_theme">AMOLEDダークモード</string>
-    <string name="settings_black_night_theme_summary">ダークテーマが有効な場合、黒色のテーマを使用します</string>
-    <string name="settings_support">サポート</string>
     <string name="settings_help">ヘルプ</string>
     <string name="settings_report_bug">バグを報告する</string>
-    <string name="settings_advanced">高度な</string>
     <string name="settings_legacy_pairing">レガシーペアリング</string>
     <string name="settings_legacy_pairing_summary">通知ではなくダイアログでペアリングコードを入力します</string>
     <!-- Bug Report Dialog -->
@@ -187,27 +169,17 @@
     <string name="toast_no_email_app">メールアプリが見つかりません</string>
     <string name="toast_shizuku_already_starting">バックグラウンドではすでに雫が起動しています</string>
     <string name="toast_accessibility_tv_only">このサービスはテレビ機器のみでサポートされています。</string>
-    <string name="toast_pairing_timeout">雫のペアリングサービスがタイムアウトした。</string>
     <!-- Dark Mode Setting Override -->
     <string name="dark_theme">テーマ</string>
     <string name="dark_theme_off">ホワイトテーマ</string>
     <string name="dark_theme_on">ダークテーマ</string>
     <string name="follow_system">システム設定に従う</string>
     <!-- About -->
-    <string name="action_about">このアプリについて</string>
-    <string name="about_dialog_button_close">近い</string>
-    <string name="about_view_source_code"><![CDATA[%sでソースコードを見る]]></string>
     <!-- Start -->
-    <string name="action_start">しずくスタート</string>
     <!-- Stop -->
     <string name="action_stop">Shizukuを停止する</string>
     <string name="dialog_stop_message">Shizukuのサービスを停止します。</string>
     <!-- Notification -->
-    <string name="notification_channel_service_status">サービス開始状況</string>
-    <string name="notification_service_starting">Shizukuを開始しています…</string>
-    <string name="notification_service_start_failed">Shizukuを開始することができませんでした。</string>
-    <string name="notification_service_start_no_root">root権限の要求に失敗しました。</string>
-    <string name="notification_working">実行中…</string>
     <string name="notification_channel_adb_pairing">ワイヤレスデバックペアリング</string>
     <string name="notification_adb_pairing_input_paring_code">ペアリングコードを入力</string>
     <string name="notification_adb_pairing_searching_for_service_title">ペアリングサービスを探しています</string>
@@ -232,18 +204,15 @@
     <string name="wadb_notification_wifi_required">続行する前にWi-Fi接続を待機しています</string>
     <string name="wadb_notification_retry">再試行を待機中</string>
     <string name="wadb_error_title">起動時にエラーが発生しました</string>
-    <string name="wadb_error_notify_dev">タップして開発者に通知します。</string>
     <string name="wadb_permission_error_notification_title">権限エラー</string>
     <string name="wadb_permission_error_notification_content">
         Shizukuを起動するにはWRITE_SECURE_SETTINGSが必要です。タップして許可方法をご確認ください。</string>
-    <string name="wadb_notification_channel">ADB自動起動サービス</string>
     <!-- Watchdog -->
     <string name="watchdog_running">ウォッチドッグが稼働中</string>
     <string name="watchdog_turn_off">無効にする</string>
     <string name="watchdog_shizuku_crashed_title">雫は最近墜落した</string>
     <string name="watchdog_shizuku_crashed_text">Watchdog
         がサービスを再起動しました。タップすると、今後のクラッシュを防ぐための潜在的な修正内容を確認できます。</string>
-    <string name="watchdog_shizuku_crashed_action_turn_off_alerts">アラートをオフにする</string>
     <!-- Misc -->
     <string name="dialog_cannot_open_browser_title">ブラウザが起動することができません</string>
     <string name="toast_copied_to_clipboard">クリップボードにコピーされました</string>

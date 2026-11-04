@@ -103,6 +103,7 @@ class ShizukuTileService : TileService() {
 
     internal fun startShizuku() {
         watchdog?.cancel()
+<<<<<<< HEAD
         if (Shell.isAppGrantedRoot() == true) {
             ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
             updateTile()
@@ -121,24 +122,72 @@ class ShizukuTileService : TileService() {
                 val hasLoopback =
                     AdbPortProber.isPortOpen(5555, 50) ||
                         (ShizukuSettings.getLastPort() in 1..65535 && AdbPortProber.isPortOpen(ShizukuSettings.getLastPort(), 50))
+=======
+        val hasWriteSecure = checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        // Root execution and port probes are blocking I/O — run off the main thread
+        CoroutineScope(Dispatchers.IO).launch {
+            if (Shell.isAppGrantedRoot() == true || EnvironmentUtils.isRooted()) {
+>>>>>>> upstream/master
                 withContext(Dispatchers.Main) {
-                    if (!hasLoopback && !isWifiOk && !hasWriteSecure) {
-                        Toast.makeText(this@ShizukuTileService, R.string.tile_open_app_required, Toast.LENGTH_SHORT).show()
-                        openApp()
-                        return@withContext
-                    }
-
                     ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
                     updateTile()
+<<<<<<< HEAD
                     AdbStartWorker.enqueue(this@ShizukuTileService, explicit = true)
                     superviseStart()
+=======
                 }
+                val rootOk =
+                    runCatching { Shell.cmd(Starter.internalCommand).exec().isSuccess }.getOrDefault(false) ||
+                        runCatching {
+                            val suPath = EnvironmentUtils.findSuBinary() ?: return@runCatching false
+                            EnvironmentUtils.runWithSuBinary(suPath, Starter.internalCommand)
+                        }.getOrDefault(false)
+                if (rootOk) {
+                    withContext(Dispatchers.Main) {
+                        ShizukuStateMachine.update()
+                        updateTile()
+                    }
+                    return@launch
+                }
+                if (!ShizukuSettings.isRootToAdbFallbackEnabled()) {
+                    withContext(Dispatchers.Main) {
+                        ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
+                        updateTile()
+                    }
+                    return@launch
+                }
+            }
+
+            val isWifiOk = !EnvironmentUtils.isWifiRequired() || ShizukuSettings.isForceStartWadbEnabled()
+            val hasLoopback = AdbPortProber.findActiveLoopbackPort(this@ShizukuTileService) > 0
+            withContext(Dispatchers.Main) {
+                if (!hasLoopback && !isWifiOk && !hasWriteSecure) {
+                    if (ShizukuStateMachine.get() == ShizukuStateMachine.State.STARTING) {
+                        ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPED)
+                        updateTile()
+                    }
+                    Toast.makeText(this@ShizukuTileService, R.string.tile_open_app_required, Toast.LENGTH_SHORT).show()
+                    openApp()
+                    return@withContext
+>>>>>>> upstream/master
+                }
+
+                ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
+                updateTile()
+                AdbStartWorker.enqueue(this@ShizukuTileService, explicit = true)
+                superviseStart()
             }
         }
     }
 
     internal fun stopShizuku() {
         watchdog?.cancel()
+<<<<<<< HEAD
+=======
+        // A deliberate stop: Watchdog and reconnect leave it stopped.
+        af.shizuku.manager.utils.UserStopFlag
+            .mark()
+>>>>>>> upstream/master
         ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPING)
         updateTile()
         AdbStartWorker.cancel(this)

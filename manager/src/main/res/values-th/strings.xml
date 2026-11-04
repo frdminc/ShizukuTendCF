@@ -66,13 +66,11 @@
         การใช้โหมดแบ่งหน้าจอเป็นวิธีเดียวที่จะทําให้แอปนี้และกล่องโต้ตอบระบบมองเห็นได้พร้อมกัน</string>
     <string name="adb_error_key_store">ไม่สามารถสร้างคีย์สําหรับการดีบักแบบไร้สาย\nอาจเป็นเพราะกลไก
         KeyStore ของอุปกรณ์นี้เสีย</string>
-    <string name="adb_stopping_tcp">ปิดพอร์ต TCP</string>
     <string name="adb_error_stop_tcp">ไม่สามารถหยุด ADB ผ่าน TCP ได้</string>
     <string name="adb_pair_required">โปรดทำขั้นตอนการจับคู่ก่อน</string>
     <string name="enable">เปิดใช้งาน</string>
     <string name="development_settings">ตัวเลือกสำหรับนักพัฒนาแอป</string>
     <string name="notification_settings">ตัวเลือกการแจ้งเตือน</string>
-    <string name="adb_pairing_tutorial_title">จับคู่ Shizuku กับอุปกรณ์</string>
     <string name="adb_pairing_tutorial_content_notification">การแจ้งเตือนจาก Shizuku
         จะช่วยให้เสร็จสิ้นกระบวนการจับคู่</string>
     <string name="adb_pairing_tutorial_content_steps">ไปที่ \"ตัวเลือกสำหรับนักพัฒนา\"
@@ -110,10 +108,6 @@
     <string name="home_automation_description">แอปเช่น Tasker และ MacroDroid
         สามารถส่งอินเทนต์เพื่อเริ่ม/หยุด Shizuku ได้โดยอัตโนมัติ</string>
     <string name="home_automation_button_view_intents">ดูความตั้งใจ</string>
-    <string name="home_automation_dialog_label_action">การกระทำ</string>
-    <string name="home_automation_dialog_label_package">บรรจุุภัณฑ์</string>
-    <string name="home_automation_dialog_label_class">ระดับ</string>
-    <string name="home_automation_dialog_label_target">เป้า</string>
     <!-- Home - Learn more -->
     <string name="home_learn_more_title">คู่มือนักพัฒนา</string>
     <string name="home_learn_more_description">เรียนรู้การพัฒนาเพื่อใช้ร่วมกันกับ Shizuku</string>
@@ -152,7 +146,6 @@
     <string name="rish_description"><![CDATA[ด้วย %1$sคุณสามารถรันคำสั่งเชลล์ในแอปพลิเคชันเทอร์มินัลใดก็ได้<p>แตะเพื่อเรียนรู้เพิ่มเติมเกี่ยวกับวิธีการใช้งาน]]></string>
     <!-- Settings -->
     <string name="settings_title">การตั้งค่า</string>
-    <string name="settings_behavior">พฤติกรรม</string>
     <string name="settings_start_on_boot">เริ่มต้นเมื่อบูตเครื่อง</string>
     <string name="settings_start_on_boot_summary">ต้องใช้ Android 11+ หรือรูท</string>
     <string name="settings_start_on_boot_bug">เนื่องจากข้อบกพร่องใน Android 11-12
@@ -161,7 +154,6 @@
     <string name="settings_use_system_color">ใช้สีของธีมระบบ</string>
     <string name="settings_watchdog">สุนัขเฝ้าบ้าน</string>
     <string name="settings_watchdog_summary">รีสตาร์ทชิซูกุโดยอัตโนมัติหากเกิดการขัดข้อง</string>
-    <string name="settings_tcp_mode">โหมด TCP</string>
     <string name="settings_tcp_mode_summary">"ช่วยให้ชิซึกุสามารถรีสตาร์ทได้โดยไม่ต้องใช้ Wi-Fi
         (ชิซึกุต้องเริ่มใหม่ครั้งหนึ่งหลังจากรีบูต)"</string>
     <string name="settings_tcp_mode_dialog_close_port">"พอร์ต TCP จะถูกปิดทันที คุณจะต้องใช้ Wi-Fi
@@ -170,22 +162,11 @@
     <string name="settings_restart_dialog_title">จำเป็นต้องรีสตาร์ท</string>
     <string name="settings_restart_dialog_message">Shizuku ต้องรีสตาร์ทเพื่อใช้การตั้งค่านี้</string>
     <string name="settings_restart_dialog_message_wifi_required"><![CDATA[<br><br><b>จําเป็นต้องใช้ Wi-Fi Shizuku จะทํางานต่อไปและรอการเชื่อมต่อ Wi-Fi ก่อนที่จะรีสตาร์ทในพื้นหลัง</b>]]></string>
-    <string name="settings_tcp_port">พอร์ต TCP</string>
-    <string name="settings_tcp_port_default">ค่าเริ่มต้น (5555)</string>
-    <string name="settings_tcp_port_hint">เว้นว่างไว้เพื่อใช้ค่าเริ่มต้น (5555)</string>
-    <string name="settings_tcp_learn_more">
-        เรียนรู้เพิ่มเติมเกี่ยวกับการใช้แอปอัตโนมัติเพื่อควบคุมชิซูกุ</string>
     <string name="settings_language">ภาษา</string>
-    <string name="settings_translation_contributors">ผู้มีส่วนร่วมในการแปลภาษา</string>
     <string name="settings_translation">มีส่วนร่วมในการแปล</string>
     <string name="settings_translation_summary">ช่วยเราแปล %s เป็นภาษาของคุณ</string>
-    <string name="settings_user_interface">ลักษณะ</string>
-    <string name="settings_black_night_theme">ธีมมืดมิด</string>
-    <string name="settings_black_night_theme_summary">ใช้ธีมสีดำสนิทหากธีมมืดถูกเปิดอยู่</string>
-    <string name="settings_support">สนับสนุน</string>
     <string name="settings_help">ช่วย</string>
     <string name="settings_report_bug">รายงานจุดบกพร่อง</string>
-    <string name="settings_advanced">ขั้นสูง</string>
     <string name="settings_legacy_pairing">การจับคู่แบบมรดก</string>
     <string name="settings_legacy_pairing_summary">ป้อนรหัสการจับคู่ในกล่องโต้ตอบแทนการแจ้งเตือน</string>
     <!-- Bug Report Dialog -->
@@ -211,26 +192,16 @@
     <string name="toast_no_email_app">ไม่พบแอปอีเมล</string>
     <string name="toast_shizuku_already_starting">ชิซึกุเริ่มอยู่ด้านหลังแล้ว</string>
     <string name="toast_accessibility_tv_only">บริการนี้รองรับเฉพาะบนอุปกรณ์ทีวีเท่านั้น</string>
-    <string name="toast_pairing_timeout">บริการจับคู่ Shizuku หมดเวลา</string>
     <!-- Dark Mode Setting Override -->
     <string name="dark_theme">ธีม</string>
     <string name="dark_theme_off">สว่างเสมอ</string>
     <string name="dark_theme_on">มืดเสมอ</string>
     <!-- About -->
-    <string name="action_about">เกี่ยวกับ</string>
-    <string name="about_dialog_button_close">ปิด</string>
-    <string name="about_view_source_code"><![CDATA[ดูซอร์สโค้ดใน %s]]></string>
     <!-- Start -->
-    <string name="action_start">เริ่มชิซึกุ</string>
     <!-- Stop -->
     <string name="action_stop">หยุดทำงาน Shizuku</string>
     <string name="dialog_stop_message">บริการ Shizuku จะถูกหยุดทำงาน</string>
     <!-- Notification -->
-    <string name="notification_channel_service_status">สถานะการเริ่มบริการ</string>
-    <string name="notification_service_starting">บริการ Shizuku กำลังเริ่มต้น…</string>
-    <string name="notification_service_start_failed">ล้มเหลวในการเริ่มบริการ Shizuku</string>
-    <string name="notification_service_start_no_root">ล้มเหลวในการขอการอนุญาตรูท</string>
-    <string name="notification_working">กำลังทำงาน…</string>
     <string name="notification_channel_adb_pairing">การจับคู่การแก้ไขข้อบกพร่องผ่าน Wi-Fi</string>
     <string name="notification_adb_pairing_input_paring_code">ป้อนรหัสการจับคู่</string>
     <string name="notification_adb_pairing_searching_for_service_title">กำลังค้นหาบริการการจับคู่</string>
@@ -256,18 +227,15 @@
     <string name="wadb_notification_wifi_required">รอการเชื่อมต่อ Wi-Fi ก่อนดำเนินการต่อ</string>
     <string name="wadb_notification_retry">กำลังรอเพื่อลองใหม่อีกครั้ง</string>
     <string name="wadb_error_title">เกิดข้อผิดพลาดขณะเริ่มต้นระบบ</string>
-    <string name="wadb_error_notify_dev">แตะเพื่อแจ้งให้ผู้พัฒนาทราบ</string>
     <string name="wadb_permission_error_notification_title">ข้อผิดพลาดในการอนุญาต</string>
     <string name="wadb_permission_error_notification_content">ชิซูกุต้องใช้ WRITE_SECURE_SETTINGS
         เพื่อเริ่มต้นระบบเมื่อบูตเครื่อง แตะเพื่อดูวิธีให้สิทธิ์</string>
-    <string name="wadb_notification_channel">บริการเริ่มต้นอัตโนมัติของ ADB</string>
     <!-- Watchdog -->
     <string name="watchdog_running">วอทช์ด็อกกำลังทำงาน</string>
     <string name="watchdog_turn_off">ปิด</string>
     <string name="watchdog_shizuku_crashed_title">ชิซึกุเพิ่งประสบอุบัติเหตุเมื่อเร็วๆ นี้</string>
     <string name="watchdog_shizuku_crashed_text">Watchdog ได้รีสตาร์ทบริการแล้ว
         แตะเพื่อดูวิธีแก้ไขที่อาจเกิดขึ้นเพื่อป้องกันปัญหาขัดข้องในอนาคต</string>
-    <string name="watchdog_shizuku_crashed_action_turn_off_alerts">ปิดการแจ้งเตือน</string>
     <!-- Misc -->
     <string name="dialog_cannot_open_browser_title">ไม่สามารถเปิดบราวเซอร์</string>
     <string name="toast_copied_to_clipboard">คัดลอกไปยังคลิปบอร์ดแล้ว</string>

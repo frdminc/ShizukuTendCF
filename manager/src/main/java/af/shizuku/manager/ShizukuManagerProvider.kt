@@ -22,6 +22,7 @@ class ShizukuManagerProvider : ShizukuProvider() {
         return super.onCreate()
     }
 
+<<<<<<< HEAD
     private fun isTrustedServerCaller(): Boolean {
         // Read the kernel-provided caller identity before any binder handoff or IPC.
         val uid = Binder.getCallingUid()
@@ -31,6 +32,30 @@ class ShizukuManagerProvider : ShizukuProvider() {
             return false
         }
         return true
+=======
+    private fun waitForBinderGracefully(onlyDuringColdStart: Boolean = false) {
+        if (onlyDuringColdStart) {
+            // Client getBinder: only while this process is cold-starting and the server's binder
+            // delivery may still be in flight. Otherwise a stopped service would stall every
+            // client's getBinder call by 1.5 s.
+            val processAgeMs = android.os.SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime()
+            if (processAgeMs !in 0L until 5_000L) return
+        }
+        if (!Shizuku.pingBinder()) {
+            // Cold-start grace period: wait up to 1500ms for binder delivery from server daemon
+            val deadline = System.currentTimeMillis() + 1500L
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    Thread.sleep(50)
+                } catch (_: InterruptedException) {
+                    break
+                }
+                if (Shizuku.pingBinder()) {
+                    break
+                }
+            }
+        }
+>>>>>>> upstream/master
     }
 
     override fun call(
@@ -50,24 +75,15 @@ class ShizukuManagerProvider : ShizukuProvider() {
                 extras.classLoader = BinderContainer::class.java.classLoader
 
                 val token = extras.getString(USER_SERVICE_ARG_TOKEN) ?: return null
-                val binder = extras.getParcelable<BinderContainer>(EXTRA_BINDER)?.binder ?: return null
+                val binder =
+                    extras.getBinder("binder")
+                        ?: extras.getParcelable<BinderContainer>(EXTRA_BINDER)?.binder
+                        ?: extras.getParcelable<moe.shizuku.api.BinderContainer>("moe.shizuku.privileged.api.intent.extra.BINDER")?.binder
+                        ?: extras.getParcelable<rikka.shizuku.BinderContainer>("rikka.shizuku.intent.extra.BINDER")?.binder
+                        ?: return null
 
-                if (!ShizukuStateMachine.isRunning()) {
-                    if (ShizukuStateMachine.update() != ShizukuStateMachine.State.RUNNING) {
-                        // Cold-start grace period: wait up to 1500ms for binder delivery from server daemon
-                        val deadline = System.currentTimeMillis() + 1500L
-                        while (System.currentTimeMillis() < deadline) {
-                            try {
-                                Thread.sleep(100)
-                            } catch (_: InterruptedException) {
-                                break
-                            }
-                            if (ShizukuStateMachine.update() == ShizukuStateMachine.State.RUNNING) {
-                                break
-                            }
-                        }
-                    }
-                }
+                waitForBinderGracefully()
+                ShizukuStateMachine.update()
 
                 if (!ShizukuStateMachine.isRunning()) {
                     LOGGER.w("sendUserService called when not running")
@@ -79,9 +95,18 @@ class ShizukuManagerProvider : ShizukuProvider() {
                     val serviceBinder = Shizuku.getBinder() ?: return null
                     val reply = Bundle()
                     reply.putParcelable(EXTRA_BINDER, BinderContainer(serviceBinder))
+                    reply.putParcelable("moe.shizuku.privileged.api.intent.extra.BINDER", moe.shizuku.api.BinderContainer(serviceBinder))
+                    reply.putParcelable("rikka.shizuku.intent.extra.BINDER", rikka.shizuku.BinderContainer(serviceBinder))
+                    reply.putBinder("binder", serviceBinder)
                     reply
                 } catch (e: Throwable) {
-                    LOGGER.e(e, "attachUserService $token")
+                    // A user service whose token the server no longer knows (it restarted, or the
+                    // app's service was already torn down) is routine (SHIZUKUPLUS-9B).
+                    if (e is IllegalArgumentException && e.message?.contains("unable to find token") == true) {
+                        LOGGER.w(e, "attachUserService $token")
+                    } else {
+                        LOGGER.e(e, "attachUserService $token")
+                    }
                     null
                 }
             } catch (e: Throwable) {
@@ -89,6 +114,9 @@ class ShizukuManagerProvider : ShizukuProvider() {
                 null
             }
         } else {
+            if (method == METHOD_GET_BINDER) {
+                waitForBinderGracefully(onlyDuringColdStart = true)
+            }
             super.call(method, arg, extras)
         }
     }

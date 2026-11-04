@@ -18,6 +18,17 @@ private val appContext: Context
 
 object EnvironmentUtils {
     @JvmStatic
+    fun isDropIn(context: Context? = null): Boolean {
+        val target =
+            context ?: try {
+                appContext
+            } catch (_: Exception) {
+                null
+            }
+        return target?.packageName == "moe.shizuku.privileged.api"
+    }
+
+    @JvmStatic
     fun isWatch(): Boolean =
         af.shizuku.common.util.EnvironmentUtils
             .isWatch(appContext)
@@ -31,9 +42,25 @@ object EnvironmentUtils {
         af.shizuku.common.util.EnvironmentUtils
             .isTlsSupported(appContext)
 
-    fun isWifiRequired(): Boolean {
+    @JvmStatic
+    fun isUsbConnected(context: Context? = null): Boolean =
+        try {
+            val ctx = context ?: appContext
+            val filter = android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)
+            val batteryStatus = ctx.registerReceiver(null, filter)
+            val plugged = batteryStatus?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, -1) ?: -1
+            plugged == android.os.BatteryManager.BATTERY_PLUGGED_USB
+        } catch (_: Exception) {
+            val state = SystemProperties.get("sys.usb.state", "")
+            state.contains("adb")
+        }
+
+    fun isWifiRequired(allowNetworkProbe: Boolean = true): Boolean {
         if (ShizukuSettings.getTcpMode()) return false
         if (getAdbTcpPort() > 0) return false
+        if (!allowNetworkProbe || android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            return true
+        }
         if (af.shizuku.manager.adb.AdbPortProber
                 .isPortOpen(5555, 50)
         ) {
@@ -97,9 +124,21 @@ object EnvironmentUtils {
         return result
     }
 
-    private fun checkSuExists(): Boolean {
+    /**
+     * Locates a usable `su` binary path across custom user settings, standard PATH, and modern
+     * KernelSU / APatch / Magisk directories. Used as a direct ProcessBuilder fallback when
+     * libsu's default `Shell.getShell()` cannot find `su` in the standard environment PATH.
+     */
+    @JvmStatic
+    fun findSuBinary(): String? {
+        runCatching {
+            val custom = ShizukuSettings.getPreferences().getString("custom_su_path", null)?.trim()
+            if (!custom.isNullOrEmpty()) {
+                val customFile = java.io.File(custom)
+                if (customFile.exists()) return customFile.absolutePath
+            }
+        }
         val paths = System.getenv("PATH")?.split(":")?.toMutableList() ?: mutableListOf()
-        // Add common modern root paths that might not be in the standard PATH
         paths.addAll(
             listOf(
                 "/data/adb/ksu/bin",
@@ -116,9 +155,58 @@ object EnvironmentUtils {
             ),
         )
         for (path in paths) {
-            if (java.io.File(path, "su").exists()) return true
+            val file = java.io.File(path, "su")
+            if (file.exists()) return file.absolutePath
         }
-        return false
+        return null
+    }
+
+    private fun checkSuExists(): Boolean = findSuBinary() != null
+
+    /**
+     * Runs [command] through the `su` binary at [suPath] directly, bypassing libsu. The output is
+     * drained so a chatty starter can't fill the pipe and stall, and the wait is bounded so an
+     * unanswered root prompt can't hang the caller. Returns true only on exit code 0.
+     */
+    @JvmStatic
+    fun runWithSuBinary(
+        suPath: String,
+        command: String,
+        timeoutSeconds: Long = 15,
+    ): Boolean {
+        var proc: Process? = null
+        var finished = false
+        return try {
+            proc = ProcessBuilder(suPath, "-c", command).redirectErrorStream(true).start()
+            val p = proc
+            Thread {
+                runCatching {
+                    p.inputStream.use { input ->
+                        val buf = ByteArray(4096)
+                        while (input.read(buf) >= 0) Unit
+                    }
+                }
+            }.apply { isDaemon = true }.start()
+            // Process.waitFor(timeout) and isAlive() are API 26+; poll exitValue() instead (minSdk 24).
+            val deadline = android.os.SystemClock.uptimeMillis() + timeoutSeconds * 1000
+            var exit: Int? = null
+            while (exit == null && android.os.SystemClock.uptimeMillis() < deadline) {
+                exit =
+                    try {
+                        p.exitValue()
+                    } catch (_: IllegalThreadStateException) {
+                        Thread.sleep(100)
+                        null
+                    }
+            }
+            finished = exit != null
+            exit == 0
+        } catch (e: Exception) {
+            timber.log.Timber.w(e, "Direct su ($suPath) failed")
+            false
+        } finally {
+            if (!finished) runCatching { proc?.destroy() }
+        }
     }
 
     @JvmStatic

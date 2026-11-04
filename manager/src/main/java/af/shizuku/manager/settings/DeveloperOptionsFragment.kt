@@ -6,6 +6,7 @@ import af.shizuku.manager.ShizukuSettings.Keys.*
 import af.shizuku.manager.utils.CrashHandler
 import af.shizuku.manager.utils.CrashReporter
 import af.shizuku.manager.utils.CustomTabsHelper
+import af.shizuku.manager.utils.LoggedCrash
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
@@ -23,11 +24,52 @@ class DeveloperOptionsFragment : BaseSettingsFragment() {
     ) {
         setPreferencesFromResource(R.xml.settings_developer_options, rootKey)
 
+        // Notification system master switch
+        findPreference<TwoStatePreference>(KEY_NOTIFICATION_SYSTEM_ENABLED)?.apply {
+            isChecked = ShizukuSettings.isNotificationSystemEnabled()
+            setOnPreferenceChangeListener { _, v ->
+                val enabled = v as? Boolean ?: return@setOnPreferenceChangeListener false
+                ShizukuSettings.setNotificationSystemEnabled(enabled)
+                if (!enabled) {
+                    val ctx = context ?: return@setOnPreferenceChangeListener true
+                    val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                    nm?.cancel(af.shizuku.manager.service.WatchdogService.NOTIFICATION_ID_CRASH)
+                    nm?.cancel(af.shizuku.manager.worker.AdbStartWorker.NOTIFICATION_ID)
+                    nm?.cancel(af.shizuku.manager.worker.AdbStartWorker.NOTIFICATION_ID_MDNS_BLOCKED)
+                    nm?.cancel(af.shizuku.manager.receiver.ShizukuReceiverStarter.NOTIFICATION_ID)
+                    nm?.cancel(af.shizuku.manager.receiver.ShizukuReceiverStarter.FOREGROUND_NOTIFICATION_ID)
+                    nm?.cancel(af.shizuku.manager.utils.BackgroundNudge.NOTIFICATION_ID)
+                    nm?.cancel(af.shizuku.manager.utils.BatteryOptimizationGuard.NOTIFICATION_ID)
+                    nm?.cancel(af.shizuku.manager.utils.VendorBatteryRestrictions.NOTIFICATION_ID)
+                    nm?.cancel(af.shizuku.manager.adb.AdbPairingService.NOTIFICATION_ID)
+                    nm?.cancel(af.shizuku.manager.utils.TcpNetworkGuard.NOTIFICATION_ID)
+                    nm?.cancel(af.shizuku.manager.utils.LiveActivityNotificationManager.NOTIFICATION_ID_WARNING)
+                    nm?.cancel(af.shizuku.manager.utils.ShizukuIssues.NOTIFICATION_ID)
+                }
+                true
+            }
+        }
+
+        findPreference<Preference>("reset_recommendations")?.setOnPreferenceClickListener {
+            af.shizuku.manager.utils.AdaptiveRecommendationManager
+                .resetAll()
+            context?.let { ctx ->
+                Toast
+                    .makeText(
+                        ctx,
+                        R.string.settings_reset_recommendations_toast,
+                        Toast.LENGTH_SHORT,
+                    ).show()
+            }
+            true
+        }
+
         // Vector / AVF Manager
         findPreference<TwoStatePreference>(KEY_VECTOR_ENABLED)?.apply {
             isChecked = ShizukuSettings.isVectorEnabled()
             setOnPreferenceChangeListener { _, v ->
-                ShizukuSettings.setVectorEnabled(v as Boolean)
+                val enabled = v as? Boolean ?: return@setOnPreferenceChangeListener false
+                ShizukuSettings.setVectorEnabled(enabled)
                 ShizukuSettings.syncAllPlusFeaturesToServer()
                 true
             }
@@ -37,9 +79,32 @@ class DeveloperOptionsFragment : BaseSettingsFragment() {
         findPreference<TwoStatePreference>(KEY_EXPERIMENTAL_ROOT_COMPAT)?.apply {
             isChecked = ShizukuSettings.isExperimentalRootCompatEnabled()
             setOnPreferenceChangeListener { _, v ->
-                ShizukuSettings.setExperimentalRootCompatEnabled(v as Boolean)
+                val enabled = v as? Boolean ?: return@setOnPreferenceChangeListener false
+                ShizukuSettings.setExperimentalRootCompatEnabled(enabled)
                 ShizukuSettings.syncAllPlusFeaturesToServer()
                 true
+            }
+        }
+
+        // Unrestricted third-party access: confirm before turning on, sync after the switch persists.
+        listOf(KEY_UNRESTRICTED_APP_DATA, KEY_UNRESTRICTED_PERSONAL_DATA).forEach { key ->
+            findPreference<TwoStatePreference>(key)?.setOnPreferenceChangeListener { pref, v ->
+                val enabled = v as? Boolean ?: return@setOnPreferenceChangeListener false
+                if (!enabled) {
+                    view?.post { ShizukuSettings.syncAllPlusFeaturesToServer() }
+                    return@setOnPreferenceChangeListener true
+                }
+                val ctx = context ?: return@setOnPreferenceChangeListener false
+                showDialog(
+                    MaterialAlertDialogBuilder(ctx)
+                        .setTitle(R.string.settings_unrestricted_confirm_title)
+                        .setMessage(R.string.settings_unrestricted_confirm_message)
+                        .setPositiveButton(R.string.settings_unrestricted_confirm_positive) { _, _ ->
+                            (pref as? TwoStatePreference)?.isChecked = true
+                            ShizukuSettings.syncAllPlusFeaturesToServer()
+                        }.setNegativeButton(android.R.string.cancel, null),
+                )
+                false
             }
         }
 
@@ -47,7 +112,8 @@ class DeveloperOptionsFragment : BaseSettingsFragment() {
         findPreference<TwoStatePreference>(KEY_SPOOF_DEVICE_ENABLED)?.apply {
             isChecked = ShizukuSettings.isSpoofDeviceEnabled()
             setOnPreferenceChangeListener { _, v ->
-                ShizukuSettings.setSpoofDeviceEnabled(v as Boolean)
+                val enabled = v as? Boolean ?: return@setOnPreferenceChangeListener false
+                ShizukuSettings.setSpoofDeviceEnabled(enabled)
                 ShizukuSettings.syncAllPlusFeaturesToServer()
                 true
             }
@@ -55,9 +121,30 @@ class DeveloperOptionsFragment : BaseSettingsFragment() {
 
         // Spoof Target
         findPreference<rikka.preference.SimpleMenuPreference>(KEY_SPOOF_TARGET)?.setOnPreferenceChangeListener { _, v ->
-            ShizukuSettings.setSpoofTarget(if (v == "auto") "auto" else v as String)
+            val target = v as? String ?: return@setOnPreferenceChangeListener false
+            ShizukuSettings.setSpoofTarget(if (target == "auto") "auto" else target)
             ShizukuSettings.syncAllPlusFeaturesToServer()
             true
+        }
+
+        val expKeys =
+            listOf(
+                "window_manager_plus_enabled",
+                "overlay_manager_plus_enabled",
+                "ai_core_plus_enabled",
+                "ai_core_master_enabled",
+                "npu_acceleration_enabled",
+                "native_window_crawler_enabled",
+                "ai_core_experimental_enabled",
+                "display_tuner_plus_enabled",
+            )
+        expKeys.forEach { key ->
+            findPreference<TwoStatePreference>(key)?.setOnPreferenceChangeListener { _, _ ->
+                // The listener runs before the switch persists its value; sync once it has, or the
+                // server gets the old state.
+                view?.post { ShizukuSettings.syncAllPlusFeaturesToServer() }
+                true
+            }
         }
 
         // Manual Crash Report
@@ -66,7 +153,7 @@ class DeveloperOptionsFragment : BaseSettingsFragment() {
             val hasLastCrash = CrashHandler.getLastCrashReport(ctx) != null
             if (hasLastCrash) {
                 setTitle(R.string.manual_report_last_crash_title)
-                setSummary(R.string.manual_report_last_crash_summary)
+                setCustomSummary(R.string.manual_report_last_crash_summary)
             }
 
             setOnPreferenceClickListener {
@@ -75,32 +162,68 @@ class DeveloperOptionsFragment : BaseSettingsFragment() {
                         .setTitle(if (hasLastCrash) R.string.manual_report_last_crash_title else R.string.manual_report_title)
                         .setMessage(R.string.manual_report_summary)
                         .setPositiveButton(R.string.manual_report_button_github) { _, _ ->
-                            val report = CrashReporter.generateReport(ctx)
-                            val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(
-                                android.content.ClipData.newPlainText(
-                                    ctx.getString(R.string.manual_report_clipboard_label),
-                                    report,
-                                ),
-                            )
-
-                            Toast.makeText(ctx, R.string.manual_report_toast_copied, Toast.LENGTH_LONG).show()
-
-                            val url = CrashReporter.getGitHubReportUrl(ctx)
-                            CustomTabsHelper.launchUrlOrCopy(ctx, url)
-
-                            if (hasLastCrash) {
-                                CrashHandler.clearLastCrash(ctx)
-                            }
+                            pickCrashes(ctx) { crashes -> sendToGitHub(ctx, crashes, hasLastCrash) }
                         }.setNeutralButton(R.string.manual_report_copied_dialog_share) { _, _ ->
-                            CrashReporter.shareAsFile(ctx)
-                            if (hasLastCrash) {
-                                CrashHandler.clearLastCrash(ctx)
+                            pickCrashes(ctx) { crashes ->
+                                CrashReporter.shareAsFile(ctx, crashes)
+                                if (hasLastCrash) {
+                                    CrashHandler.clearLastCrash(ctx)
+                                }
                             }
                         }.setNegativeButton(android.R.string.cancel, null),
                 )
                 true
             }
         }
+    }
+
+    private fun sendToGitHub(
+        ctx: Context,
+        crashes: List<LoggedCrash>?,
+        hasLastCrash: Boolean,
+    ) {
+        val report = CrashReporter.generateReport(ctx, crashes)
+        val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(
+            af.shizuku.manager.utils.sensitivePlainText(
+                ctx.getString(R.string.manual_report_clipboard_label),
+                report,
+            ),
+        )
+
+        Toast.makeText(ctx, R.string.manual_report_toast_copied, Toast.LENGTH_LONG).show()
+
+        val url = CrashReporter.getGitHubReportUrl(ctx, crashes)
+        CustomTabsHelper.launchUrlOrCopy(ctx, url)
+
+        if (hasLastCrash) {
+            CrashHandler.clearLastCrash(ctx)
+        }
+    }
+
+    /**
+     * Lets the user choose which logged crashes go into the report (#628); the newest is checked.
+     * With no history (crashes from before it existed) it falls back to the last crash file.
+     */
+    private fun pickCrashes(
+        ctx: Context,
+        onPicked: (List<LoggedCrash>?) -> Unit,
+    ) {
+        val history = CrashHandler.getCrashHistory(ctx)
+        if (history.isEmpty()) {
+            onPicked(null)
+            return
+        }
+        val format = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT)
+        val labels = history.map { "${format.format(java.util.Date(it.timestamp))} · ${it.exception}" }.toTypedArray()
+        val checked = BooleanArray(history.size) { it == 0 }
+        showDialog(
+            MaterialAlertDialogBuilder(ctx)
+                .setTitle(R.string.manual_report_pick_crashes_title)
+                .setMultiChoiceItems(labels, checked) { _, which, isChecked -> checked[which] = isChecked }
+                .setPositiveButton(R.string.action_continue) { _, _ ->
+                    onPicked(history.filterIndexed { i, _ -> checked[i] })
+                }.setNegativeButton(android.R.string.cancel, null),
+        )
     }
 }

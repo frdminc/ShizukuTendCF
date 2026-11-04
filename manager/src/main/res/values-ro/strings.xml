@@ -67,13 +67,11 @@
         această aplicație și dialogul de sistem să fie vizibile în același timp.</string>
     <string name="adb_error_key_store">Nu pot genera cheia pentru depanarea wireless.\nAcest lucru
         poate fi cauzat de faptul că mecanismul KeyStore al acestui dispozitiv este defect.</string>
-    <string name="adb_stopping_tcp">Închiderea portului TCP</string>
     <string name="adb_error_stop_tcp">Nu s-a putut opri ADB prin TCP</string>
     <string name="adb_pair_required">Parcurge mai întâi procesul de asociere.</string>
     <string name="enable">Permite</string>
     <string name="development_settings">Opțiuni dezvoltator</string>
     <string name="notification_settings">Opțiuni de notificare</string>
-    <string name="adb_pairing_tutorial_title">Asociază Shizuku cu acest dispozitiv</string>
     <string name="adb_pairing_tutorial_content_notification">O notificare de la Shizuku te va ajuta
         să finalizezi asocierea.</string>
     <string name="adb_pairing_tutorial_content_steps">Navigați la „Opțiuni pentru dezvoltatori”,
@@ -115,10 +113,6 @@
     <string name="home_automation_description">Aplicații precum Tasker și MacroDroid pot trimite
         intenții de pornire/oprire automată a Shizuku.</string>
     <string name="home_automation_button_view_intents">Vizualizați intențiile</string>
-    <string name="home_automation_dialog_label_action">Acţiune</string>
-    <string name="home_automation_dialog_label_package">Pachet</string>
-    <string name="home_automation_dialog_label_class">Clasă</string>
-    <string name="home_automation_dialog_label_target">Ţintă</string>
     <!-- Home - Learn more -->
     <string name="home_learn_more_title">Ghid pentru dezvoltatori</string>
     <string name="home_learn_more_description">Află cum să dezvolți cu Shizuku</string>
@@ -158,7 +152,6 @@
     <string name="rish_description"><![CDATA[Cu %1$s, puteți rula comenzi shell în orice aplicație terminal.<p>Atingeți pentru a afla mai multe despre cum să o utilizați.]]></string>
     <!-- Settings -->
     <string name="settings_title">Setări</string>
-    <string name="settings_behavior">Comportament</string>
     <string name="settings_start_on_boot">Pornire la pornire</string>
     <string name="settings_start_on_boot_summary">Necesită Android 11+ sau root</string>
     <string name="settings_start_on_boot_bug">Din cauza unui bug în Android 11-12, depanarea
@@ -167,7 +160,6 @@
     <string name="settings_use_system_color">Utilizează culoarea temei de sistem</string>
     <string name="settings_watchdog">Câine de pază</string>
     <string name="settings_watchdog_summary">Repornește automat Shizuku dacă se blochează</string>
-    <string name="settings_tcp_mode">Mod TCP</string>
     <string name="settings_tcp_mode_summary">"Permite repornirea sistemului Shizuku fără Wi-Fi.
         (Shizuku trebuie să fi pornit o dată de la repornire)"</string>
     <string name="settings_tcp_mode_dialog_close_port">"Portul TCP va fi închis imediat. Veți avea
@@ -177,24 +169,11 @@
     <string name="settings_restart_dialog_message">Shizuku trebuie să repornească pentru a aplica
         această setare.</string>
     <string name="settings_restart_dialog_message_wifi_required"><![CDATA[<br><br><b>Wi-Fi este necesar. Shizuku va continua să ruleze și va aștepta o conexiune Wi-Fi înainte de a reporni în fundal.</b>]]></string>
-    <string name="settings_tcp_port">Port TCP</string>
-    <string name="settings_tcp_port_default">Implicit (5555)</string>
-    <string name="settings_tcp_port_hint">Lăsați necompletat pentru a utiliza valoarea implicită
-        (5555)</string>
-    <string name="settings_tcp_learn_more">Află mai multe despre utilizarea aplicațiilor de
-        automatizare pentru a controla Shizuku</string>
     <string name="settings_language">Limba</string>
-    <string name="settings_translation_contributors">Colaboratori de traduceri</string>
     <string name="settings_translation">Participă la traducere</string>
     <string name="settings_translation_summary">Ajută-ne să traducem %s în limba ta</string>
-    <string name="settings_user_interface">Aspect</string>
-    <string name="settings_black_night_theme">Tema de noapte întunecată</string>
-    <string name="settings_black_night_theme_summary">Folosește tema negru pur dacă modul noapte
-        este activat</string>
-    <string name="settings_support">Sprijin</string>
     <string name="settings_help">Ajutor</string>
     <string name="settings_report_bug">Raportează o eroare</string>
-    <string name="settings_advanced">Avansat</string>
     <string name="settings_legacy_pairing">Împerechere moștenită</string>
     <string name="settings_legacy_pairing_summary">Introduceți codul de asociere într-o casetă de
         dialog în loc de o notificare</string>
@@ -222,26 +201,16 @@
     <string name="toast_no_email_app">Nu a fost găsită nicio aplicație de e-mail</string>
     <string name="toast_shizuku_already_starting">Shizuku începe deja în fundal</string>
     <string name="toast_accessibility_tv_only">Acest serviciu este suportat doar pe dispozitive TV.</string>
-    <string name="toast_pairing_timeout">Serviciul de pereche Shizuku expirat.</string>
     <!-- Dark Mode Setting Override -->
     <string name="dark_theme">Temă</string>
     <string name="dark_theme_off">Întotdeauna lumină</string>
     <string name="dark_theme_on">Întotdeauna întuneric</string>
     <!-- About -->
-    <string name="action_about">Despre</string>
-    <string name="about_dialog_button_close">Aproape</string>
-    <string name="about_view_source_code"><![CDATA[Vizualizează codul sursă la %s]]></string>
     <!-- Start -->
-    <string name="action_start">Începe Shizuku</string>
     <!-- Stop -->
     <string name="action_stop">Oprire Shizuku</string>
     <string name="dialog_stop_message">Serviciul Shizuku va fi oprit.</string>
     <!-- Notification -->
-    <string name="notification_channel_service_status">Starea de pornire a serviciului</string>
-    <string name="notification_service_starting">Serviciul Shizuku pornește…</string>
-    <string name="notification_service_start_failed">Pornirea serviciului Shizuku a eșuat.</string>
-    <string name="notification_service_start_no_root">Nu s-a putut solicita permisiunea root.</string>
-    <string name="notification_working">Se lucrează…</string>
     <string name="notification_channel_adb_pairing">Asociere prin depanare fără fir</string>
     <string name="notification_adb_pairing_input_paring_code">Introdu codul de asociere</string>
     <string name="notification_adb_pairing_searching_for_service_title">Se caută serviciul de
@@ -269,18 +238,15 @@
         continua</string>
     <string name="wadb_notification_retry">Se așteaptă o nouă încercare</string>
     <string name="wadb_error_title">Eroare la pornire la bootare</string>
-    <string name="wadb_error_notify_dev">Atingeți pentru a notifica dezvoltatorul.</string>
     <string name="wadb_permission_error_notification_title">Eroare de permisiune</string>
     <string name="wadb_permission_error_notification_content">Shizuku are nevoie de
         WRITE_SECURE_SETTINGS pentru a porni la pornire. Atingeți pentru a afla cum să îl acordați.</string>
-    <string name="wadb_notification_channel">Serviciu de pornire automată ADB</string>
     <!-- Watchdog -->
     <string name="watchdog_running">Watchdog-ul rulează</string>
     <string name="watchdog_turn_off">Opreşte</string>
     <string name="watchdog_shizuku_crashed_title">Shizuku s-a prăbușit recent</string>
     <string name="watchdog_shizuku_crashed_text">Watchdog a repornit serviciul. Apasă pentru a afla
         despre posibile soluții pentru a preveni viitoare blocări.</string>
-    <string name="watchdog_shizuku_crashed_action_turn_off_alerts">Dezactivează alertele</string>
     <!-- Misc -->
     <string name="dialog_cannot_open_browser_title">Nu se poate porni browser-ul</string>
     <string name="toast_copied_to_clipboard">Copiat în clipboard</string>

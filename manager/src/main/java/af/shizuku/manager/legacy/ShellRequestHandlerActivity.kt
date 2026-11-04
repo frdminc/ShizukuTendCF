@@ -71,6 +71,7 @@ class ShellRequestHandlerActivity : MaterialActivity() {
         title: Int,
         message: Int,
     ) {
+        if (!ShizukuSettings.isNotificationSystemEnabled()) return
         val titleStr = getString(title)
         val messageStr = getString(message)
 
@@ -108,6 +109,7 @@ class ShellRequestHandlerActivity : MaterialActivity() {
                 .setContentText(messageStr)
                 .setContentIntent(launchPendingIntent)
                 .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
                 .setSmallIcon(R.drawable.ic_notification_icon)
                 .build()
 

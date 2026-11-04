@@ -2,6 +2,7 @@ package af.shizuku.manager.home
 
 import af.shizuku.manager.R
 import af.shizuku.manager.adb.AdbPairingAccessibilityService
+import af.shizuku.manager.ktx.findActivity
 import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.SettingsPage
 import android.Manifest.permission.WRITE_SECURE_SETTINGS
@@ -15,19 +16,53 @@ import android.text.Spannable
 import android.text.SpannableString
 import android.text.TextUtils
 import android.text.style.TypefaceSpan
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
+/**
+ * Gets the pairing accessibility service turned on: automatically when the app can (run off the
+ * main thread, it goes through the shell), otherwise by walking the user to the setting.
+ */
 fun Context.showAccessibilityDialog() {
     if (isAccessibilityEnabled()) {
         showNavigateDialog()
         return
     }
+    val scope = findActivity<androidx.activity.ComponentActivity>()?.lifecycleScope ?: return showManualAccessibilitySetup()
+    scope.launch {
+        val enabled = withContext(Dispatchers.IO) { tryEnableAccessibilityAutomatically() }
+        if (enabled) showNavigateDialog() else showManualAccessibilitySetup()
+    }
+}
+
+private fun Context.showManualAccessibilitySetup() {
+    val installer = packageManager.getInstallerPackageName(packageName)
+    val isInstalledByPlayOrAdb = (installer == "com.android.vending") || (installer == null)
+    val isRestricted = !isInstalledByPlayOrAdb && (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+
+    if (isRestricted) {
+        showPermissionDialog()
+    } else {
+        showEnableDialog()
+    }
+}
+
+/**
+ * Enables the pairing accessibility service with no UI, trying in order: a direct write
+ * (WRITE_SECURE_SETTINGS already held), Shizuku, then root. Blocking (shell calls) - call off the
+ * main thread. Returns true when the service ends up enabled; false means the caller should fall
+ * back to the system Accessibility screen.
+ */
+fun Context.tryEnableAccessibilityAutomatically(): Boolean {
+    if (isAccessibilityEnabled()) return true
 
     val hasWriteSecureSettings = (checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED)
     if (hasWriteSecureSettings) {
         if (enableAccessibilityService()) {
-            showNavigateDialog()
-            return
+            return true
         }
     }
 
@@ -82,8 +117,7 @@ fun Context.showAccessibilityDialog() {
             p4?.destroy()
 
             if (enableAccessibilityService() || isAccessibilityEnabled()) {
-                showNavigateDialog()
-                return
+                return true
             }
         } catch (e: Exception) {
             timber.log.Timber.w(e, "Auto-elevation via Shizuku failed")
@@ -116,22 +150,12 @@ fun Context.showAccessibilityDialog() {
                 )
             process.waitFor()
             if (enableAccessibilityService() || isAccessibilityEnabled()) {
-                showNavigateDialog()
-                return
+                return true
             }
         } catch (_: Throwable) {
         }
     }
-
-    val installer = packageManager.getInstallerPackageName(packageName)
-    val isInstalledByPlayOrAdb = (installer == "com.android.vending") || (installer == null)
-    val isRestricted = !isInstalledByPlayOrAdb && (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-
-    if (isRestricted) {
-        showPermissionDialog()
-    } else {
-        showEnableDialog()
-    }
+    return false
 }
 
 private fun Context.showPermissionDialog() {

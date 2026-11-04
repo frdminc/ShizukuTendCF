@@ -21,6 +21,5 @@
     <string name="compat_hub_install_signature_conflict">Không thể cài đặt: một ứng dụng khác (ví dụ: Shizuku gốc) đã được cài đặt dưới tên moe.shizuku.privileged.api với chữ ký không tương thích. Vui lòng gỡ cài đặt ứng dụng đó trước.</string>
     <string name="compat_hub_install_fail_storage">Không thể cài đặt: không đủ dung lượng lưu trữ khả dụng trên thiết bị.</string>
     <string name="compat_hub_install_fail_abi">Không thể cài đặt: Compat Hub không hỗ trợ kiến trúc CPU của thiết bị này.</string>
-    <string name="compat_hub_install_manual_launched">Đang mở trình cài đặt — làm theo lời nhắc trên màn hình để hoàn tất cài đặt.</string>
     <string name="compat_hub_install_fail_newprocess">Thiết bị của bạn giới hạn API tạo tiến trình của Shizuku. Đang mở trình cài đặt hệ thống để thay thế — nhấn Cài đặt khi được nhắc.</string>
 </resources>

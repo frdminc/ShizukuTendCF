@@ -25,7 +25,7 @@
             android:layout_height="48dp"
             android:layout_marginEnd="16dp"
             app:cardElevation="0dp"
-            app:cardCornerRadius="16dp"
+            app:shapeAppearance="?attr/shapeAppearanceCornerLarge"
             app:cardBackgroundColor="?attr/colorSecondaryContainer">
 
             <ImageView
@@ -61,6 +61,13 @@
         </LinearLayout>
 
     </LinearLayout>
+
+    <include
+        android:id="@+id/style_picker"
+        layout="@layout/view_changelog_style_picker"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone" />
 
     <!-- Notes body — expands to fill available space, scrollable -->
     <androidx.core.widget.NestedScrollView
@@ -140,17 +147,27 @@
         android:gravity="end">
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_github"
-            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:id="@+id/btn_tour"
+            style="?attr/materialButtonTonalStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
-            android:text="@string/changelog_view_on_github"
+            android:text="@string/onboarding_take_tour"
+            app:icon="@drawable/ic_sparkle_24" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_github"
+            style="?attr/materialIconButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:contentDescription="@string/changelog_view_on_github"
+            android:tooltipText="@string/changelog_view_on_github"
             app:icon="@drawable/ic_outline_open_in_new_24" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_close"
-            style="@style/Widget.Material3.Button"
+            style="@style/Widget.Material3Expressive.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/changelog_close" />

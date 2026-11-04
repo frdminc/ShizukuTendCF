@@ -21,6 +21,5 @@
     <string name="compat_hub_install_signature_conflict">No se puede instalar: ya hay otra aplicación instalada (p. ej., el Shizuku original) como moe.shizuku.privileged.api con una firma incompatible. Desinstálala primero.</string>
     <string name="compat_hub_install_fail_storage">No se puede instalar: no hay suficiente espacio de almacenamiento en el dispositivo.</string>
     <string name="compat_hub_install_fail_abi">No se puede instalar: Compat Hub no es compatible con la arquitectura de CPU de este dispositivo.</string>
-    <string name="compat_hub_install_manual_launched">Abriendo el instalador — sigue las instrucciones en pantalla para completar la instalación.</string>
     <string name="compat_hub_install_fail_newprocess">Tu dispositivo restringe la API de creación de procesos de Shizuku. Abriendo el instalador del sistema — pulsa en Instalar cuando se te solicite.</string>
 </resources>

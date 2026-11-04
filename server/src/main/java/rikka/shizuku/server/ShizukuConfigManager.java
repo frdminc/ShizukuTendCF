@@ -8,7 +8,13 @@ import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.os.Build;
 import android.os.Handler;
+<<<<<<< HEAD
 import android.os.SystemClock;
+=======
+import android.system.ErrnoException;
+import android.system.Os;
+import android.util.AtomicFile;
+>>>>>>> upstream/master
 
 import androidx.annotation.Nullable;
 
@@ -48,9 +54,15 @@ public class ShizukuConfigManager extends ConfigManager {
             .create();
 
     /**
+<<<<<<< HEAD
      * How long a batched write waits, so the start-up reconcile and import, which can change many
      * entries at once, are written together. A change the operator makes is written at once
      * instead ({@link #scheduleWriteLocked(boolean)}).
+=======
+     * How long a batched write waits, so that start-up, which can change many entries at once,
+     * writes them together. A change the user makes is written at once instead
+     * ({@link #scheduleWriteLocked(boolean)}).
+>>>>>>> upstream/master
      */
     private static final long WRITE_DELAY = 10 * 1000;
 
@@ -111,11 +123,16 @@ public class ShizukuConfigManager extends ConfigManager {
     }
 
     /**
+<<<<<<< HEAD
      * Writes {@code json} as the config. Callers hold the CONFIG_FILE lock; a seam for tests.
+=======
+     * Writes {@code json} as the config; the caller serializes it. A seam for tests.
+>>>>>>> upstream/master
      *
      * @throws IOException the config was not saved; the previous one is kept
      */
     static void writeJson(String json) throws IOException {
+<<<<<<< HEAD
         // The config is written to a fresh file given mode 0660 and group shell through its
         // descriptor, then renamed into place, never through a symbolic link (SafeConfigFile).
         // Closing #419: the config file was previously world-readable/writable. Root bypasses
@@ -128,6 +145,101 @@ public class ShizukuConfigManager extends ConfigManager {
     /**
      * Writes a change still waiting for the worker now, on the calling thread; nothing when none
      * is. For an exit, which would otherwise lose it.
+=======
+        synchronized (ATOMIC_FILE) {
+            saveConfig(ATOMIC_FILE, json.getBytes());
+            LOGGER.v("config saved to " + ATOMIC_FILE.getBaseFile().getAbsolutePath());
+        }
+    }
+
+    /**
+     * Writes {@code bytes} to {@code file} ({@link #writeAtomically}), then gives the file the
+     * config's mode ({@link #setConfigFileMode}) whether or not the write succeeded: a write that
+     * failed its checks can still leave a file it created at the base name.
+     *
+     * @throws IOException the bytes were not saved
+     */
+    static void saveConfig(AtomicFile file, byte[] bytes) throws IOException {
+        try {
+            writeAtomically(file, bytes);
+        } finally {
+            setConfigFileMode(file.getBaseFile());
+        }
+    }
+
+    /**
+     * Mode 0660, group shell, on {@code file} if it exists. A failure is logged; it never counts
+     * as a failed save.
+     */
+    static void setConfigFileMode(File file) {
+        // Closing #419: the config file was previously world-readable/writable.
+        // Root bypasses DAC checks entirely, so it doesn't need explicit bits here;
+        // only shell needs explicit access, granted via group ownership. No "other"
+        // access is needed, so we restrict to owner+group read/write only.
+        if (!file.exists()) {
+            return;
+        }
+        try {
+            Os.chmod(file.getAbsolutePath(), 0660);
+            Os.chown(file.getAbsolutePath(), -1, android.os.Process.SHELL_UID);
+        } catch (ErrnoException | RuntimeException e) {
+            LOGGER.w("failed to set permissions on " + file.getAbsolutePath() + ": " + e);
+        }
+    }
+
+    /** {@link Build.VERSION#SDK_INT}; a seam for tests. */
+    static int sdkInt() {
+        return Build.VERSION.SDK_INT;
+    }
+
+    /**
+     * Writes {@code bytes} to {@code file} and checks that they reached it.
+     * {@link AtomicFile#finishWrite} does not report a failed sync, close or (on API 30+) rename
+     * of the new file into place: it only logs it. So the data is synced here before
+     * finishWrite, and afterwards the base file must hold as many bytes as were written, with no
+     * backup left beside it (AtomicFile reads a backup in place of the base file) and, on API
+     * 30+, no new file (one left was not renamed into place).
+     *
+     * @throws IOException the bytes were not saved; AtomicFile keeps the previous file
+     */
+    static void writeAtomically(AtomicFile file, byte[] bytes) throws IOException {
+        synchronized (file) {
+            FileOutputStream stream = file.startWrite();
+            try {
+                stream.write(bytes);
+                stream.getFD().sync();
+            } catch (Throwable tr) {
+                file.failWrite(stream);
+                throw tr;
+            }
+            file.finishWrite(stream);
+
+            File base = file.getBaseFile();
+            File newFile = new File(base.getPath() + ".new");
+            File backup = new File(base.getPath() + ".bak");
+            String problem = null;
+            // Only API 30+ writes through a new file; before it, one there is not this write's.
+            if (sdkInt() >= 30 && newFile.exists()) {
+                problem = "the new file was not renamed into place";
+                // Only ever the file this write made; the next write would truncate it anyway.
+                if (!newFile.delete()) {
+                    LOGGER.w("cannot delete " + newFile);
+                }
+            } else if (backup.exists()) {
+                problem = "the backup is still in place";
+            } else if (base.length() != bytes.length) {
+                problem = "it holds " + base.length() + " bytes of " + bytes.length;
+            }
+            if (problem != null) {
+                throw new IOException("can't save " + base + ": " + problem);
+            }
+        }
+    }
+
+    /**
+     * Writes a change still waiting for the worker now, on the calling thread; does nothing when
+     * none is waiting. Called before the server exits, which would otherwise lose it.
+>>>>>>> upstream/master
      *
      * @return false when a change is still waiting afterwards: the write failed, or a change was
      * made after it
@@ -140,22 +252,34 @@ public class ShizukuConfigManager extends ConfigManager {
     }
 
     /**
+<<<<<<< HEAD
      * Writes the config if a change is waiting. The config is copied out under this object's lock,
      * which every change holds, and written under CONFIG_FILE's, held across both so that two
      * writes (the worker's and an exit's flush) cannot reach the disk in the other order. Nothing
      * takes CONFIG_FILE while holding this object's lock.
+=======
+     * Writes the config if a change is waiting. The config is serialized under this object's lock,
+     * which every change holds, and written under ATOMIC_FILE's, held across both so that two
+     * writes (the worker's and an exit's flush) cannot reach the disk in the other order. Nothing
+     * takes ATOMIC_FILE while holding this object's lock.
+>>>>>>> upstream/master
      *
      * <p>A write that fails leaves the change waiting and posts a retry
      * ({@link #writeFailedLocked(Throwable)}), so the worker tries again and an exit's flush finds
      * it waiting.
      */
     private void writePending() {
+<<<<<<< HEAD
         synchronized (CONFIG_FILE) {
+=======
+        synchronized (ATOMIC_FILE) {
+>>>>>>> upstream/master
             String json;
             synchronized (this) {
                 // Checked first: a flush with nothing waiting does not start the worker thread.
                 if (pendingWrite == WRITE_NONE) {
                     return;
+<<<<<<< HEAD
                 }
                 HandlerKt.getWorkerHandler().removeCallbacks(mWriteRunner);
                 // Cleared before the copy: a change after it posts a write of its own.
@@ -166,6 +290,18 @@ public class ShizukuConfigManager extends ConfigManager {
                     writeFailedLocked(tr);
                     return;
                 }
+=======
+                }
+                HandlerKt.getWorkerHandler().removeCallbacks(mWriteRunner);
+                // Cleared before serializing: a change after this posts a write of its own.
+                pendingWrite = WRITE_NONE;
+                try {
+                    json = GSON_OUT.toJson(config);
+                } catch (Throwable tr) {
+                    writeFailedLocked(tr);
+                    return;
+                }
+>>>>>>> upstream/master
             }
             Throwable failure = null;
             try {
@@ -177,6 +313,7 @@ public class ShizukuConfigManager extends ConfigManager {
                 if (failure != null) {
                     writeFailedLocked(failure);
                 } else if (writeFailures > 0) {
+<<<<<<< HEAD
                     LOGGER.i("config saved to %s after %d failed attempts", CONFIG_FILE.getPath(), writeFailures);
                     writeFailures = 0;
                 }
@@ -201,6 +338,11 @@ public class ShizukuConfigManager extends ConfigManager {
             if (writeFailures == 1) {
                 LOGGER.e(failure, "can't save %s; the previous config is kept, trying again now",
                         CONFIG_FILE.getPath());
+=======
+                    LOGGER.i("config saved to %s after %d failed attempts", ATOMIC_FILE.getBaseFile(), writeFailures);
+                    writeFailures = 0;
+                }
+>>>>>>> upstream/master
             }
             return;
         }
@@ -208,6 +350,43 @@ public class ShizukuConfigManager extends ConfigManager {
         if (writeFailures == 1) {
             LOGGER.e(failure, "can't save %s; the previous config is kept, trying again in %d ms",
                     CONFIG_FILE.getPath(), delay);
+        }
+        Handler handler = HandlerKt.getWorkerHandler();
+        handler.removeCallbacks(mWriteRunner);
+        handler.postDelayed(mWriteRunner, delay);
+        pendingWrite = WRITE_DELAYED;
+    }
+
+    /** {@link #RETRY_FIRST_DELAY}, doubled for each failure in a row after the first, at most {@link #WRITE_DELAY}. */
+    private static long retryDelay(int failures) {
+        int doublings = Math.min(Math.max(failures - 1, 0), 16);
+        return Math.min(WRITE_DELAY, RETRY_FIRST_DELAY << doublings);
+    }
+
+    /**
+     * After a write that failed: the change waits again, and a retry is posted after
+     * {@link #retryDelay(int)}. A prompt write posted meanwhile (a change made during the write)
+     * is left to run as posted, and a delayed one is brought forward to the retry. The failure is
+     * logged with its cause at the start of a run of failures, again in one line every
+     * {@link #FAILURE_LOG_EVERY} failures while the run lasts, and the write that ends the run
+     * says so.
+     */
+    private void writeFailedLocked(Throwable failure) {
+        writeFailures++;
+        if (writeFailures % FAILURE_LOG_EVERY == 0) {
+            LOGGER.w("%s still not saved after %d failed attempts: %s", ATOMIC_FILE.getBaseFile(), writeFailures, failure);
+        }
+        if (pendingWrite == WRITE_PROMPT) {
+            if (writeFailures == 1) {
+                LOGGER.e(failure, "can't save %s; the previous config is kept, trying again now",
+                        ATOMIC_FILE.getBaseFile());
+            }
+            return;
+        }
+        long delay = retryDelay(writeFailures);
+        if (writeFailures == 1) {
+            LOGGER.e(failure, "can't save %s; the previous config is kept, trying again in %d ms",
+                    ATOMIC_FILE.getBaseFile(), delay);
         }
         Handler handler = HandlerKt.getWorkerHandler();
         handler.removeCallbacks(mWriteRunner);
@@ -237,6 +416,7 @@ public class ShizukuConfigManager extends ConfigManager {
     /** Writes that failed in a row; 0 after one that succeeded. */
     private int writeFailures = 0;
 
+<<<<<<< HEAD
     /**
      * Uids whose stored grant start-up could not check against their packages and signers (a
      * read that did not answer). The grant is kept but not honoured until find() confirms it.
@@ -246,6 +426,9 @@ public class ShizukuConfigManager extends ConfigManager {
     private static final long RECHECK_INTERVAL = 1000;
 
     public ShizukuConfigManager(IntPredicate isManagerAppId) {
+=======
+    public ShizukuConfigManager() {
+>>>>>>> upstream/master
         this.config = load();
 
         boolean changed = false;
@@ -361,8 +544,13 @@ public class ShizukuConfigManager extends ConfigManager {
         }
 
         if (changed) {
+<<<<<<< HEAD
             // Start-up: one write for the whole reconcile and import. Under the lock, as the
             // worker reads pendingWrite under it.
+=======
+            // Start-up: one write for everything above. Under the lock, as the worker reads
+            // pendingWrite under it.
+>>>>>>> upstream/master
             synchronized (this) {
                 scheduleWriteLocked(false);
             }
@@ -370,11 +558,21 @@ public class ShizukuConfigManager extends ConfigManager {
     }
 
     /**
+<<<<<<< HEAD
      * Posts a write of the config to the worker: at once when {@code prompt} (a change the operator
      * made, which a stop or restart soon after must not lose), otherwise after {@link #WRITE_DELAY}
      * (start-up's bulk changes, and fill-ins that are worked out again at the next start). A
      * prompt write brings a delayed one forward; either one already posted covers a delayed
      * request. Each write saves the whole config, so one write covers every change before it.
+=======
+     * Posts a write of the config to the worker: at once when {@code prompt} (a change the user
+     * made, which a stop or restart soon after must not lose), otherwise after
+     * {@link #WRITE_DELAY} (start-up's bulk changes, which the next start works out again). A
+     * prompt write brings a delayed one forward; either one already posted covers a delayed
+     * request. Each write saves the whole config, so one write covers every change before it.
+     * The pending state is kept in a field rather than read from Handler.hasCallbacks, which
+     * needs API 29, so it behaves the same on every API level.
+>>>>>>> upstream/master
      */
     private void scheduleWriteLocked(boolean prompt) {
         if (pendingWrite == WRITE_PROMPT || (pendingWrite == WRITE_DELAYED && !prompt)) {
@@ -863,6 +1061,7 @@ public class ShizukuConfigManager extends ConfigManager {
         }
     }
 
+<<<<<<< HEAD
     /**
      * SHA-256 digests (lowercase hex) of every signer of {@code names}, the packages installed
      * under {@code uid}: the APK's signers plus, for a single-signer APK, the earlier certificates
@@ -901,11 +1100,58 @@ public class ShizukuConfigManager extends ConfigManager {
         } catch (Throwable t) {
             LOGGER.w(t, "signer lookup failed for uid %d", uid);
             return null;
+=======
+    public boolean isPermGrantMigrationDone() {
+        synchronized (this) {
+            return config.permGrantMigrationDone;
+        }
+    }
+
+    public java.util.Set<String> getAutoGrantedPermissions() {
+        synchronized (this) {
+            if (config.autoGrantedPermissions == null) config.autoGrantedPermissions = new java.util.ArrayList<>();
+            return new java.util.HashSet<>(config.autoGrantedPermissions);
+        }
+    }
+
+    public void addAutoGrantedPermissions(java.util.Collection<String> keys) {
+        if (keys.isEmpty()) return;
+        synchronized (this) {
+            if (config.autoGrantedPermissions == null) config.autoGrantedPermissions = new java.util.ArrayList<>();
+            java.util.Set<String> merged = new java.util.LinkedHashSet<>(config.autoGrantedPermissions);
+            merged.addAll(keys);
+            config.autoGrantedPermissions = new java.util.ArrayList<>(merged);
+            scheduleWriteLocked(true);
+        }
+    }
+
+    public void clearAutoGrantedPermissions() {
+        synchronized (this) {
+            if (config.autoGrantedPermissions == null || config.autoGrantedPermissions.isEmpty()) return;
+            config.autoGrantedPermissions = new java.util.ArrayList<>();
+            scheduleWriteLocked(true);
+        }
+    }
+
+    public void markPermGrantMigrationDone() {
+        synchronized (this) {
+            if (config.permGrantMigrationDone) {
+                return;
+            }
+            config.permGrantMigrationDone = true;
+            // Written at once: if it were lost, the next start would run the one-time migration
+            // again and re-grant a permission the user has since revoked (#568).
+            scheduleWriteLocked(true);
+>>>>>>> upstream/master
         }
     }
 
     /** Applies the change; true when the config changed. The caller schedules the write. */
+<<<<<<< HEAD
     private boolean updateLocked(int uid, List<String> packages, int mask, int values, @Nullable List<String> signers) {
+=======
+    private boolean updateLocked(int uid, List<String> packages, int mask, int values) {
+>>>>>>> upstream/master
         ShizukuConfig.PackageEntry entry = findLocked(uid);
         if (entry == null) {
             entry = new ShizukuConfig.PackageEntry(uid, mask & values);
@@ -925,9 +1171,12 @@ public class ShizukuConfigManager extends ConfigManager {
                 entry.packages.add(packageName);
             }
         }
+<<<<<<< HEAD
         if (signers != null && !signers.isEmpty()) {
             entry.signers = signers;
         }
+=======
+>>>>>>> upstream/master
         return true;
     }
 
@@ -954,6 +1203,7 @@ public class ShizukuConfigManager extends ConfigManager {
                         ? packages : PackageManagerApis.getPackagesForUidNoThrow(uid))
                 : null;
         synchronized (this) {
+<<<<<<< HEAD
             boolean changed = updateLocked(uid, packages, mask, values, signers);
             if ((mask & ConfigManager.MASK_PERMISSION) != 0) {
                 // The operator just decided for this uid, which settles a grant left unconfirmed at
@@ -969,6 +1219,10 @@ public class ShizukuConfigManager extends ConfigManager {
             }
             if (changed) {
                 // The operator's change: written at once, on the worker.
+=======
+            if (updateLocked(uid, packages, mask, values)) {
+                // The user's change: written at once, on the worker.
+>>>>>>> upstream/master
                 scheduleWriteLocked(true);
             }
         }
@@ -980,9 +1234,13 @@ public class ShizukuConfigManager extends ConfigManager {
             return;
         }
         config.packages.remove(entry);
+<<<<<<< HEAD
         unconfirmedUids.remove(uid);
         lastRecheck.remove(uid);
         // A removal ends a grant, so it is written at once whoever asked for it.
+=======
+        // A removal ends a grant, so it is written at once.
+>>>>>>> upstream/master
         scheduleWriteLocked(true);
     }
 

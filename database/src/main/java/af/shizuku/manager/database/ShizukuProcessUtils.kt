@@ -70,4 +70,57 @@ object ShizukuProcessUtils {
             ShizukuCaptureResult(-1, "", e.message ?: e.javaClass.simpleName)
         }
     }
+
+    /**
+     * Spawns [command] as a detached, persistent privileged daemon (UID 2000 / 0) that outlives
+     * the caller and the individual `newProcess` binder call (#531). Redirects stdin/stdout/stderr
+     * to `/dev/null` inside a new session (`setsid`) so pipe drain threads never block and the
+     * child is not torn down when the shell exits.
+     *
+     * @return the spawned child's PID (> 0), or -1 on failure.
+     */
+    fun runDetached(command: String): Int {
+        if (!Shizuku.pingBinder() || command.isBlank()) return -1
+        return try {
+            val escaped = "'" + command.replace("'", "'\\''") + "'"
+            val wrapper = "setsid sh -c $escaped </dev/null >/dev/null 2>&1 & echo \$!"
+            val process =
+                Shizuku.newProcess(
+                    arrayOf("sh", "-c", wrapper),
+                    // null inherits the server's environment; a non-null array replaces it
+                    // entirely (no PATH, so `setsid` would not resolve).
+                    null,
+                    null,
+                )
+            try {
+                process.outputStream.close()
+            } catch (_: Exception) {
+            }
+            val pidLine =
+                process.inputStream
+                    .bufferedReader()
+                    .use { it.readLine()?.trim() }
+            process.waitFor()
+            pidLine?.toIntOrNull()?.takeIf { it > 0 } ?: -1
+        } catch (e: Exception) {
+            Timber.w(e, "runDetached failed")
+            -1
+        }
+    }
+
+    /** Returns true if a privileged process with [pid] is currently alive. */
+    fun isProcessAlive(pid: Int): Boolean {
+        if (pid <= 0 || !Shizuku.pingBinder()) return false
+        return runPrivilegedCapture(arrayOf("sh", "-c", "kill -0 $pid 2>/dev/null")).exitCode == 0
+    }
+
+    /** Sends [signal] (default `TERM`) to a privileged process with [pid]. */
+    fun killProcess(
+        pid: Int,
+        signal: String = "TERM",
+    ): Boolean {
+        if (pid <= 0 || !Shizuku.pingBinder()) return false
+        val safeSig = signal.filter { it.isLetterOrDigit() }.ifEmpty { "TERM" }
+        return runPrivilegedCapture(arrayOf("sh", "-c", "kill -s $safeSig $pid 2>/dev/null")).exitCode == 0
+    }
 }

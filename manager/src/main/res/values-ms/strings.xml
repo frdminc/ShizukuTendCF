@@ -69,13 +69,11 @@
         membolehkan apl ini dan dialog sistem kelihatan pada masa yang sama.</string>
     <string name="adb_error_key_store">Tidak dapat menjana kunci untuk penyahpepijatan
         wayarles.\nIni mungkin kerana mekanisme KeyStore peranti ini rosak.</string>
-    <string name="adb_stopping_tcp">Menutup port TCP</string>
     <string name="adb_error_stop_tcp">Gagal menghentikan ADB melalui TCP</string>
     <string name="adb_pair_required">Sila lalui langkah berpasangan terlebih dahulu.</string>
     <string name="enable">Dayakan</string>
     <string name="development_settings">Pilihan pemaju</string>
     <string name="notification_settings">Pilihan pemberitahuan</string>
-    <string name="adb_pairing_tutorial_title">Gandingkan Shizuku dengan peranti anda</string>
     <string name="adb_pairing_tutorial_content_notification">Pemberitahuan daripada Shizuku akan
         membantu anda melengkapkan gandingan.</string>
     <string name="adb_pairing_tutorial_content_steps">Navigasi ke \"Pilihan Pembangun\", kemudian
@@ -116,10 +114,6 @@
     <string name="home_automation_description">Apl seperti Tasker dan MacroDroid boleh menghantar
         niat untuk memulakan/menghentikan Shizuku secara automatik.</string>
     <string name="home_automation_button_view_intents">Lihat niat</string>
-    <string name="home_automation_dialog_label_action">Tindakan</string>
-    <string name="home_automation_dialog_label_package">Pakej</string>
-    <string name="home_automation_dialog_label_class">Kelas</string>
-    <string name="home_automation_dialog_label_target">Sasaran</string>
     <!-- Home - Learn more -->
     <string name="home_learn_more_title">Panduan pembangun</string>
     <string name="home_learn_more_description">Ketahui cara membangun dengan Shizuku</string>
@@ -158,7 +152,6 @@
     <string name="rish_description"><![CDATA[Dengan %1$s, anda boleh menjalankan arahan shell dalam mana-mana apl terminal.<p>Ketik untuk mengetahui lebih lanjut tentang cara menggunakannya.]]></string>
     <!-- Settings -->
     <string name="settings_title">tetapan</string>
-    <string name="settings_behavior">Tingkah laku</string>
     <string name="settings_start_on_boot">Mulakan semasa but</string>
     <string name="settings_start_on_boot_summary">Memerlukan Android 11+ atau root</string>
     <string name="settings_start_on_boot_bug">Disebabkan oleh pepijat dalam Android 11-12,
@@ -168,7 +161,6 @@
     <string name="settings_use_system_color">Gunakan warna tema sistem</string>
     <string name="settings_watchdog">Pengawas</string>
     <string name="settings_watchdog_summary">Mulakan semula Shizuku secara automatik jika ia ranap</string>
-    <string name="settings_tcp_mode">mod TCP</string>
     <string name="settings_tcp_mode_summary">"Membenarkan Shizuku memulakan semula tanpa Wi-Fi.
         (Shizuku mesti bermula sekali sejak but semula)"</string>
     <string name="settings_tcp_mode_dialog_close_port">"Port TCP akan ditutup serta-merta. Anda
@@ -178,23 +170,11 @@
     <string name="settings_restart_dialog_message">Shizuku perlu memulakan semula untuk menggunakan
         tetapan ini.</string>
     <string name="settings_restart_dialog_message_wifi_required"><![CDATA[<br><br><b>Wi-Fi diperlukan. Shizuku akan terus berjalan dan menunggu sambungan Wi-Fi sebelum dimulakan semula di latar belakang.</b>]]></string>
-    <string name="settings_tcp_port">port TCP</string>
-    <string name="settings_tcp_port_default">Lalai (5555)</string>
-    <string name="settings_tcp_port_hint">Biarkan kosong untuk menggunakan lalai (5555)</string>
-    <string name="settings_tcp_learn_more">Ketahui lebih lanjut tentang menggunakan apl automasi
-        untuk mengawal Shizuku</string>
     <string name="settings_language">Bahasa</string>
-    <string name="settings_translation_contributors">Penyumbang terjemahan</string>
     <string name="settings_translation">Mengambil bahagian dalam terjemahan</string>
     <string name="settings_translation_summary">Bantu kami menterjemah %s ke dalam bahasa anda</string>
-    <string name="settings_user_interface">Penampilan</string>
-    <string name="settings_black_night_theme">Tema malam hitam</string>
-    <string name="settings_black_night_theme_summary">Gunakan tema hitam tulen jika mod malam
-        didayakan</string>
-    <string name="settings_support">Sokongan</string>
     <string name="settings_help">Tolong</string>
     <string name="settings_report_bug">Laporkan pepijat</string>
-    <string name="settings_advanced">Maju</string>
     <string name="settings_legacy_pairing">Gandingan warisan</string>
     <string name="settings_legacy_pairing_summary">Masukkan kod gandingan dalam dialog dan bukannya
         pemberitahuan</string>
@@ -222,26 +202,16 @@
     <string name="toast_no_email_app">Tiada apl e-mel ditemui</string>
     <string name="toast_shizuku_already_starting">Shizuku sudah bermula di latar belakang</string>
     <string name="toast_accessibility_tv_only">Perkhidmatan ini hanya disokong pada peranti TV.</string>
-    <string name="toast_pairing_timeout">Perkhidmatan gandingan Shizuku tamat masa.</string>
     <!-- Dark Mode Setting Override -->
     <string name="dark_theme">Tema</string>
     <string name="dark_theme_off">Sentiasa ringan</string>
     <string name="dark_theme_on">Sentiasa gelap</string>
     <!-- About -->
-    <string name="action_about">Tentang</string>
-    <string name="about_dialog_button_close">tutup</string>
-    <string name="about_view_source_code"><![CDATA[Lihat kod sumber di %s]]></string>
     <!-- Start -->
-    <string name="action_start">Mulakan Shizuku</string>
     <!-- Stop -->
     <string name="action_stop">Hentikan Shizuku</string>
     <string name="dialog_stop_message">Perkhidmatan Shizuku akan dihentikan.</string>
     <!-- Notification -->
-    <string name="notification_channel_service_status">Status permulaan perkhidmatan</string>
-    <string name="notification_service_starting">Perkhidmatan Shizuku bermula…</string>
-    <string name="notification_service_start_failed">Mulakan perkhidmatan Shizuku gagal.</string>
-    <string name="notification_service_start_no_root">Gagal meminta kebenaran root.</string>
-    <string name="notification_working">Bekerja…</string>
     <string name="notification_channel_adb_pairing">Penyahpepijatan berpasangan tanpa wayar</string>
     <string name="notification_adb_pairing_input_paring_code">Masukkan kod berpasangan</string>
     <string name="notification_adb_pairing_searching_for_service_title">Mencari perkhidmatan
@@ -269,18 +239,15 @@
     <string name="wadb_notification_wifi_required">Menunggu sambungan Wi-Fi sebelum meneruskan</string>
     <string name="wadb_notification_retry">Menunggu untuk mencuba semula</string>
     <string name="wadb_error_title">Ralat semasa memulakan but</string>
-    <string name="wadb_error_notify_dev">Ketik untuk memberitahu pembangun.</string>
     <string name="wadb_permission_error_notification_title">Ralat Kebenaran</string>
     <string name="wadb_permission_error_notification_content">Shizuku memerlukan
         WRITE_SECURE_SETTINGS untuk bermula semasa but. Ketik untuk mengetahui cara memberikannya.</string>
-    <string name="wadb_notification_channel">Perkhidmatan automula ADB</string>
     <!-- Watchdog -->
     <string name="watchdog_running">Anjing pengawas sedang berjalan</string>
     <string name="watchdog_turn_off">Mati</string>
     <string name="watchdog_shizuku_crashed_title">Shizuku terhempas baru-baru ini</string>
     <string name="watchdog_shizuku_crashed_text">Pengawas memulakan semula perkhidmatan. Ketik untuk
         mengetahui tentang kemungkinan pembetulan untuk mengelakkan ranap masa hadapan.</string>
-    <string name="watchdog_shizuku_crashed_action_turn_off_alerts">Matikan Makluman</string>
     <!-- Misc -->
     <string name="dialog_cannot_open_browser_title">Tidak boleh memulakan penyemak imbas</string>
     <string name="toast_copied_to_clipboard">Disalin ke papan keratan</string>

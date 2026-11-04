@@ -12,7 +12,10 @@ import af.shizuku.manager.adb.StartNotificationState.AskAgain
 import af.shizuku.manager.adb.StartNotificationState.Display
 import af.shizuku.manager.adb.StartNotificationState.PendingReason
 import af.shizuku.manager.starter.Starter
+<<<<<<< HEAD
 import af.shizuku.manager.utils.HeadlessLogger
+=======
+>>>>>>> upstream/master
 import af.shizuku.manager.utils.SettingsPage
 import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.worker.AdbStartWorker
@@ -52,10 +55,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 object ShizukuReceiverStarter {
     private const val TAG = "AdbStartNotification"
+<<<<<<< HEAD
 
     // HeadlessLogger component.
     private const val LOG = "Starter"
 
+=======
+>>>>>>> upstream/master
     const val NOTIFICATION_ID = 1447
 
     // The start worker's foreground notification. WorkManager posts it and removes it again on its
@@ -119,7 +125,26 @@ object ShizukuReceiverStarter {
             return
         }
 
+        // A connection is already holding adbd's "Allow USB debugging?" dialog open; any new
+        // connection would queue another dialog (and enqueue() would cancel the waiting worker).
+        if (ShizukuSettings.getLastLaunchMode() != LaunchMethod.ROOT && AdbAuthWait.isWaiting()) {
+            Timber.tag(AppConstants.TAG).i("Start skipped: waiting for the adbd authorisation dialog to be answered")
+            return
+        }
+
+        // One dialog per boot or explicit start: once a dialog has gone unanswered, background
+        // triggers (QUICKBOOT_POWERON, the Tasker/Locale plugin) and the
+        // watchdog must not be able to raise a fresh dialog every 300 s. Explicit paths pass
+        // forceStart or clear the marker first (boot, token-authenticated broadcast,
+        // the notification's "Attempt now").
+        if (!forceStart && ShizukuSettings.getLastLaunchMode() != LaunchMethod.ROOT && AdbAuthWait.isUnanswered()) {
+            Timber.tag(AppConstants.TAG).i("Start skipped: adbd authorisation dialog went unanswered; waiting for an explicit start")
+            refreshNotification(context)
+            return
+        }
+
         if (ShizukuSettings.getLastLaunchMode() == LaunchMethod.ROOT) {
+<<<<<<< HEAD
             HeadlessLogger.i(LOG, "start: root")
             rootStart(context)
         } else if (ShizukuSettings.getLastLaunchMode() == LaunchMethod.ADB) {
@@ -133,6 +158,48 @@ object ShizukuReceiverStarter {
         } else {
             Timber.tag(AppConstants.TAG).w("Background start not supported")
             HeadlessLogger.w(LOG, "start: launch mode ${ShizukuSettings.getLastLaunchMode()} cannot start in the background")
+=======
+            // Off the caller's thread: Watchdog, the boot receiver and the automation receivers
+            // call this on main, and building the root shell (an su prompt, a slow Magisk or
+            // KernelSU) then ran the starter synchronously there. One thread also keeps two
+            // root starts from running at once.
+            val app = context.applicationContext
+            rootStarts.execute { rootStart(app, forceStart) }
+        } else if (ShizukuSettings.getLastLaunchMode() == LaunchMethod.ADB) {
+            if (context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
+                AdbStartWorker.enqueue(context, explicit = forceStart)
+            } else {
+                // Fallback: if TCP mode or force-start WADB is enabled, or an ADB TCP/saved port is active,
+                // AdbStartWorker can connect without WRITE_SECURE_SETTINGS and auto-regrant it.
+                if (ShizukuSettings.getTcpMode() ||
+                    ShizukuSettings.isForceStartWadbEnabled() ||
+                    ShizukuSettings.getLastPort() > 0 ||
+                    af.shizuku.manager.utils.EnvironmentUtils
+                        .getAdbTcpPort() > 0
+                ) {
+                    AdbStartWorker.enqueue(context, explicit = forceStart)
+                } else {
+                    showPermissionErrorNotification(context)
+                }
+            }
+        } else {
+            val app = context.applicationContext
+            if (af.shizuku.manager.utils.EnvironmentUtils
+                    .isRooted()
+            ) {
+                Timber.tag(AppConstants.TAG).i("Unknown launch mode, falling back to Root start")
+                rootStarts.execute { rootStart(app, forceStart) }
+            } else if (ShizukuSettings.getTcpMode() ||
+                af.shizuku.manager.utils.EnvironmentUtils
+                    .getAdbTcpPort() > 0 ||
+                context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
+            ) {
+                Timber.tag(AppConstants.TAG).i("Unknown launch mode, falling back to ADB start")
+                AdbStartWorker.enqueue(context, explicit = forceStart)
+            } else {
+                Timber.tag(AppConstants.TAG).w("Background start not supported")
+            }
+>>>>>>> upstream/master
         }
     }
 
@@ -140,6 +207,9 @@ object ShizukuReceiverStarter {
      *  receiver and the Tasker/Locale plugin's fire receiver. */
     fun stop() {
         if (!ShizukuStateMachine.isRunning()) return
+        // A deliberate stop (manual broadcast or automation): Watchdog and reconnect leave it.
+        af.shizuku.manager.utils.UserStopFlag
+            .mark()
         ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPING)
         runCatching { Shizuku.exit() }
             .onFailure { Timber.tag(AppConstants.TAG).w(it, "Shizuku.exit failed") }
@@ -165,6 +235,7 @@ object ShizukuReceiverStarter {
             Intent(context, NotifCancelReceiver::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+<<<<<<< HEAD
 
     /**
      * For [FOREGROUND_NOTIFICATION_ID] only. The prompt and notice stay in [NOTIFICATION_ID]; this
@@ -193,6 +264,36 @@ object ShizukuReceiverStarter {
         ensureChannel(context)
         val cancelPendingIntent = cancelPendingIntent(context)
 
+=======
+
+    /**
+     * For [FOREGROUND_NOTIFICATION_ID] only. The prompt and notice stay in [NOTIFICATION_ID]; this
+     * one just keeps the worker alive while it waits for an unlock, so it has no restore or
+     * "Attempt now" of its own.
+     */
+    fun buildForegroundNotification(context: Context): Notification {
+        ensureChannel(context)
+        return NotificationCompat
+            .Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification_icon)
+            .setContentTitle(context.getString(R.string.wadb_notification_title))
+            .setOngoing(true)
+            .setSilent(true)
+            .addAction(R.drawable.ic_notification_close_24, context.getString(android.R.string.cancel), cancelPendingIntent(context))
+            .build()
+    }
+
+    private fun buildNotification(
+        context: Context,
+        msg: String? = null,
+        notice: Boolean = false,
+        noticeStamp: Long = 0L,
+        attemptLabel: Int = R.string.wadb_notification_attempt_now,
+    ): Notification {
+        ensureChannel(context)
+        val cancelPendingIntent = cancelPendingIntent(context)
+
+>>>>>>> upstream/master
         // An activity, not a broadcast, so that tapping it collapses the shade and the dialog this
         // start raises is not hidden behind it. Cancel raises nothing and stays a broadcast; the
         // content tap already opens an activity.
@@ -233,8 +334,12 @@ object ShizukuReceiverStarter {
 
         val nb = NotificationCompat.Builder(context, CHANNEL_ID)
 
+<<<<<<< HEAD
         // BigTextStyle so a long message (the authorisation wait carries a key fingerprint the
         // user is asked to compare) is readable in full when expanded.
+=======
+        // BigTextStyle so a long message is readable in full when expanded.
+>>>>>>> upstream/master
         if (msg != null) nb.setContentText(msg).setStyle(NotificationCompat.BigTextStyle().bigText(msg))
 
         return nb
@@ -258,6 +363,11 @@ object ShizukuReceiverStarter {
     // futures, which the main thread must never do.
     private val serial =
         Executors.newSingleThreadExecutor { r -> Thread(r, "adb-start-notification").apply { isDaemon = true } }
+<<<<<<< HEAD
+=======
+    private val rootStarts =
+        Executors.newSingleThreadExecutor { r -> Thread(r, "root-start").apply { isDaemon = true } }
+>>>>>>> upstream/master
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val observing = AtomicBoolean(false)
 
@@ -407,6 +517,7 @@ object ShizukuReceiverStarter {
             }.onFailure { Timber.tag(TAG).w(it, "enqueue skipped: the start work's state could not be read") }
             render(app, force = false)
         }
+<<<<<<< HEAD
     }
 
     /**
@@ -589,6 +700,204 @@ object ShizukuReceiverStarter {
         return DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton), wallMs).toString()
     }
 
+=======
+    }
+
+    /**
+     * The user's Cancel: cancels the start work, queued or running, and dismisses the "not answered"
+     * notice, as one step against enqueues. A held prompt stays until its wait ends, which cancelling
+     * the worker that holds it brings about by closing its connection.
+     */
+    internal fun cancelStarts(
+        context: Context,
+        then: (() -> Unit)? = null,
+    ) {
+        val app = appContext(context)
+        if (app == null) {
+            then?.invoke()
+            return
+        }
+        val finish = bounded(then)
+        serial.execute {
+            try {
+                AdbAuthWait.dismissUnansweredNotice()
+                if (!unlocked(app)) return@execute
+                runCatching {
+                    WorkManager
+                        .getInstance(app)
+                        .cancelUniqueWork(AdbStartWorker.UNIQUE_WORK_NAME)
+                        .result
+                        .get(WORK_TIMEOUT_S, TimeUnit.SECONDS)
+                }.onFailure { Timber.tag(TAG).w(it, "cancel: WorkManager unavailable") }
+                runCatching { app.getSystemService(NotificationManager::class.java)?.cancel(PERMISSION_NOTIFICATION_ID) }
+                render(app, force = false)
+            } finally {
+                finish?.invoke()
+            }
+        }
+    }
+
+    /** The user swiped the notification away: a notice stays dismissed, anything still true comes back. */
+    fun restoreNotification(
+        context: Context,
+        swipedNotice: Boolean,
+        noticeStamp: Long = 0L,
+        then: (() -> Unit)? = null,
+    ) {
+        if (swipedNotice) AdbAuthWait.dismissUnansweredNotice(noticeStamp)
+        refreshNotification(context, force = true, then = then)
+    }
+
+    /** adbd's dialog is up for a background start. [attempt] is no longer used. */
+    @Suppress("UNUSED_PARAMETER")
+    fun postAuthPrompt(
+        context: Context,
+        attempt: Long,
+    ) {
+        appContext(context)
+        AdbAuthWait.postAuthPrompt()
+    }
+
+    // Started once per process, from the first render. Every emission re-renders from a fresh read,
+    // so an emission and an on-demand render can never apply an older state over a newer one.
+    private fun observe(app: Context) {
+        if (!observing.compareAndSet(false, true)) return
+        val flow =
+            runCatching { WorkManager.getInstance(app).getWorkInfosForUniqueWorkFlow(AdbStartWorker.UNIQUE_WORK_NAME) }
+                .getOrElse {
+                    observing.set(false)
+                    Timber.tag(TAG).w(it, "cannot follow the start work yet")
+                    return
+                }
+        // The notice is hidden while a server runs, so it must be re-rendered when one arrives
+        // and, above all, when it dies: the marker then stops the watchdog, and the notice with
+        // "Attempt now" is the user's way to start again.
+        scope.launch {
+            runCatching { ShizukuStateMachine.asFlow().collect { refreshNotification(app) } }
+                .onFailure { Timber.tag(TAG).w(it, "stopped following the service state") }
+        }
+        scope.launch {
+            flow
+                .catch { Timber.tag(TAG).w(it, "stopped following the start work") }
+                .onCompletion { observing.set(false) }
+                .collect { refreshNotification(app) }
+        }
+    }
+
+    // The only code that posts or removes NOTIFICATION_ID. Runs only on [serial].
+    private fun render(
+        app: Context,
+        force: Boolean,
+    ) {
+        if (!unlocked(app)) return
+        observe(app)
+        val serverRunning = ShizukuStateMachine.isRunning()
+        // A server started some other way (root, adb from a computer) leaves the marker set, since
+        // this manager's key is still not accepted. Its notice is old news by then: without this it
+        // came back every time that server stopped. The marker and its start guard stay.
+        if (serverRunning && AdbAuthWait.isUnansweredNoticeDue()) {
+            AdbAuthWait.dismissUnansweredNotice(AdbAuthWait.unansweredStamp())
+        }
+        val display =
+            StartNotificationState.display(
+                works = queryWork(app),
+                prompt = AdbAuthWait.prompt(),
+                waitHeld = AdbAuthWait.isWaiting(),
+                unmeteredAvailable = unmeteredAvailable(app),
+                unanswered = AdbAuthWait.isUnansweredNoticeDue(),
+                serverRunning = serverRunning,
+            )
+        if (display == Display.Unknown) return
+        runCatching {
+            val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (!af.shizuku.manager.ShizukuSettings
+                    .isNotificationSystemEnabled()
+            ) {
+                nm.cancel(NOTIFICATION_ID)
+                nm.cancel(PERMISSION_NOTIFICATION_ID)
+                rendered = Display.None
+                return@runCatching
+            }
+            // The missing-permission notice stops being true once the permission is held.
+            if (app.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
+                nm.cancel(PERMISSION_NOTIFICATION_ID)
+            }
+            // "Unchanged" must mean it is still in the shade: the system removes a notification
+            // without telling us when its channel is blocked, and drops a notify while it is.
+            val showing = runCatching { nm.activeNotifications.any { it.id == NOTIFICATION_ID } }.getOrNull()
+            val wanted = display != Display.None
+            val stamp = if (display == Display.Unanswered) AdbAuthWait.unansweredStamp() else 0L
+            if (!force && display == rendered && stamp == renderedStamp && (showing == null || showing == wanted)) return@runCatching
+            when (display) {
+                is Display.Prompt ->
+                    // The same button, while this wait is held, offers the key again on it
+                    // (NotifAttemptReceiver.attempt), so it says so.
+                    nm.notify(
+                        NOTIFICATION_ID,
+                        buildNotification(app, promptText(app, display), attemptLabel = R.string.wadb_notification_ask_again),
+                    )
+                Display.Progress -> nm.notify(NOTIFICATION_ID, buildNotification(app))
+                is Display.Pending -> {
+                    val msg =
+                        when (display.reason) {
+                            PendingReason.WIFI_REQUIRED -> app.getString(R.string.wadb_notification_wifi_required)
+                            PendingReason.WILL_RETRY -> app.getString(R.string.wadb_notification_retry)
+                            PendingReason.QUEUED -> null
+                        }
+                    nm.notify(NOTIFICATION_ID, buildNotification(app, msg))
+                }
+                Display.Unanswered ->
+                    nm.notify(
+                        NOTIFICATION_ID,
+                        buildNotification(
+                            app,
+                            app.getString(R.string.wadb_notification_auth_timed_out),
+                            notice = true,
+                            noticeStamp = stamp,
+                        ),
+                    )
+                Display.None, Display.Unknown -> nm.cancel(NOTIFICATION_ID)
+            }
+            rendered = display
+            renderedStamp = stamp
+        }.onFailure { Timber.tag(TAG).w(it, "could not render the start notification") }
+    }
+
+    /**
+     * The held dialog's text. Toasts may be suppressed (seen on a Samsung S24), so it says
+     * where the user stands with "Ask again" and when the wait ends, as times
+     * of day: Display.Prompt carries both, so a change in either renders again.
+     */
+    private fun promptText(
+        app: Context,
+        prompt: Display.Prompt,
+    ): String {
+        val ends = prompt.endsAtMs?.let { clockText(app, it) }
+        val askAgain =
+            when (val a = prompt.askAgain) {
+                is AskAgain.From -> app.getString(R.string.wadb_notification_ask_again_from, clockText(app, a.atMs))
+                AskAgain.Ready -> app.getString(R.string.wadb_notification_ask_again_ready)
+                AskAgain.Used ->
+                    ends?.let { app.getString(R.string.wadb_notification_ask_again_used, it) }
+                        ?: app.getString(R.string.wadb_notification_ask_again_used_untimed)
+                null -> null
+            }
+        // The "last prompt" sentence already gives the end.
+        val endsSentence = if (prompt.askAgain == AskAgain.Used) null else ends?.let { app.getString(R.string.wadb_notification_wait_ends, it) }
+        return listOfNotNull(app.getString(R.string.wadb_notification_awaiting_auth), askAgain, endsSentence)
+            .joinToString(". ")
+    }
+
+    /** [wallMs] as a time of day with seconds, in the device's locale and 12/24-hour setting. */
+    private fun clockText(
+        context: Context,
+        wallMs: Long,
+    ): String {
+        val skeleton = if (DateFormat.is24HourFormat(context)) "Hms" else "hms"
+        return DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton), wallMs).toString()
+    }
+
+>>>>>>> upstream/master
     // Null when WorkManager cannot be read, which renders nothing new rather than an empty queue.
     private fun queryWork(app: Context): List<StartNotificationState.Work>? =
         runCatching {
@@ -596,9 +905,12 @@ object ShizukuReceiverStarter {
                 .getInstance(app)
                 .getWorkInfosForUniqueWork(AdbStartWorker.UNIQUE_WORK_NAME)
                 .get(WORK_TIMEOUT_S, TimeUnit.SECONDS)
+<<<<<<< HEAD
                 // A quiet retry (WirelessDebugging) shows nothing unless it runs as an ordinary
                 // start, which publishes its step.
                 .filterNot { AdbStartWorker.QUIET_TAG in it.tags && it.progress.getString(AdbStartWorker.KEY_STEP) == null }
+=======
+>>>>>>> upstream/master
                 .map { it.toWork() }
         }.onFailure { Timber.tag(TAG).w(it, "could not read the start work's state") }
             .getOrNull()
@@ -620,17 +932,51 @@ object ShizukuReceiverStarter {
             cm != null && cm.activeNetwork != null && !cm.isActiveNetworkMetered
         }.getOrDefault(false)
 
+<<<<<<< HEAD
     private fun rootStart(context: Context) {
+=======
+    private fun rootStart(
+        context: Context,
+        forceStart: Boolean = false,
+    ) {
+>>>>>>> upstream/master
         Sentry.addBreadcrumb(Breadcrumb("Background Root start initiated").apply { category = "shizuku.starter" })
         if (!Shell.getShell().isRoot) {
+            Shell.getCachedShell()?.close()
+            // Plan B: Try direct su binary execution if su lives outside standard PATH (e.g. KernelSU / APatch / custom_su_path)
+            val fallbackSu =
+                af.shizuku.manager.utils.EnvironmentUtils
+                    .findSuBinary()
+            if (fallbackSu != null) {
+                // Receivers call start() on the main thread and the direct su run can take up to
+                // 15 s (root prompt); keep it off the main thread, past the broadcast ANR limit.
+                ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
+                scope.launch(Dispatchers.IO) {
+                    if (af.shizuku.manager.utils.EnvironmentUtils
+                            .runWithSuBinary(fallbackSu, Starter.internalCommand)
+                    ) {
+                        ShizukuStateMachine.update()
+                        return@launch
+                    }
+                    Timber.tag(AppConstants.TAG).w("Direct su fallback ($fallbackSu) failed")
+                    recoverFromFailedStart()
+                    Sentry.addBreadcrumb(
+                        Breadcrumb("Background Root start failed - direct su failed").apply {
+                            category = "shizuku.starter"
+                            level = io.sentry.SentryLevel.WARNING
+                        },
+                    )
+                    tryFallbackToAdbFromRoot(context, forceStart)
+                }
+                return
+            }
             Sentry.addBreadcrumb(
                 Breadcrumb("Background Root start failed - no root").apply {
                     category = "shizuku.starter"
                     level = io.sentry.SentryLevel.WARNING
                 },
             )
-            // NotificationHelper.notify(context, AppConstants.NOTIFICATION_ID_STATUS, AppConstants.NOTIFICATION_CHANNEL_STATUS, R.string.notification_service_start_no_root)
-            Shell.getCachedShell()?.close()
+            tryFallbackToAdbFromRoot(context, forceStart)
             return
         }
 
@@ -650,6 +996,7 @@ object ShizukuReceiverStarter {
                 )
                 Timber.tag(AppConstants.TAG).e("Root starter exited with code ${result.code}")
                 recoverFromFailedStart()
+                tryFallbackToAdbFromRoot(context, forceStart)
             }
         } catch (e: Exception) {
             Sentry.addBreadcrumb(
@@ -660,6 +1007,31 @@ object ShizukuReceiverStarter {
             )
             Timber.tag(AppConstants.TAG).e(e, "Failed to start Shizuku with root")
             recoverFromFailedStart()
+            tryFallbackToAdbFromRoot(context, forceStart)
+        }
+    }
+
+    private fun tryFallbackToAdbFromRoot(
+        context: Context,
+        forceStart: Boolean,
+    ) {
+        if (ShizukuStateMachine.isRunning()) return
+        if (!ShizukuSettings.isRootToAdbFallbackEnabled()) return
+        val canTryAdb =
+            context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED ||
+                ShizukuSettings.getTcpMode() ||
+                af.shizuku.manager.utils.EnvironmentUtils
+                    .getAdbTcpPort() > 0
+        if (canTryAdb && (forceStart || !AdbAuthWait.isUnanswered()) && !AdbAuthWait.isWaiting()) {
+            Timber.tag(AppConstants.TAG).i("Root start failed; falling back to Wireless ADB")
+            runCatching {
+                af.shizuku.manager.database.ActivityLogManager.log(
+                    "Shizuku",
+                    context.packageName,
+                    "Connection: Root start failed; falling back to Wireless ADB",
+                )
+            }
+            AdbStartWorker.enqueue(context, explicit = forceStart)
         }
     }
 
@@ -671,6 +1043,14 @@ object ShizukuReceiverStarter {
     }
 
     private fun showPermissionErrorNotification(context: Context) {
+<<<<<<< HEAD
+=======
+        if (!af.shizuku.manager.ShizukuSettings
+                .isNotificationSystemEnabled()
+        ) {
+            return
+        }
+>>>>>>> upstream/master
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         ensureChannel(context)
 

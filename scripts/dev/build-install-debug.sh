@@ -125,11 +125,20 @@ if not os.path.exists(libcpp):
 print(f"  Injecting {libcpp} into lib/arm64-v8a/libc++_shared.so …")
 with zipfile.ZipFile(src, 'r') as zin, zipfile.ZipFile(dst, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
     for item in zin.infolist():
+        if item.filename == 'lib/arm64-v8a/libc++_shared.so':
+            continue  # will be replaced below
         zout.writestr(item, zin.read(item.filename))
     with open(libcpp, 'rb') as f:
         zout.writestr('lib/arm64-v8a/libc++_shared.so', f.read())
 print("  Done.")
 PY
+
+# ── 3b. Align ────────────────────────────────────────────────────────────────
+# The Python repack above keeps each entry's compression but not its alignment. Uncompressed
+# dex/.so must be aligned or ART/the linker falls back to extracting them into memory.
+ALIGNED_APK="${TMPDIR_LOCAL}/sp-aligned-$$.apk"
+zipalign -f -P 16 4 "$PATCHED_APK" "$ALIGNED_APK"
+mv -f "$ALIGNED_APK" "$PATCHED_APK"
 
 # ── 4. Sign ──────────────────────────────────────────────────────────────────
 SIGNED_APK="${TMPDIR_LOCAL}/sp-signed-$$.apk"
@@ -158,6 +167,14 @@ if [[ -n "$NEW_APK_DIR" ]]; then
             ${NEW_APK_DIR}/lib/arm64/libshizuku.so \
             --apk=${NEW_APK_DIR}/base.apk &
         sleep 3
+        # The app's own package-replaced receiver may have started a server at the same time;
+        # keep only the newest so two servers never fight over the binder.
+        set -- \$(pidof shizuku_plus_server)
+        if [ \$# -gt 1 ]; then
+            newest=\$(for p in \"\$@\"; do echo \"\$(stat -c %Y /proc/\$p) \$p\"; done | sort -n | tail -1 | cut -d' ' -f2)
+            for p in \"\$@\"; do [ \"\$p\" != \"\$newest\" ] && kill \$p; done
+            sleep 1
+        fi
         ps -A | grep shizuku_plus_server
     " 2>&1
 else

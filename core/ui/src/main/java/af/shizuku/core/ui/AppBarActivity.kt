@@ -34,9 +34,9 @@ abstract class AppBarActivity : AppActivity() {
         if (!suppressTransitionOnCreate) {
             val axis = transitionAxis
             window.enterTransition = MaterialSharedAxis(axis, true)
-            window.exitTransition = MaterialSharedAxis(axis, false)
+            window.exitTransition = MaterialSharedAxis(axis, true)
             window.reenterTransition = MaterialSharedAxis(axis, false)
-            window.returnTransition = MaterialSharedAxis(axis, true)
+            window.returnTransition = MaterialSharedAxis(axis, false)
         } else {
             window.enterTransition = null
             window.exitTransition = null

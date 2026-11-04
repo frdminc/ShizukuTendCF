@@ -18,13 +18,17 @@ class PermissionManagerActivity : AppActivity() {
         setContent {
             val context = LocalContext.current
             AppTheme(
+                isExpressiveMotion =
+                    af.shizuku.manager.ShizukuSettings
+                        .isExpressiveAnimationsEnabled(),
                 darkTheme = isSystemInDarkTheme(),
                 isBlackNightTheme = ThemeHelper.isBlackNightTheme(context),
                 isAmoledPlus = ShizukuSettings.isAmoledPlusEnabled(),
                 isOneUi = ShizukuSettings.isOneUiThemeEnabled(),
+                isBoldTypography = ShizukuSettings.isBoldTypographyEnabled(),
                 isRoundedEdges = ShizukuSettings.isRoundedEdgesEnabled(),
             ) {
-                PermissionManagerScreen(onBackClick = { finish() })
+                PermissionManagerScreen(onBackClick = { finishAfterTransition() })
             }
         }
     }

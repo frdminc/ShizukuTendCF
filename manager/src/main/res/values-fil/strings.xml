@@ -71,13 +71,11 @@
         upang hayaan ang app na ito at ang dialog ng system na makita sa parehong oras.</string>
     <string name="adb_error_key_store">Hindi makabuo ng key para sa wireless debugging.\nIto ay
         maaaring dahil ang mekanismo ng KeyStore ng device na ito ay sira.</string>
-    <string name="adb_stopping_tcp">Pagsasara ng TCP port</string>
     <string name="adb_error_stop_tcp">Nabigo na pigilan ang ADB sa TCP</string>
     <string name="adb_pair_required">Sundin muna ang mga hakbang sa pagpapares.</string>
     <string name="enable">Paganahin</string>
     <string name="development_settings">Mga opsyon ng developer</string>
     <string name="notification_settings">Mga opsyon sa notipikasyon</string>
-    <string name="adb_pairing_tutorial_title">Ipares ang Shizuku sa device mo</string>
     <string name="adb_pairing_tutorial_content_notification">Tutulungan ka ng isang notipikasyon
         mula sa Shizuku na tapusin ang pagpapares.</string>
     <string name="adb_pairing_tutorial_content_steps">Mag-navigate sa \"Developer Options\",
@@ -119,10 +117,6 @@
     <string name="home_automation_description">Ang mga app tulad ng Tasker at MacroDroid ay maaaring
         magpadala ng mga layunin upang awtomatikong simulan/ihinto ang Shizuku.</string>
     <string name="home_automation_button_view_intents">Tingnan ang mga layunin</string>
-    <string name="home_automation_dialog_label_action">Aksyon</string>
-    <string name="home_automation_dialog_label_package">Package</string>
-    <string name="home_automation_dialog_label_class">Klase</string>
-    <string name="home_automation_dialog_label_target">Target</string>
     <!-- Home - Learn more -->
     <string name="home_learn_more_title">Gabay ng developer</string>
     <string name="home_learn_more_description">Matuto kung paano mag-develop gamit ang Shizuku</string>
@@ -164,7 +158,6 @@
     <string name="rish_description"><![CDATA[Sa %1$s, maaari kang magpatakbo ng mga shell command sa anumang terminal app.<p>I-tap para matuto pa tungkol sa kung paano ito gamitin.]]></string>
     <!-- Settings -->
     <string name="settings_title">Mga Setting</string>
-    <string name="settings_behavior">Pag-uugali</string>
     <string name="settings_start_on_boot">Magsimula sa boot</string>
     <string name="settings_start_on_boot_summary">Nangangailangan ng Android 11+ o root</string>
     <string name="settings_start_on_boot_bug">Dahil sa isang bug sa Android 11-12, hindi naaalala ng
@@ -174,7 +167,6 @@
     <string name="settings_use_system_color">Gamitin ang kulay ng tema ng sistema</string>
     <string name="settings_watchdog">Tagapagbantay</string>
     <string name="settings_watchdog_summary">Awtomatikong i-restart ang Shizuku kung nag-crash ito</string>
-    <string name="settings_tcp_mode">TCP mode</string>
     <string name="settings_tcp_mode_summary">"Pinapayagan ang Shizuku na mag-restart nang walang
         Wi-Fi. (Siguro minsan nang nagsimula si Shizuku mula nang mag-reboot)"</string>
     <string name="settings_tcp_mode_dialog_close_port">"Agad na isasara ang TCP port. Kakailanganin
@@ -184,23 +176,11 @@
     <string name="settings_restart_dialog_message">Kailangang mag-restart ng Shizuku para mailapat
         ang setting na ito.</string>
     <string name="settings_restart_dialog_message_wifi_required"><![CDATA[<br><br><b>Kinakailangan ang Wi-Fi. Magpapatuloy sa pagtakbo ang Shizuku at maghihintay ng koneksyon sa Wi-Fi bago mag-restart sa background.</b>]]></string>
-    <string name="settings_tcp_port">TCP port</string>
-    <string name="settings_tcp_port_default">Default (5555)</string>
-    <string name="settings_tcp_port_hint">Mag-iwan ng blangko upang magamit ang default (5555)</string>
-    <string name="settings_tcp_learn_more">Matuto nang higit pa tungkol sa paggamit ng mga
-        automation app upang makontrol ang Shizuku</string>
     <string name="settings_language">Wika</string>
-    <string name="settings_translation_contributors">Mga nag-ambag sa pagsasalin</string>
     <string name="settings_translation">Sumali sa pagsasalin</string>
     <string name="settings_translation_summary">Tulungan kaming isalin ang %s sa iyong wika</string>
-    <string name="settings_user_interface">Hitsura</string>
-    <string name="settings_black_night_theme">Itim na panggabing tema</string>
-    <string name="settings_black_night_theme_summary">Gamitin ang purong itim na tema kung nakabukas
-        ang panggabing mode</string>
-    <string name="settings_support">Suporta</string>
     <string name="settings_help">Tulong</string>
     <string name="settings_report_bug">Mag-ulat ng isang bug</string>
-    <string name="settings_advanced">Advanced</string>
     <string name="settings_legacy_pairing">Pagpapares ng pamana</string>
     <string name="settings_legacy_pairing_summary">Ipasok ang code ng pagpapares sa isang dialog sa
         halip na isang abiso</string>
@@ -230,27 +210,16 @@
     <string name="toast_shizuku_already_starting">Nagsisimula na si Shizuku sa background</string>
     <string name="toast_accessibility_tv_only">Ang serbisyong ito ay sinusuportahan lamang sa mga TV
         device.</string>
-    <string name="toast_pairing_timeout">Nag-time out ang serbisyo ng pagpapares ng Shizuku.</string>
     <!-- Dark Mode Setting Override -->
     <string name="dark_theme">Tema</string>
     <string name="dark_theme_off">Laging magaan</string>
     <string name="dark_theme_on">Laging madilim</string>
     <!-- About -->
-    <string name="action_about">Tungkol</string>
-    <string name="about_dialog_button_close">Isara</string>
-    <string name="about_view_source_code"><![CDATA[Tingnan ang source code sa %s]]></string>
     <!-- Start -->
-    <string name="action_start">Simulan ang Shizuku</string>
     <!-- Stop -->
     <string name="action_stop">Ihinto ang Shizuku</string>
     <string name="dialog_stop_message">Ihihinto ang serbisyo ng Shizuku.</string>
     <!-- Notification -->
-    <string name="notification_channel_service_status">Estado sa pagbubukas ng serbisyo</string>
-    <string name="notification_service_starting">Nagsisimula ang serbisyo ng Shizuku…</string>
-    <string name="notification_service_start_failed">Nagkaproblema sa pagsisimula ng serbisyo ng
-        Shizuku.</string>
-    <string name="notification_service_start_no_root">Hindi nakakuha ng pahintulot sa root.</string>
-    <string name="notification_working">Inaasikaso…</string>
     <string name="notification_channel_adb_pairing">Pagpapares ng wireless na pag-debug</string>
     <string name="notification_adb_pairing_input_paring_code">Ilagay ang code ng pagpapares</string>
     <string name="notification_adb_pairing_searching_for_service_title">Naghahanap ng serbisyo sa
@@ -278,12 +247,10 @@
     <string name="wadb_notification_wifi_required">Maghintay ng koneksyon sa Wi-Fi bago magpatuloy</string>
     <string name="wadb_notification_retry">Naghihintay na subukan muli</string>
     <string name="wadb_error_title">Error habang nagsisimula sa boot</string>
-    <string name="wadb_error_notify_dev">I-tap upang ipaalam sa developer.</string>
     <string name="wadb_permission_error_notification_title">Error sa Pahintulot</string>
     <string name="wadb_permission_error_notification_content">Kailangan ni Shizuku ng
         WRITE_SECURE_SETTINGS para makapagsimula sa boot. Mag-tap upang malaman kung paano ito
         ibigay.</string>
-    <string name="wadb_notification_channel">Serbisyo ng awtomatikong pagsisimula ng ADB</string>
     <!-- Watchdog -->
     <string name="watchdog_running">Tumatakbo ang Watchdog</string>
     <string name="watchdog_turn_off">I-off</string>
@@ -291,7 +258,6 @@
     <string name="watchdog_shizuku_crashed_text">Muling sinimulan ng Watchdog ang serbisyo. I-tap
         upang malaman ang tungkol sa mga potensyal na pag-aayos upang maiwasan ang mga pag-crash sa
         hinaharap.</string>
-    <string name="watchdog_shizuku_crashed_action_turn_off_alerts">I-off ang Mga Alerto</string>
     <!-- Misc -->
     <string name="dialog_cannot_open_browser_title">Hindi mabuksan ang browser</string>
     <string name="toast_copied_to_clipboard">Kinopya sa clipboard</string>

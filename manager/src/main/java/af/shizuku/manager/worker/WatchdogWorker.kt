@@ -45,9 +45,11 @@ class WatchdogWorker(
                 .setContentTitle(applicationContext.getString(R.string.watchdog_running))
                 .setSmallIcon(R.drawable.ic_notification_icon)
                 .setOngoing(true)
+                .setSilent(true)
+                .setOnlyAlertOnce(true)
                 .build()
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ForegroundInfo(HEAL_NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SHORT_SERVICE)
+            ForegroundInfo(HEAL_NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             ForegroundInfo(HEAL_NOTIFICATION_ID, notification)
         }
@@ -104,6 +106,11 @@ class WatchdogWorker(
 
         if (!WatchdogService.isRunning()) {
             Timber.tag("WatchdogWorker").w("WatchdogService was DEAD! Restarting...")
+            try {
+                setForeground(getForegroundInfo())
+            } catch (e: Exception) {
+                Timber.tag("WatchdogWorker").w(e, "Could not elevate to foreground before service start")
+            }
             WatchdogService.start(applicationContext)
         } else {
             Timber.tag("WatchdogWorker").d("WatchdogService is healthy.")

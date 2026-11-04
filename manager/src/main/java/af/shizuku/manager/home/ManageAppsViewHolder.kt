@@ -73,8 +73,6 @@ class ManageAppsViewHolder(
         val activity = v.context.asActivity<android.app.Activity>() ?: return
         activity.startWithSceneTransition(
             Intent(activity, ApplicationManagementActivity::class.java),
-            iconView,
-            "icon_manage_apps",
         )
     }
 }

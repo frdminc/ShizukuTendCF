@@ -21,6 +21,5 @@
     <string name="compat_hub_install_signature_conflict">Kan niet installeren: er is al een andere app (bijv. originele Shizuku) geïnstalleerd als moe.shizuku.privileged.api met een incompatibele handtekening. Verwijder deze eerst.</string>
     <string name="compat_hub_install_fail_storage">Kan niet installeren: onvoldoende vrije opslagruimte op het apparaat.</string>
     <string name="compat_hub_install_fail_abi">Kan niet installeren: Compat Hub ondersteunt de CPU-architectuur van dit apparaat niet.</string>
-    <string name="compat_hub_install_manual_launched">Installatieprogramma wordt geopend — volg de instructies op het scherm om de installatie te voltooien.</string>
     <string name="compat_hub_install_fail_newprocess">Uw apparaat beperkt de API van Shizuku voor het starten van processen. Systeeminstallatieprogramma wordt geopend — tik op Installeren wanneer daarom wordt gevraagd.</string>
 </resources>

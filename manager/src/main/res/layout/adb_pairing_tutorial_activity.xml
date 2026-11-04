@@ -35,6 +35,70 @@
             android:divider="@drawable/spacing_card_vertical"
             android:orientation="vertical">
 
+            <!-- Live pairing status, fed by AdbPairingService.state; hidden while idle. -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/pairing_status"
+                style="@style/DialogCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:accessibilityLiveRegion="polite"
+                android:focusable="false"
+                android:visibility="gone">
+
+                <FrameLayout
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="-8dp"
+                    android:layout_marginTop="2dp">
+
+                    <com.google.android.material.progressindicator.CircularProgressIndicator
+                        android:id="@+id/pairing_status_progress"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:indeterminate="true"
+                        android:importantForAccessibility="no"
+                        app:indicatorSize="20dp"
+                        app:trackThickness="3dp" />
+
+                    <ImageView
+                        android:id="@+id/pairing_status_icon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:importantForAccessibility="no"
+                        android:tint="?colorOnSecondaryContainer"
+                        android:tintMode="src_in"
+                        android:visibility="gone" />
+
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="36dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/pairing_status_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="?textAppearanceTitleSmall"
+                        android:textColor="?colorOnSecondaryContainer" />
+
+                    <TextView
+                        android:id="@+id/pairing_status_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:textAppearance="?textAppearanceBodyMedium"
+                        android:textColor="?colorOnSecondaryContainer"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/notification"
                 style="@style/DialogCard"
@@ -105,7 +169,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/notification_options"
-                        style="@style/Widget.Material3.Button.TonalButton"
+                        style="?attr/materialButtonTonalStyle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
@@ -253,7 +317,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/developer_options"
-                    style="@style/Widget.Material3.Button.TonalButton"
+                    style="?attr/materialButtonTonalStyle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
@@ -294,6 +358,26 @@
                     android:layout_height="wrap_content"
                     android:text="@string/adb_pairing_tutorial_content_enter_pairing_code" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/manual_pairing"
+                    style="?attr/materialButtonTonalStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/notification_adb_pairing_input_paring_code"
+                    app:icon="@drawable/ic_code_24"
+                    app:iconPadding="16dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/auto_fill_code"
+                    style="?attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/adb_pairing_tutorial_autofill"
+                    app:icon="@drawable/ic_sparkle_24"
+                    app:iconPadding="16dp" />
+
             </LinearLayout>
 
         </LinearLayout>
@@ -326,6 +410,17 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="@string/adb_pairing_tutorial_content_finish" />
+
+                <!-- Also the way in for someone who paired before: starting needs no new pairing. -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/start_now"
+                    style="?attr/materialButtonTonalStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/home_root_button_start"
+                    app:icon="@drawable/ic_server_start_24"
+                    app:iconPadding="16dp" />
 
             </LinearLayout>
 

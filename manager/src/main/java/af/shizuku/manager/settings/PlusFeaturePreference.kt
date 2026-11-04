@@ -61,11 +61,25 @@ class PlusFeaturePreference(
 
         holder.itemView.requestLayout()
 
+        // Long-press opens help (or the integration): name the action for TalkBack instead of a
+        // tooltip that repeated the visible title/summary.
+        androidx.core.view.ViewCompat.replaceAccessibilityAction(
+            holder.itemView,
+            androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_LONG_CLICK,
+            // Long-press opens the integration app when there is one, otherwise the help topic.
+            if (integrationPackage != null) null else context.getString(R.string.settings_help),
+            null,
+        )
+
         holder.itemView.setOnLongClickListener {
             if (integrationPackage != null) launchIntegration() else showHelp()
             true
         }
     }
+
+    private fun harmonized(color: Int): Int =
+        com.google.android.material.color.MaterialColors
+            .harmonizeWithPrimary(context, color)
 
     private fun badgeStyleFor(type: Int): Triple<String, Int, Int>? =
         when (type) {
@@ -87,13 +101,32 @@ class PlusFeaturePreference(
                     resolveColor(com.google.android.material.R.attr.colorTertiaryContainer, 0xFFFFD8E4.toInt()),
                     resolveColor(com.google.android.material.R.attr.colorOnTertiaryContainer, 0xFF31111D.toInt()),
                 )
+            4 ->
+                Triple(
+                    "ADB",
+                    resolveColor(com.google.android.material.R.attr.colorSecondaryContainer, 0xFFE8DEF8.toInt()),
+                    resolveColor(com.google.android.material.R.attr.colorOnSecondaryContainer, 0xFF1D192B.toInt()),
+                )
+            5 ->
+                Triple(
+                    "DEVICE OWNER",
+                    resolveColor(com.google.android.material.R.attr.colorPrimaryContainer, 0xFFEADDFF.toInt()),
+                    resolveColor(com.google.android.material.R.attr.colorOnPrimaryContainer, 0xFF21005D.toInt()),
+                )
+            6 ->
+                Triple(
+                    "ONE UI",
+                    harmonized(0xFFD0E4FF.toInt()),
+                    harmonized(0xFF001D36.toInt()),
+                )
             else -> null
         }
 
     private fun severityBadgeStyleFor(type: Int): Triple<String, Int, Int>? =
         when (type) {
-            // No M3 "warning" role exists, so RISKY is a fixed amber rather than theme-resolved.
-            1 -> Triple("RISKY", 0xFFFFE0B2.toInt(), 0xFF7A4A00.toInt())
+            // No M3 "warning" role exists: RISKY is a custom amber, harmonized with the theme's
+            // primary (M3's guidance for custom colours) so it sits with any accent.
+            1 -> Triple("RISKY", harmonized(0xFFFFE0B2.toInt()), harmonized(0xFF7A4A00.toInt()))
             // Solid colorError (not the softer colorErrorContainer ROOT uses) so DANGEROUS reads as
             // a step up in severity even when both badges appear on the same item.
             2 ->
@@ -119,13 +152,26 @@ class PlusFeaturePreference(
             spannable.append(" ")
             val end = spannable.length
             spannable.setSpan(
-                InlineBadgeSpan(badgeLabel, bgColor, fgColor, density),
+                InlineBadgeSpan(
+                    badgeLabel,
+                    bgColor,
+                    fgColor,
+                    density,
+                    // labelSmall's 11sp floor, in sp so it follows the system font size
+                    android.util.TypedValue.applyDimension(
+                        android.util.TypedValue.COMPLEX_UNIT_SP,
+                        11f,
+                        titleView.resources.displayMetrics,
+                    ),
+                ),
                 start,
                 end,
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
             )
         }
         titleView.text = spannable
+        // The pills are drawn over a placeholder, so TalkBack wouldn't hear them: say them.
+        titleView.contentDescription = "$title, " + badges.joinToString(", ") { it.first }
     }
 
     /** Draws a pill-shaped badge inline with the preference title. Replaces the stacked
@@ -136,8 +182,8 @@ class PlusFeaturePreference(
         private val bgColor: Int,
         private val fgColor: Int,
         private val density: Float,
+        private val textSizePx: Float,
     ) : ReplacementSpan() {
-        private val textSizePx = 9f * density
         private val paddingH = 5f * density
         private val paddingV = 2f * density
         private val cornerRadius = 4f * density
@@ -221,7 +267,23 @@ class PlusFeaturePreference(
     }
 
     private fun showHelp() {
-        if (infoDetail != 0) {
+        val topicId =
+            af.shizuku.manager.knowledgebase.KnowledgebaseRegistry
+                .topicForPrefKey(key)
+        if (topicId != null) {
+            af.shizuku.manager.knowledgebase.KnowledgebaseHelper
+                .show(context, topicId)
+            return
+        }
+
+        val detailText =
+            if (infoDetail != 0) {
+                context.getString(infoDetail)
+            } else {
+                summary?.toString() ?: title?.toString()
+            }
+
+        if (detailText != null) {
             val dialog =
                 com.google.android.material.bottomsheet
                     .BottomSheetDialog(context)
@@ -236,8 +298,6 @@ class PlusFeaturePreference(
                         (24 * context.resources.displayMetrics.density).toInt(),
                         (24 * context.resources.displayMetrics.density).toInt(),
                     )
-                    // Use theme surface background
-                    setBackgroundColor(resolveColor(com.google.android.material.R.attr.colorSurface, 0xFFFFFFFF.toInt()))
                 }
 
             // Drag handle indicator
@@ -260,7 +320,8 @@ class PlusFeaturePreference(
             // Title
             val titleTextView =
                 TextView(context).apply {
-                    text = context.getString(if (infoTitle != 0) infoTitle else R.string.settings_plus_learn_more)
+                    val customTitle = if (infoTitle != 0) context.getString(infoTitle) else title?.toString()
+                    text = customTitle ?: context.getString(R.string.settings_plus_learn_more)
                     setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 20f)
                     setTypeface(null, android.graphics.Typeface.BOLD)
                     setTextColor(resolveColor(com.google.android.material.R.attr.colorOnSurface, 0xFF000000.toInt()))
@@ -288,7 +349,7 @@ class PlusFeaturePreference(
 
             val detailTextView =
                 TextView(context).apply {
-                    text = context.getString(infoDetail)
+                    text = detailText
                     setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
                     setTextColor(resolveColor(com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF333333.toInt()))
                     setLineSpacing(0f, 1.25f)
@@ -358,8 +419,11 @@ class PlusFeaturePreference(
                             af.shizuku.manager.utils.HapticUtils
                                 .toggleOff(view)
                         }
-                        this@PlusFeaturePreference.isChecked = isCheckedVal
-                        this@PlusFeaturePreference.callChangeListener(isCheckedVal)
+                        if (this@PlusFeaturePreference.callChangeListener(isCheckedVal)) {
+                            this@PlusFeaturePreference.isChecked = isCheckedVal
+                        } else {
+                            view.isChecked = this@PlusFeaturePreference.isChecked
+                        }
                     }
                 }
             switchLayout.addView(mSwitch)

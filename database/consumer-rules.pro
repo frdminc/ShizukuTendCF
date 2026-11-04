@@ -13,3 +13,13 @@
 # Room
 -keep class * extends androidx.room.RoomDatabase
 -keep @androidx.room.Entity class *
+
+# kotlinx.serialization: the app database (assets/app_context_db.json) is decoded with generated
+# serializers; without these an R8 build parses it to nothing and Apps / Root compatibility lose
+# every description and SU-path hint.
+-keepattributes InnerClasses,EnclosingMethod
+-keep,includedescriptorclasses class af.shizuku.manager.database.**$$serializer { *; }
+-keepclassmembers class af.shizuku.manager.database.** {
+    *** Companion;
+    kotlinx.serialization.KSerializer serializer(...);
+}

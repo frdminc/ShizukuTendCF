@@ -25,13 +25,12 @@ object SettingsSearchEngine {
 
     private val screens =
         mapOf(
-            R.xml.settings_shizuku_plus to "af.shizuku.manager.settings.ShizukuPlusSettingsFragment",
             R.xml.settings_personalization to "af.shizuku.manager.settings.PersonalizationSettingsFragment",
             R.xml.settings_behavior to "af.shizuku.manager.settings.BehaviorSettingsFragment",
             R.xml.settings_advanced to "af.shizuku.manager.settings.AdvancedSettingsFragment",
             R.xml.settings_developer_options to "af.shizuku.manager.settings.DeveloperOptionsFragment",
+            R.xml.settings_experimental to "af.shizuku.manager.settings.ExperimentalSettingsFragment",
             R.xml.settings_root_integration to "af.shizuku.manager.settings.RootIntegrationSettingsFragment",
-            R.xml.settings_app_management to "af.shizuku.manager.settings.AppManagementSettingsFragment",
             R.xml.settings_about to "af.shizuku.manager.settings.AboutSettingsFragment",
         )
 
@@ -81,6 +80,37 @@ object SettingsSearchEngine {
         indexedItems = items
     }
 
+    fun findItemByKey(
+        context: Context,
+        key: String,
+    ): SettingItem? {
+        init(context)
+        val direct = indexedItems?.firstOrNull { it.key == key }
+        if (direct != null) return direct
+
+        val namespace = "http://schemas.android.com/apk/res/android"
+        for ((xmlId, fragmentClass) in screens) {
+            try {
+                val parser = context.resources.getXml(xmlId)
+                var eventType = parser.eventType
+                while (eventType != XmlPullParser.END_DOCUMENT) {
+                    if (eventType == XmlPullParser.START_TAG) {
+                        val k = parser.getAttributeValue(namespace, "key")
+                        if (k == key) {
+                            val titleRes = parser.getAttributeResourceValue(namespace, "title", 0)
+                            val title = if (titleRes != 0) context.getString(titleRes) else (parser.getAttributeValue(namespace, "title") ?: key)
+                            val iconRes = parser.getAttributeResourceValue(namespace, "icon", 0)
+                            return SettingItem(key, title, null, null, fragmentClass, xmlId, iconRes)
+                        }
+                    }
+                    eventType = parser.next()
+                }
+            } catch (_: Exception) {
+            }
+        }
+        return null
+    }
+
     fun search(
         context: Context,
         query: String,
@@ -89,13 +119,18 @@ object SettingsSearchEngine {
         val items = indexedItems ?: return emptyList()
         if (query.isBlank()) return emptyList()
         val q = query.trim().lowercase()
-        val devUnlocked = ShizukuSettings.isVectorEnabled()
+        val devUnlocked = ShizukuSettings.isDevOptionsUnlocked()
+        val appIdentityOn = ShizukuSettings.isExperimentalAppIdentityEnabled()
 
         return items.filter { item ->
             if (!devUnlocked && item.fragmentClass == "af.shizuku.manager.settings.DeveloperOptionsFragment") return@filter false
+            // Experimental app identity rows stay out of search while the dev toggle is off.
+            if (!appIdentityOn && item.key in APP_IDENTITY_KEYS) return@filter false
             item.title.lowercase().contains(q) ||
                 (item.summary != null && item.summary.lowercase().contains(q)) ||
                 (item.category != null && item.category.lowercase().contains(q))
         }
     }
+
+    private val APP_IDENTITY_KEYS = setOf("category_app_identity", "custom_icon_studio", "app_icon_alias", "custom_app_name")
 }

@@ -25,10 +25,13 @@ class UnansweredConfirmationTest :
             confirmation.mayStart(adb = true, unanswered = true) shouldBe true
             confirmation.mayStart(adb = true, unanswered = true) shouldBe true
         }
+<<<<<<< HEAD
 
         test("only the non-exported component's own extra is a gesture") {
             UnansweredConfirmation.isUserGesture(launchedViaExportedAlias = false, gestureExtra = true) shouldBe true
             UnansweredConfirmation.isUserGesture(launchedViaExportedAlias = true, gestureExtra = true) shouldBe false
             UnansweredConfirmation.isUserGesture(launchedViaExportedAlias = false, gestureExtra = false) shouldBe false
         }
+=======
+>>>>>>> upstream/master
     })

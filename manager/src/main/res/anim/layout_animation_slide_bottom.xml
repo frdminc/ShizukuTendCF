@@ -2,4 +2,4 @@
 <layoutAnimation xmlns:android="http://schemas.android.com/apk/res/android"
     android:animation="@anim/item_slide_in_bottom"
     android:animationOrder="normal"
-    android:delay="0.08" />
+    android:delay="0.06" />

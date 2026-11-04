@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     style="@style/Card.Small">
 
     <ImageView
@@ -12,8 +14,9 @@
         android:src="@drawable/ic_learn_more_24" />
 
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_weight="1"
         android:layout_marginStart="@dimen/m3e_spacing_large"
         android:duplicateParentState="true"
         android:orientation="vertical">
@@ -33,6 +36,48 @@
             android:layout_height="wrap_content"
             android:duplicateParentState="true"
             android:text="@string/home_learn_more_description" />
+
+        <!-- Shown only when Sentry quota is reached -->
+        <LinearLayout
+            android:id="@+id/sentry_offline_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="?colorOutlineVariant"
+                android:alpha="0.4" />
+
+            <TextView
+                android:id="@+id/sentry_offline_title"
+                style="@style/CardTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/sentry_offline_notice_title"
+                android:textColor="?colorError" />
+
+            <TextView
+                android:id="@+id/sentry_offline_summary"
+                style="@style/CardSummary.Brief"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/sentry_offline_notice_summary" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/chip_report_issue"
+                style="?attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/sentry_offline_report_github" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="10dp"
+    android:background="@drawable/bg_pv_panel"
+    android:importantForAccessibility="no">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <View android:layout_width="22dp" android:layout_height="22dp" android:background="@drawable/bg_pv_chip" />
+        <LinearLayout
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:layout_marginStart="8dp" android:orientation="vertical">
+            <View android:layout_width="56dp" android:layout_height="7dp" android:background="@drawable/bg_pv_bar_primary" />
+            <View android:layout_width="38dp" android:layout_height="5dp" android:layout_marginTop="4dp" android:background="@drawable/bg_pv_bar" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <View android:layout_width="match_parent" android:layout_height="5dp" android:layout_marginTop="12dp" android:background="@drawable/bg_pv_bar" />
+    <View android:layout_width="match_parent" android:layout_height="5dp" android:layout_marginTop="6dp" android:background="@drawable/bg_pv_bar" />
+    <View android:layout_width="70dp" android:layout_height="5dp" android:layout_marginTop="6dp" android:background="@drawable/bg_pv_bar" />
+    <View android:layout_width="match_parent" android:layout_height="5dp" android:layout_marginTop="6dp" android:background="@drawable/bg_pv_bar" />
+
+    <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+        <View android:layout_width="34dp" android:layout_height="14dp" android:background="@drawable/bg_pv_chip" />
+        <View android:layout_width="34dp" android:layout_height="14dp" android:layout_marginStart="6dp" android:background="@drawable/bg_pv_chip" />
+        <View android:layout_width="34dp" android:layout_height="14dp" android:layout_marginStart="6dp" android:background="@drawable/bg_pv_chip" />
+    </LinearLayout>
+</LinearLayout>

@@ -19,14 +19,18 @@ import timber.log.Timber
  * already uses to enable itself.
  *
  * Intentionally NOT a background watchdog: it only runs when the user foregrounds the app, so it
- * never fights someone who deliberately turned the service off (the AICore+ toggle being ON is
- * treated as the user's standing intent to have it enabled), and it adds no background wakeups.
+ * never fights someone who deliberately turned the service off, and it adds no background wakeups.
+ * It never enables the service for someone who has not switched it on themselves once (see
+ * ShizukuSettings.isAICoreAccessibilityUserEnabled).
  */
 object AICoreAccessibilityHealer {
     fun reenableIfNeeded(context: Context) {
         try {
-            // Only act on the user's standing intent: AICore+ feature toggled on in-app.
+            // Only act on the user's standing intent: AICore+ toggled on in-app AND the service
+            // turned on by the user at least once through Android's consent screen. The toggle
+            // alone defaults to on, so it is not consent to enable an accessibility service.
             if (!ShizukuSettings.isAICorePlusEnabled()) return
+            if (!ShizukuSettings.isAICoreAccessibilityUserEnabled()) return
 
             // Re-enabling requires WRITE_SECURE_SETTINGS, granted to the manager once Shizuku
             // is running. Without it there's nothing we can do here (the UI already guides the
@@ -56,6 +60,17 @@ object AICoreAccessibilityHealer {
         } catch (e: Exception) {
             // Never let self-heal crash app startup — worst case the user re-enables manually.
             Timber.w(e, "AICore+ accessibility self-heal failed")
+        }
+    }
+
+    /** See [ShizukuSettings.recordAICoreAccessibilityBaselineIfNeeded]; call from Application.onCreate. */
+    fun recordBaseline(context: Context) {
+        try {
+            ShizukuSettings.recordAICoreAccessibilityBaselineIfNeeded(
+                isServiceEnabled(context, ComponentName(context, AICorePlusService::class.java)),
+            )
+        } catch (e: Exception) {
+            Timber.w(e, "AICore+ accessibility baseline failed")
         }
     }
 

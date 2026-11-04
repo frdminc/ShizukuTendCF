@@ -11,7 +11,6 @@
         android:duplicateParentState="true"
         android:importantForAccessibility="yes"
         android:contentDescription="@string/accessibility_icon_server_status"
-        android:transitionName="icon_server_status"
         android:src="@drawable/ic_server_error_24"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -32,29 +31,19 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:layout_marginStart="@dimen/m3e_spacing_large"
-        android:layout_marginEnd="16dp"
         android:duplicateParentState="true"
         app:layout_constraintStart_toEndOf="@android:id/icon"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent">
 
-        <!-- Status dot + title on one horizontal row, gravity=center_vertical
-             so the dot always optically aligns with the text cap-height. -->
+        <!-- Title row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:duplicateParentState="true">
-
-            <View
-                android:id="@+id/status_indicator"
-                android:layout_width="8dp"
-                android:layout_height="8dp"
-                android:layout_marginEnd="12dp"
-                android:background="@drawable/shape_status_indicator"
-                android:importantForAccessibility="no" />
 
             <TextView
                 android:id="@android:id/text1"
@@ -104,16 +93,6 @@
                 tools:visibility="visible" />
 
         </com.google.android.material.chip.ChipGroup>
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_sentry_offline"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/sentry_offline_notice_button"
-            android:visibility="gone"
-            android:textColor="?colorError"
-            tools:visibility="visible" />
 
     </LinearLayout>
 

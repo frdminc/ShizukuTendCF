@@ -3,6 +3,7 @@ package af.shizuku.manager.utils
 import af.shizuku.manager.BuildConfig
 import af.shizuku.manager.ShizukuApplication
 import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.database.ActivityLogManager
 import android.Manifest.permission.WRITE_SECURE_SETTINGS
 import android.content.pm.PackageManager
 import android.os.Handler
@@ -23,7 +24,10 @@ import timber.log.Timber
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
+<<<<<<< HEAD
 import java.util.concurrent.atomic.AtomicInteger
+=======
+>>>>>>> upstream/master
 import java.util.concurrent.atomic.AtomicReference
 
 object ShizukuStateMachine {
@@ -58,6 +62,45 @@ object ShizukuStateMachine {
         java.util.concurrent.atomic
             .AtomicLong(0L)
     private const val STARTING_TIMEOUT_MS = 90_000L
+    private val stoppingTimestamp =
+        java.util.concurrent.atomic
+            .AtomicLong(0L)
+
+    // A stop whose binder never reported death (no binder held by this process, exit() that
+    // threw) used to stay STOPPING for good.
+    private const val STOPPING_TIMEOUT_MS = 15_000L
+    private const val COLD_START_GRACE_MS = 2_500L
+
+    @Volatile
+    private var processStartElapsedMs = android.os.SystemClock.elapsedRealtime()
+    private val binderReceivedThisProcess = AtomicBoolean(false)
+    private val coldStartRecheckScheduled = AtomicBoolean(false)
+
+    // One exemption check runs at a time in this process: two RUNNING transitions close together
+    // (a crash right after the first start, then a quick restart) each launch a coroutine that could
+    // read the pending flag before the other clears it. Claiming here keeps the post to one.
+    private val exemptionCheckRunning = AtomicBoolean(false)
+
+    /**
+     * Tests only: signalled when the post-RUNNING coroutine (Device Hardening, privilege grant,
+     * and the new-install battery-exemption check) has finished, so a scenario can wait for it.
+     */
+    @Volatile
+    @androidx.annotation.VisibleForTesting
+    var postRunningLatchForTesting: CountDownLatch? = null
+
+    /** Tests only: what a new process would start from (the persisted settled state). */
+    internal fun resetForTesting() {
+        state.set(loadPersistedSettledState())
+        startingTimestamp.set(0L)
+        processStartElapsedMs = -COLD_START_GRACE_MS * 2
+        binderReceivedThisProcess.set(false)
+        coldStartRecheckScheduled.set(false)
+        postRunningLatchForTesting = null
+        exemptionCheckRunning.set(false)
+        BatteryOptimizationGuard.resetForTesting()
+        VendorBatteryRestrictions.resetForTesting()
+    }
 
     /** A start of ours that has not yet produced a new server; [binder] is the one present when it began. */
     private class PendingStart(
@@ -109,6 +152,7 @@ object ShizukuStateMachine {
                         category = "shizuku.service"
                     },
                 )
+<<<<<<< HEAD
                 // A live binder does not say this manager's ADB key was accepted (the server may
                 // have been started as root, from a computer, or before the key was revoked), so
                 // the unanswered marker stays: it is cleared where adbd accepts the key
@@ -117,6 +161,15 @@ object ShizukuStateMachine {
                 // when the server stops.
                 set(State.RUNNING)
                 recordIfNewServer()
+=======
+                binderReceivedThisProcess.set(true)
+                set(State.RUNNING)
+                // Push the user's Plus feature flags as soon as the binder arrives - in the
+                // background too (watchdog, boot), not only when Home is open - so the server never
+                // runs with defaults the user changed.
+                af.shizuku.manager.ShizukuSettings
+                    .syncAllPlusFeaturesToServer()
+>>>>>>> upstream/master
             },
         )
         Shizuku.addBinderDeadListener(
@@ -135,6 +188,11 @@ object ShizukuStateMachine {
     fun get(): State = state.get()
 
     private fun transition(transform: (State) -> State) {
+        transitionAndGet(transform)
+    }
+
+    /** [transition], returning the state it produced. */
+    private fun transitionAndGet(transform: (State) -> State): State {
         // Capture the value our own CAS produced: a separate state.get() after getAndUpdate can
         // observe a concurrent transition's later write, making oldState == newState and silently
         // skipping listener/broadcast side effects for a transition that did occur.
@@ -142,8 +200,20 @@ object ShizukuStateMachine {
         val oldState = state.getAndUpdate { current -> transform(current).also { computed = it } }
         val newState = computed ?: error("getAndUpdate lambda must always execute synchronously")
         if (oldState != newState) {
+<<<<<<< HEAD
+=======
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                listeners.forEach { it(newState) }
+            } else {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    listeners.forEach { it(newState) }
+                }
+            }
+>>>>>>> upstream/master
             Timber.tag("ShizukuStateMachine").d(newState.toString())
+            logConnectionTransition(oldState, newState)
 
+<<<<<<< HEAD
             // Which app build started the running server is recorded when a start succeeds, not
             // when it begins. All deliberate start paths (AdbStarter, ShizukuReceiverStarter, tile,
             // StarterActivity) funnel through STARTING, which notes the server binder present then;
@@ -151,6 +221,23 @@ object ShizukuStateMachine {
             // server. Recording at STARTING marked a server left over from a pre-update build as
             // current when the restart failed and update() settled back onto it, so
             // isServerVersionSkewed() never fired in exactly the case it exists for.
+=======
+            // Record which app build is starting this server instance. All deliberate start paths
+            // (AdbStarter, ShizukuReceiverStarter, tile, StarterActivity) funnel through STARTING,
+            // so this captures every fresh start centrally and lets isServerVersionSkewed() later
+            // detect a running server left behind by a pre-update build.
+            if (newState == State.STOPPING) stoppingTimestamp.set(System.currentTimeMillis())
+            // Running again, however it was started: a stop the user made earlier no longer
+            // stands (root and other non-ADB starts never cleared it, so Watchdog and reconnect
+            // would have kept treating Shizuku+ as stopped on purpose).
+            if (newState == State.RUNNING) {
+                runCatching { UserStopFlag.clear() }
+                runCatching {
+                    af.shizuku.manager.doctor.StartFailureLog
+                        .clear()
+                }
+            }
+>>>>>>> upstream/master
             if (newState == State.STARTING) {
                 startingTimestamp.set(System.currentTimeMillis())
                 pendingStart.set(PendingStart(currentBinder()))
@@ -179,6 +266,22 @@ object ShizukuStateMachine {
                 }
 
                 if (newState == State.RUNNING) {
+                    applyWatchdogDefault()
+                    try {
+                        val context = ShizukuApplication.appContext
+                        af.shizuku.manager.service.WatchdogService
+                            .dismissCrashNotification(context)
+                        af.shizuku.manager.worker.AdbStartWorker
+                            .dismissNotifications(context)
+                        ShizukuIssues.clearStartProblems(context)
+                        val nm = context.getSystemService(android.app.NotificationManager::class.java)
+                        nm?.cancel(af.shizuku.manager.receiver.ShizukuReceiverStarter.NOTIFICATION_ID)
+                        nm?.cancel(af.shizuku.manager.receiver.ShizukuReceiverStarter.FOREGROUND_NOTIFICATION_ID)
+                        nm?.cancel(BackgroundNudge.NOTIFICATION_ID)
+                        nm?.cancel(af.shizuku.manager.adb.AdbPairingService.NOTIFICATION_ID)
+                    } catch (e: Exception) {
+                        Timber.tag("ShizukuStateMachine").w(e, "Failed to cancel lingering notifications on RUNNING")
+                    }
                     try {
                         val context = ShizukuApplication.appContext
                         CoroutineScope(Dispatchers.IO).launch {
@@ -188,6 +291,20 @@ object ShizukuStateMachine {
                                         DeviceOptimizer.applyFixes(context)
                                     }
                                     SettingsHelper.autoGrantPrivileges(context)
+<<<<<<< HEAD
+=======
+                                    val trigger =
+                                        if (oldState == State.CRASHED ||
+                                            af.shizuku.manager.service.WatchdogService
+                                                .isRunning()
+                                        ) {
+                                            "Watchdog / service start"
+                                        } else {
+                                            "service start"
+                                        }
+                                    af.shizuku.manager.database.ScriptSnippetManager
+                                        .runAutoRunSnippets(trigger)
+>>>>>>> upstream/master
                                 } catch (e: Exception) {
                                     Timber.tag("ShizukuStateMachine").e(e, "Failed to apply optimizations and privileges on RUNNING")
                                 }
@@ -198,7 +315,11 @@ object ShizukuStateMachine {
                                             ShizukuSettings.clearWatchdogExemptionPending()
                                         } else {
                                             // The check runs on the main thread (not this IO dispatcher): the
+<<<<<<< HEAD
                                             // scenario harness serves the system services it reads reliably
+=======
+                                            // Robolectric unit tests serve the system services it reads reliably
+>>>>>>> upstream/master
                                             // only from the main looper. It stays after the Device Hardening
                                             // pass above, which is what makes it observe the pass's effect.
                                             val settled =
@@ -216,7 +337,11 @@ object ShizukuStateMachine {
                                 if (ShizukuSettings.getWatchdog()) {
                                     try {
                                         // Vendor battery restrictions (Samsung, Xiaomi) are re-applied by the
+<<<<<<< HEAD
                                         // vendor at any time, so unlike the one-shot #36 exemption check above this
+=======
+                                        // vendor at any time, so unlike the one-shot exemption check above this
+>>>>>>> upstream/master
                                         // runs at every start while the Watchdog is on. The shell work stays on this
                                         // IO dispatcher; the system-service reads inside switch to Main.
                                         VendorBatteryRestrictions.check(context)
@@ -235,9 +360,27 @@ object ShizukuStateMachine {
                     }
                 }
 
-                if ((newState == State.STOPPED || newState == State.CRASHED) &&
-                    ShizukuSettings.isAutoCloseTcpPortEnabled()
-                ) {
+                if (newState == State.CRASHED && oldState == State.RUNNING) {
+                    runCatching { ShizukuIssues.onServerLost(ShizukuApplication.appContext) }
+                }
+
+                if ((newState == State.STOPPED || newState == State.CRASHED) && (oldState == State.RUNNING || oldState == State.STARTING)) {
+                    try {
+                        val context = ShizukuApplication.appContext
+                        af.shizuku.manager.doctor.ServiceDoctor
+                            .triggerAdaptiveAutoHealAsync(context)
+                    } catch (e: Exception) {
+                        Timber.tag("ShizukuStateMachine").w(e, "Failed to trigger adaptive auto-heal")
+                    }
+                }
+
+                val shouldAutoClose =
+                    ShizukuSettings.isAutoCloseTcpPortEnabled() &&
+                        (
+                            newState == State.STOPPED ||
+                                (newState == State.CRASHED && !ShizukuSettings.isWatchdogAutoRestartEnabled())
+                        )
+                if (shouldAutoClose) {
                     try {
                         val context = ShizukuApplication.appContext
                         if (context.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
@@ -282,6 +425,7 @@ object ShizukuStateMachine {
                 Timber.tag("ShizukuStateMachine").w("Skipping broadcast: appContext not initialized yet")
             }
         }
+        return newState
     }
 
     /**
@@ -335,7 +479,21 @@ object ShizukuStateMachine {
             } finally {
                 span?.finish()
             }
+        // Re-verify before calling a RUNNING server crashed, in case it attached between the
+        // first ping and now. Done here, not in the transition below, which may run again.
+        val verifiedAlive =
+            !isAlive &&
+                get() == State.RUNNING &&
+                try {
+                    Shizuku.pingBinder()
+                } catch (_: Exception) {
+                    false
+                }
+        val sinceProcessStart = android.os.SystemClock.elapsedRealtime() - processStartElapsedMs
+        val inColdStartGrace = !binderReceivedThisProcess.get() && sinceProcessStart in 0L until COLD_START_GRACE_MS
+        var needsColdStartRecheck = false
 
+<<<<<<< HEAD
         val currentState = get()
         val state =
             when {
@@ -354,20 +512,115 @@ object ShizukuStateMachine {
                     } else {
                         State.STARTING
                     }
+=======
+        // Decided against the state as it is at the moment of the change, not as it was read
+        // before the ping: deciding first and then setting unconditionally let a stale read win
+        // (a STOPPING the user just made went back to RUNNING, then CRASHED, and Watchdog
+        // restarted the server they had stopped; or RUNNING went back to STARTING).
+        val result =
+            transitionAndGet { current ->
+                needsColdStartRecheck = false
+                when {
+                    // A stop is under way and the server hasn't gone yet: stay stopping.
+                    isAlive && current == State.STOPPING -> State.STOPPING
+                    isAlive -> State.RUNNING
+                    current == State.STARTING -> {
+                        // Break out of STARTING after 90 s so a failed start (server process died,
+                        // ADB connection refused, etc.) never leaves the UI permanently locked.
+                        val elapsed = System.currentTimeMillis() - startingTimestamp.get()
+                        // A start waiting on adbd's authorisation dialog is still in progress;
+                        // calling it STOPPED would invite a second start, and a second dialog.
+                        if (elapsed > STARTING_TIMEOUT_MS &&
+                            !af.shizuku.manager.adb.AdbAuthWait
+                                .isWaiting()
+                        ) {
+                            State.STOPPED
+                        } else {
+                            State.STARTING
+                        }
+                    }
+                    current == State.STOPPING -> {
+                        val elapsed = System.currentTimeMillis() - stoppingTimestamp.get()
+                        if (elapsed > STOPPING_TIMEOUT_MS) State.STOPPED else State.STOPPING
+                    }
+                    current == State.CRASHED -> State.CRASHED
+                    // Was RUNNING (or, thanks to loadPersistedSettledState(), a freshly cold-started
+                    // process that persisted RUNNING before it died) and the binder isn't
+                    // answering: that's a crash, not a stop.
+                    current == State.RUNNING ->
+                        when {
+                            verifiedAlive -> State.RUNNING
+                            inColdStartGrace -> {
+                                needsColdStartRecheck = true
+                                State.RUNNING
+                            }
+                            else -> State.CRASHED
+                        }
+                    else -> State.STOPPED
+>>>>>>> upstream/master
                 }
-                currentState == State.STOPPING -> State.STOPPING
-                currentState == State.CRASHED -> State.CRASHED
-                // Was RUNNING (or, thanks to loadPersistedSettledState(), a freshly cold-started
-                // process that persisted RUNNING before it died) and the binder isn't answering: that's
-                // a crash, not a stop. Previously fell into the `else -> STOPPED` branch below, which
-                // WatchdogService's flow collector (only listens for CRASHED) silently ignores - the
-                // watchdog's external re-arm (#417) never restarted anything because every unexpected
-                // death got misreported as an intentional stop.
-                currentState == State.RUNNING -> State.CRASHED
-                else -> State.STOPPED
             }
-        set(state)
-        return state
+        if (verifiedAlive) binderReceivedThisProcess.set(true)
+        if (needsColdStartRecheck) scheduleColdStartRecheck(COLD_START_GRACE_MS - sinceProcessStart + 50L)
+        return result
+    }
+
+    private fun scheduleColdStartRecheck(delayMs: Long) {
+        if (coldStartRecheckScheduled.compareAndSet(false, true)) {
+            runCatching {
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    coldStartRecheckScheduled.set(false)
+                    update()
+                }, delayMs)
+            }.onFailure {
+                coldStartRecheckScheduled.set(false)
+            }
+        }
+    }
+
+    /** When a drop was last observed, so the next RUNNING can report how long the gap was. */
+    private val lastDropAtMs =
+        java.util.concurrent.atomic
+            .AtomicLong(0L)
+
+    /**
+     * Records connection-level transitions in the activity log (kept longer than ordinary entries):
+     * a running server dying or being stopped, a start that never completed, and recovery. Fired
+     * once per real state change, so repeated update() polling can't spam it.
+     */
+    private fun logConnectionTransition(
+        old: State,
+        new: State,
+    ) {
+        val message =
+            when {
+                old == State.RUNNING && new == State.CRASHED -> {
+                    lastDropAtMs.set(System.currentTimeMillis())
+                    DeactivationAdvisor.recordUnexpectedDrop()
+                    "Connection: Shizuku service dropped unexpectedly (process or binder died)"
+                }
+                old == State.RUNNING && new == State.STOPPING -> {
+                    lastDropAtMs.set(System.currentTimeMillis())
+                    if (!UserStopFlag.isSet()) DeactivationAdvisor.recordUnexpectedDrop()
+                    if (UserStopFlag.isSet()) "Connection: Shizuku service stopped by you" else "Connection: Shizuku service stopping"
+                }
+                old == State.RUNNING && new == State.STOPPED -> {
+                    lastDropAtMs.set(System.currentTimeMillis())
+                    if (!UserStopFlag.isSet()) DeactivationAdvisor.recordUnexpectedDrop()
+                    "Connection: Shizuku service stopped"
+                }
+                old == State.STARTING && (new == State.STOPPED || new == State.CRASHED) ->
+                    "Connection: start did not complete (${new.name.lowercase()})"
+                new == State.RUNNING && lastDropAtMs.get() > 0L -> {
+                    val seconds = (System.currentTimeMillis() - lastDropAtMs.getAndSet(0L)) / 1000
+                    "Connection: restored after ${seconds}s"
+                }
+                else -> null
+            } ?: return
+        runCatching {
+            af.shizuku.manager.database.ActivityLogManager
+                .log("Shizuku", ShizukuApplication.appContext.packageName, message)
+        }
     }
 
     fun isRunning(): Boolean = get() == State.RUNNING
@@ -385,6 +638,7 @@ object ShizukuStateMachine {
         return startedBuild in 1 until BuildConfig.VERSION_CODE
     }
 
+<<<<<<< HEAD
     private fun currentBinder(): IBinder? = runCatching { Shizuku.getBinder() }.getOrNull()
 
     /**
@@ -403,6 +657,20 @@ object ShizukuStateMachine {
             ShizukuSettings.setServerStartedBuild(BuildConfig.VERSION_CODE)
         } catch (e: Exception) {
             Timber.tag("ShizukuStateMachine").w(e, "Failed to record server start build")
+=======
+    /**
+     * A new install's Watchdog default turns on with its first server, so that until a server has
+     * run the watchdog starts nothing and shows nothing (see ShizukuSettings.decideWatchdogDefault).
+     */
+    private fun applyWatchdogDefault() {
+        try {
+            val context = ShizukuApplication.appContext
+            if (ShizukuSettings.applyWatchdogDefaultOnFirstRun(context)) {
+                ActivityLogManager.log("Shizuku", context.packageName, "Watchdog: turned on with the first server start (the default for a new install)")
+            }
+        } catch (e: Exception) {
+            Timber.tag("ShizukuStateMachine").w(e, "Failed to apply the new-install Watchdog default")
+>>>>>>> upstream/master
         }
     }
 

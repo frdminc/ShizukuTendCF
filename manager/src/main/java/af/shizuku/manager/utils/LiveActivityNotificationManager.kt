@@ -15,12 +15,16 @@ import androidx.core.app.PendingIntentCompat
 object LiveActivityNotificationManager {
     private const val CHANNEL_ID = "live_activity_channel"
     const val NOTIFICATION_ID = 9999
+<<<<<<< HEAD
     private const val WARNING_CHANNEL_ID = "activity_log_warning"
     const val WARNING_NOTIFICATION_ID = 9998
+=======
+    const val NOTIFICATION_ID_WARNING = 9998
+>>>>>>> upstream/master
 
     private fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
             val channel =
                 NotificationChannel(
                     CHANNEL_ID,
@@ -50,8 +54,13 @@ object LiveActivityNotificationManager {
         return NotificationCompat
             .Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_server_ok_24)
+<<<<<<< HEAD
             .setContentTitle(context.getString(R.string.live_activity_notification_title))
             .setContentText(status)
+=======
+            .setContentTitle("Shizuku+ Active")
+            .setContentText(status.removePrefix(":").trim())
+>>>>>>> upstream/master
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -65,12 +74,48 @@ object LiveActivityNotificationManager {
         context: Context,
         status: String,
     ) {
+<<<<<<< HEAD
         // Live activity is shown only inside the Watchdog's notification (1001). With the Watchdog
         // off there is no live-activity notification at all, so post nothing here (a standalone
         // 9999 posted in a narrow race — the Watchdog turned off mid-log — would never be cleared).
         if (ShizukuSettings.getWatchdog() || WatchdogService.isRunning()) {
             WatchdogService.updateLiveStatus(context, status)
         }
+=======
+        if (ShizukuSettings.getWatchdog() || WatchdogService.isRunning()) {
+            WatchdogService.updateLiveStatus(context, status)
+        }
+    }
+
+    fun showWarning(
+        context: Context,
+        title: String,
+        message: String,
+    ) {
+        if (!ShizukuSettings.isNotificationSystemEnabled()) return
+        ensureChannel(context)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        val pendingIntent =
+            PendingIntentCompat.getActivity(
+                context,
+                0,
+                Intent(context, MainActivity::class.java),
+                0,
+                false,
+            )
+        val notification =
+            NotificationCompat
+                .Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification_icon)
+                .setContentTitle(title)
+                .setContentText(message)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .build()
+        manager.notify(NOTIFICATION_ID_WARNING, notification)
+>>>>>>> upstream/master
     }
 
     fun dismiss(context: Context) {
@@ -79,6 +124,7 @@ object LiveActivityNotificationManager {
         if (WatchdogService.isRunning()) {
             WatchdogService.updateLiveStatus(context, null)
         }
+<<<<<<< HEAD
     }
 
     /**
@@ -120,5 +166,7 @@ object LiveActivityNotificationManager {
                 .setAutoCancel(true)
                 .build(),
         )
+=======
+>>>>>>> upstream/master
     }
 }

@@ -69,13 +69,11 @@
         sistemsko okno hkrati vidna.</string>
     <string name="adb_error_key_store">Ni mogoče generirati ključa za brezžično razhroščevanje.\nTo
         je morda zato, ker je mehanizem KeyStore na tej napravi pokvarjen.</string>
-    <string name="adb_stopping_tcp">Zapiranje TCP vrat</string>
     <string name="adb_error_stop_tcp">Ustavitev ADB prek TCP ni uspela</string>
     <string name="adb_pair_required">Najprej sledite koraku seznanjanja.</string>
     <string name="enable">Omogoči</string>
     <string name="development_settings">Možnosti za razvijalce</string>
     <string name="notification_settings">Možnosti obveščanja</string>
-    <string name="adb_pairing_tutorial_title">Združite Shizuku s svojo napravo</string>
     <string name="adb_pairing_tutorial_content_notification">Obvestilo Shizukuja vam bo pomagalo
         dokončati seznanjanje.</string>
     <string name="adb_pairing_tutorial_content_steps">Pojdite na »Možnosti za razvijalce« in nato
@@ -117,10 +115,6 @@
     <string name="home_automation_description">Aplikacije, kot sta Tasker in MacroDroid, lahko
         pošiljajo namere za samodejni zagon/ustavitev aplikacije Shizuku.</string>
     <string name="home_automation_button_view_intents">Ogled namenov</string>
-    <string name="home_automation_dialog_label_action">Dejanje</string>
-    <string name="home_automation_dialog_label_package">Paket</string>
-    <string name="home_automation_dialog_label_class">Razred</string>
-    <string name="home_automation_dialog_label_target">Cilj</string>
     <!-- Home - Learn more -->
     <string name="home_learn_more_title">Vodnik za razvijalce</string>
     <string name="home_learn_more_description">Naučite se razvijati s Shizukujem</string>
@@ -158,7 +152,6 @@
     <string name="rish_description"><![CDATA[Z %1$slahko zaženete ukaze lupine v kateri koli terminalski aplikaciji.<p>Dotaknite se, če želite izvedeti več o uporabi.]]></string>
     <!-- Settings -->
     <string name="settings_title">Nastavitve</string>
-    <string name="settings_behavior">Vedenje</string>
     <string name="settings_start_on_boot">Zaženi ob zagonu</string>
     <string name="settings_start_on_boot_summary">Zahteva Android 11+ ali root</string>
     <string name="settings_start_on_boot_bug">Zaradi napake v Androidu 11-12 brezžično odpravljanje
@@ -167,7 +160,6 @@
     <string name="settings_use_system_color">Uporabi sistemsko barvo teme</string>
     <string name="settings_watchdog">Nadzorni pes</string>
     <string name="settings_watchdog_summary">Samodejni ponovni zagon Shizukuja, če se sesuje</string>
-    <string name="settings_tcp_mode">Način TCP</string>
     <string name="settings_tcp_mode_summary">"Omogoča Shizuku, da se ponovno zažene brez Wi-Fi-ja.
         (Shizuku je morala enkrat začeti od ponovnega zagona)"</string>
     <string name="settings_tcp_mode_dialog_close_port">"Vrata TCP bodo takoj zaprta. Za ponovni
@@ -177,23 +169,11 @@
     <string name="settings_restart_dialog_message">Shizuku mora začeti znova, da lahko uporabi to
         nastavitev.</string>
     <string name="settings_restart_dialog_message_wifi_required"><![CDATA[<br><br><b>Wi-Fi je obvezen. Shizuku bo še naprej delovala in počakala na Wi-Fi povezavo, preden se bo v ozadju ponovno zagnala.</b>]]></string>
-    <string name="settings_tcp_port">TCP priključek</string>
-    <string name="settings_tcp_port_default">Privzeto (5555)</string>
-    <string name="settings_tcp_port_hint">Pustite prazno za privzeto (5555)</string>
-    <string name="settings_tcp_learn_more">Izvedite več o uporabi avtomatizacijskih aplikacij za
-        upravljanje Shizuku</string>
     <string name="settings_language">Jezik</string>
-    <string name="settings_translation_contributors">Sodelavci prevodov</string>
     <string name="settings_translation">Sodelujte pri prevajanju</string>
     <string name="settings_translation_summary">Pomagajte nam prevajati %s v vaš jezik</string>
-    <string name="settings_user_interface">Videz</string>
-    <string name="settings_black_night_theme">Tema črne noči</string>
-    <string name="settings_black_night_theme_summary">Če je omogočen nočni način, uporabite čisto
-        črno temo</string>
-    <string name="settings_support">Podpora</string>
     <string name="settings_help">Pomoč</string>
     <string name="settings_report_bug">Prijavite napako</string>
-    <string name="settings_advanced">Napreden</string>
     <string name="settings_legacy_pairing">Zapuščina parov</string>
     <string name="settings_legacy_pairing_summary">Namesto obvestila vnesite kodo za povezovanje v
         pogovorno okno</string>
@@ -222,26 +202,16 @@
     <string name="toast_shizuku_already_starting">Shizuku že začne v ozadju</string>
     <string name="toast_accessibility_tv_only">Ta storitev je podprta samo na televizijskih
         napravah.</string>
-    <string name="toast_pairing_timeout">Storitev za parjenje Shizuku je potekla.</string>
     <!-- Dark Mode Setting Override -->
     <string name="dark_theme">Tema</string>
     <string name="dark_theme_off">Vedno svetloba</string>
     <string name="dark_theme_on">Vedno temno</string>
     <!-- About -->
-    <string name="action_about">O</string>
-    <string name="about_dialog_button_close">Blizu</string>
-    <string name="about_view_source_code"><![CDATA[Poglej izvorno kodo na %s]]></string>
     <!-- Start -->
-    <string name="action_start">Zaženi Shizuku</string>
     <!-- Stop -->
     <string name="action_stop">Ustavi Shizuku</string>
     <string name="dialog_stop_message">Storitev Shizuku bo bila ustavljena.</string>
     <!-- Notification -->
-    <string name="notification_channel_service_status">Status zagona storitve</string>
-    <string name="notification_service_starting">Storitev Shizuku se zaganja…</string>
-    <string name="notification_service_start_failed">Zagon storitve Shizuku ni uspel.</string>
-    <string name="notification_service_start_no_root">Neuspešna zahteva za root dovoljenje.</string>
-    <string name="notification_working">V teku…</string>
     <string name="notification_channel_adb_pairing">Seznanjanje brezžičnega razhroščevanja</string>
     <string name="notification_adb_pairing_input_paring_code">Vnesite seznantitveno kodo</string>
     <string name="notification_adb_pairing_searching_for_service_title">Iskanje storitve za
@@ -268,18 +238,15 @@
     <string name="wadb_notification_wifi_required">Čakanje na Wi-Fi povezavo, preden nadaljujem</string>
     <string name="wadb_notification_retry">Čakanje na ponovni poskus</string>
     <string name="wadb_error_title">Napaka ob zagonu zagona</string>
-    <string name="wadb_error_notify_dev">Tapnite, da obvestite razvijalca.</string>
     <string name="wadb_permission_error_notification_title">Napaka pri dovoljenju</string>
     <string name="wadb_permission_error_notification_content">Shizuku potrebuje
         WRITE_SECURE_SETTINGS, da začne na začetku. Tapnite, da izveste, kako ga odobriti.</string>
-    <string name="wadb_notification_channel">ADB storitev samodejnega zagona</string>
     <!-- Watchdog -->
     <string name="watchdog_running">Watchdog teče</string>
     <string name="watchdog_turn_off">Izklop</string>
     <string name="watchdog_shizuku_crashed_title">Shizuku je pred kratkim doživela nesrečo</string>
     <string name="watchdog_shizuku_crashed_text">Watchdog je ponovno zagnal storitev. Tapnite, da
         izveste o možnih popravkih za preprečevanje prihodnjih zrušitev.</string>
-    <string name="watchdog_shizuku_crashed_action_turn_off_alerts">Izklopite opozorila</string>
     <!-- Misc -->
     <string name="dialog_cannot_open_browser_title">Brskalnika ni mogoče zagnati</string>
     <string name="toast_copied_to_clipboard">Kopirano v odložišče</string>

@@ -21,6 +21,5 @@
     <string name="compat_hub_install_signature_conflict">无法安装：已有其他应用（例如原版 Shizuku）以 moe.shizuku.privileged.api 为包名安装，且签名不兼容。请先卸载它。</string>
     <string name="compat_hub_install_fail_storage">无法安装：设备可用存储空间不足。</string>
     <string name="compat_hub_install_fail_abi">无法安装：兼容中心不支持此设备的 CPU 架构。</string>
-    <string name="compat_hub_install_manual_launched">正在打开安装程序——请按屏幕提示完成安装。</string>
     <string name="compat_hub_install_fail_newprocess">你的设备限制了 Shizuku 的进程启动 API。改为打开系统安装程序——出现提示时点按「安装」。</string>
 </resources>

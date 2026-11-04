@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <string-array name="night_mode">
+        <item>@string/dark_theme_off</item>
+        <item>@string/dark_theme_on</item>
+        <item>@string/follow_system</item>
+    </string-array>
+
+    <integer-array name="night_mode_value" translatable="false">
+        <item>1</item>
+        <item>2</item>
+        <item>-1</item>
+    </integer-array>
+
+    <string-array name="swipe_actions">
+        <item>@string/settings_action_none</item>
+        <item>@string/settings_action_open_app</item>
+        <item>@string/settings_action_app_info</item>
+        <item>@string/settings_action_toggle_permission</item>
+        <item>@string/settings_action_hide_from_list</item>
+    </string-array>
+
+    <string-array name="swipe_actions_values" translatable="false">
+        <item>none</item>
+        <item>open_app</item>
+        <item>app_info</item>
+        <item>toggle_permission</item>
+        <item>hide_from_list</item>
+    </string-array>
+
+    <string-array name="spoof_targets">
+        <item>Avtomatik aşkarla (Sistem Standartı)</item>
+        <item>Pixel 10 Pro XL</item>
+        <item>Pixel 9 Pro XL</item>
+        <item>Pixel 8 Pro</item>
+        <item>Galaxy S25 Ultra</item>
+        <item>Galaxy S24 Ultra</item>
+        <item>Galaxy S23 Ultra</item>
+        <item>Galaxy S22 Ultra</item>
+        <item>OnePlus 13</item>
+        <item>OnePlus 12</item>
+        <item>Nothing Phone (3)</item>
+        <item>Nothing Phone (2)</item>
+        <item>Xiaomi 15 Pro</item>
+        <item>Xiaomi 14 Ultra</item>
+        <item>Oppo Find X8 Ultra</item>
+        <item>TCL 50 Pro</item>
+    </string-array>
+
+    <string-array name="spoof_targets_values" translatable="false">
+        <item>auto</item>
+        <item>pixel_10_pro_xl</item>
+        <item>pixel_9_pro_xl</item>
+        <item>pixel_8_pro</item>
+        <item>s25_ultra</item>
+        <item>s24_ultra</item>
+        <item>s23_ultra</item>
+        <item>s22_ultra</item>
+        <item>oneplus_13</item>
+        <item>oneplus_12</item>
+        <item>nothing_phone_3</item>
+        <item>nothing_phone_2</item>
+        <item>xiaomi_15_pro</item>
+        <item>xiaomi_14_ultra</item>
+        <item>oppo_find_x8_ultra</item>
+        <item>tcl_50_pro</item>
+    </string-array>
+
+   
+
+
+    <string-array name="corner_rounding_entries">
+        <item>@string/corner_style_sharp</item>
+        <item>Zərif — 20dp</item>
+        <item>Standart — 28dp</item>
+        <item>Təkmilləşdirilmiş — 32dp (Standart)</item>
+        <item>Böyük — 36dp</item>
+        <item>Maksimum — 44dp</item>
+        <item>Sistem Standartı</item>
+    </string-array>
+
+    <string-array name="corner_rounding_values" translatable="false">
+        <item>sharp</item>
+        <item>gentle</item>
+        <item>standard</item>
+        <item>default</item>
+        <item>large</item>
+        <item>maximum</item>
+        <item>system</item>
+    </string-array>
+
+    <string-array name="update_channel_entries">
+        <item>@string/update_channel_stable</item>
+        <item>@string/update_channel_dev</item>
+    </string-array>
+
+    <string-array name="update_channel_values" translatable="false">
+        <item>stable</item>
+        <item>dev</item>
+    </string-array>
+
+    <string-array name="custom_accents">
+        <item>Standart Mavi (Standart)</item>
+        <item>Gecə Bənövşəyi</item>
+        <item>Meşə Yaşılı</item>
+        <item>Tünd Qırmızı Qızılgül</item>
+        <item>Dərin Okean</item>
+        <item>Kəhrəba Qürubu</item>
+        <item>Qızılgül Ləçəyi</item>
+        <item>Gecə Şist rəngi</item>
+        <item>Kiber Neon Mavi</item>
+        <item>Sintvave Neon</item>
+    </string-array>
+
+    <string-array name="custom_accents_values" translatable="false">
+        <item>DEFAULT</item>
+        <item>VIOLET</item>
+        <item>GREEN</item>
+        <item>CRIMSON</item>
+        <item>OCEAN</item>
+        <item>AMBER</item>
+        <item>ROSE</item>
+        <item>SLATE</item>
+        <item>CYAN</item>
+        <item>NEON</item>
+    </string-array>
+
+    <string-array name="floating_nav_label_modes">
+        <item>Yalnız seçilmişlər</item>
+        <item>Həmişə</item>
+        <item>Yalnız ikonlar</item>
+    </string-array>
+
+    <string-array name="floating_nav_label_modes_value" translatable="false">
+        <item>selected</item>
+        <item>labeled</item>
+        <item>unlabeled</item>
+    </string-array>
+
+   
+  <string-array name="changelog_styles">
+        <item>@string/changelog_style_classic</item>
+        <item>@string/changelog_style_timeline</item>
+    </string-array>
+
+    <string-array name="changelog_styles_value" translatable="false">
+        <item>classic</item>
+        <item>timeline</item>
+    </string-array>
+
+    <string-array name="tcp_network_protection_entries">
+        <item>@string/tcp_protection_off</item>
+        <item>@string/tcp_protection_open</item>
+        <item>@string/tcp_protection_trusted</item>
+    </string-array>
+
+    <string-array name="tcp_network_protection_values" translatable="false">
+        <item>off</item>
+        <item>open</item>
+        <item>trusted</item>
+    </string-array>
+
+    <string-array name="app_icon_alias_entries">
+        <item>Shizuku+ (Standart)</item>
+        <item>Shizuku (Klassik)</item>
+        <item>Sistem Xidməti (Maskalanma)</item>
+        <item>Alətlər (Maskalanma)</item>
+        <item>Fayllar (Maskalanma)</item>
+        <item>Qeydlər (Maskalanma)</item>
+    </string-array>
+
+    <string-array name="app_icon_alias_values" translatable="false">
+        <item>default</item>
+        <item>classic</item>
+        <item>system</item>
+        <item>tools</item>
+        <item>files</item>
+        <item>notes</item>
+    </string-array>
+
+    <string-array name="dark_styles">
+        <item>@string/settings_dark_style_standard</item>
+        <item>@string/settings_dark_style_black</item>
+        <item>@string/settings_dark_style_amoled</item>
+    </string-array>
+    <string-array name="dark_styles_value" translatable="false">
+        <item>standard</item>
+        <item>black</item>
+        <item>amoled</item>
+    </string-array>
+    <string-array name="haptics_modes">
+        <item>@string/settings_haptics_off</item>
+        <item>@string/settings_haptics_system</item>
+        <item>@string/settings_haptics_always</item>
+    </string-array>
+    <string-array name="haptics_modes_value" translatable="false">
+        <item>off</item>
+        <item>system</item>
+        <item>always</item>
+    </string-array>
+    <string-array name="floating_nav_styles">
+        <item>@string/settings_floating_nav_style_floating</item>
+        <item>@string/settings_floating_nav_style_docked</item>
+        <item>@string/settings_floating_nav_style_compact</item>
+        <item>@string/settings_floating_nav_style_capsule</item>
+    </string-array>
+    <string-array name="floating_nav_styles_value" translatable="false">
+        <item>floating</item>
+        <item>docked</item>
+        <item>compact</item>
+        <item>capsule</item>
+    </string-array>
+    <string-array name="floating_nav_optional_tabs">
+        <item>@string/nav_apps</item>
+        <item>@string/nav_hub</item>
+    </string-array>
+    <string-array name="floating_nav_optional_tabs_value" translatable="false">
+        <item>apps</item>
+        <item>hub</item>
+    </string-array>
+</resources>

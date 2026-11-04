@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="companion_conflict_title">Orijinal Shizuku Aşkar Edildi</string>
+    <string name="companion_conflict_description">Orijinal Shizuku-nun Shizuku+ ilə birlikdə quraşdırılması icazə münaqişələrinə və tətbiqin sıradan çıxmasına səbəb ola bilər. Shizuku+-ın düzgün işləməsini təmin etmək üçün xahiş olunur, orijinal Shizuku tətbiqini silin və ya söndürün.\n\nBunu aşağıdakı vasitələrlə edə bilərsiniz:\n1. Tənzimləmələr -> Tətbiqlər -> Shizuku -> Söndür / Sil\n2. Aşağıdakı düymələr vasitəsilə (Shizuku+ xidməti işləyirsə)\n3. ADB vasitəsilə: adb shell pm disable-user --user 0 moe.shizuku.privileged.api</string>
+    <string name="companion_action_disable">Orijinalı Söndür</string>
+    <string name="companion_action_uninstall">Orijinalı Sil</string>
+    <string name="companion_disable_success">Orijinal Shizuku uğurla söndürüldü.</string>
+    <string name="companion_disable_failure">Orijinal Shizuku-nu söndürmək mümkün olmadı. Shizuku+-ın işlədiyindən əmin olun və ya ADB-dən əl ilə istifadə edin.</string>
+    <string name="companion_action_disabling">Söndürülür…</string>
+
+    <string name="compat_hub_installed_title">Uyğunluq Mərkəzi Aktivdir</string>
+    <string name="compat_hub_installed_desc">Standart Shizuku API-dən istifadə edən tətbiqlər (SD Maid, SwiftBackup və əksər digərləri) artıq Shizuku+-ı aşkar edə və istifadə edə bilər.</string>
+    <string name="compat_hub_missing_title">Uyğunluq Mərkəzi Quraşdırılmayıb</string>
+    <string name="compat_hub_missing_desc">Əksər tətbiqlər standart Shizuku API üçün nəzərdə tutulub və bu kiçik uyğunluq körpüsü olmadan Shizuku+-ı aşkar edə bilməyəcək. Onu bir dəfə quraşdırın və bütün uyğun tətbiqlər avtomatik işləyəcək.</string>
+    <string name="compat_hub_install_btn">Uyğunluq Mərkəzini Quraşdır</string>
+    <string name="companion_uninstall_confirm_title">İndi silinsin?</string>
+    <string name="companion_uninstall_confirm_message">Bu, %1$s tətbiqini və bütün tətbiq məlumatlarını dərhal siləcək. Bu əməliyyatı geri qaytarmaq mümkün deyil.</string>
+    <string name="compat_hub_uninstall_btn">Mərkəzi Sil</string>
+    <string name="compat_hub_uninstall_success">Uyğunluq Mərkəzi uğurla silindi!</string>
+    <string name="compat_hub_installing">Quraşdırılır…</string>
+    <string name="compat_hub_install_success">Uyğunluq Mərkəzi uğurla quraşdırıldı!</string>
+    <string name="compat_hub_install_fail">Quraşdırma uğursuz oldu. Shizuku+ və ya Root-un aktiv olduğundan əmin olun.</string>
+    <string name="compat_hub_install_fail_detail">Quraşdırma uğursuz oldu: %1$s</string>
+    <string name="compat_hub_install_fail_restricted">Quraşdırıla bilmir: cihaz məhdudiyyəti tərəfindən bloklandı (məsələn, Samsung Avtomatik Bloklayıcı). Tənzimləmələr → Təhlükəsizlik → Avtomatik Bloklayıcı bölməsindən Avto Bloklayıcını söndürün və yenidən cəhd edin.</string>
+    <string name="compat_hub_install_signature_conflict">Quraşdırıla bilmir: fərqli bir tətbiq (məsələn, orijinal Shizuku) uyğun gəlməyən imza ilə moe.shizuku.privileged.api olaraq artıq quraşdırılıb. Əvvəlcə onu silin.</string>
+    <string name="compat_hub_install_fail_storage">Quraşdırıla bilmir: cihazda kifayət qədər boş yaddaş yoxdur.</string>
+    <string name="compat_hub_install_fail_abi">Quraşdırıla bilmir: Uyğunluq Mərkəzi bu cihazın CPU arxitekturasını dəstəkləmir.</string>
+    <string name="compat_hub_install_fail_newprocess">Cihazınız Shizuku-nun proses yaratma API-sini məhdudlaşdırır. Bunun əvəzinə sistem quraşdırıcısı açılır — istənildikdə Quraşdır düyməsinə toxunun.</string>
+    <string name="compat_hub_progress_preparing">Uyğunluq Mərkəzi hazırlanır…</string>
+    <string name="compat_hub_progress_uninstalling">Uyğunluq Mərkəzi silinir…</string>
+    <string name="compat_hub_progress_finishing">Tamamlanır…</string>
+</resources>

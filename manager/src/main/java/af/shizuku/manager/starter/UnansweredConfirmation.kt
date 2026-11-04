@@ -20,6 +20,7 @@ internal class UnansweredConfirmation {
         adb: Boolean,
         unanswered: Boolean,
     ): Boolean = !adb || confirmed || !unanswered
+<<<<<<< HEAD
 
     companion object {
         /**
@@ -31,4 +32,6 @@ internal class UnansweredConfirmation {
             gestureExtra: Boolean,
         ): Boolean = !launchedViaExportedAlias && gestureExtra
     }
+=======
+>>>>>>> upstream/master
 }

@@ -116,8 +116,9 @@ object AppIconCache {
         }
         var loader = appIconLoaders[size]
         if (loader == null) {
-            val shrinkNonAdaptiveIcons = BuildUtils.atLeast30 && context.applicationInfo.loadIcon(context.packageManager) is AdaptiveIconDrawable
-            loader = AppIconLoader(size, shrinkNonAdaptiveIcons, context)
+            val appContext = context.applicationContext
+            val shrinkNonAdaptiveIcons = BuildUtils.atLeast30 && appContext.applicationInfo.loadIcon(appContext.packageManager) is AdaptiveIconDrawable
+            loader = AppIconLoader(size, shrinkNonAdaptiveIcons, appContext)
             appIconLoaders[size] = loader
         }
         val bitmap =

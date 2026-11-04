@@ -73,13 +73,11 @@
     <string name="adb_error_key_store">Δεν είναι δυνατή η δημιουργία κλειδιού για τον ασύρματο
         εντοπισμό σφαλμάτων.\nΑυτό μπορεί να οφείλεται στο ότι ο μηχανισμός KeyStore αυτής της
         συσκευής είναι κατεστραμμένος.</string>
-    <string name="adb_stopping_tcp">Κλείσιμο θύρας TCP</string>
     <string name="adb_error_stop_tcp">Απέτυχε η διακοπή του ADB μέσω TCP</string>
     <string name="adb_pair_required">Παρακαλούμε ακολουθήστε πρώτα το βήμα σύζευξης.</string>
     <string name="enable">Ενεργοποιώ</string>
     <string name="development_settings">Επιλογές προγραμματιστή</string>
     <string name="notification_settings">Επιλογές ειδοποιήσεων</string>
-    <string name="adb_pairing_tutorial_title">Συνδέστε το Shizuku με τη συσκευή σας</string>
     <string name="adb_pairing_tutorial_content_notification">Μια ειδοποίηση από το Shizuku θα σας
         βοηθήσει να ολοκληρώσετε τη σύζευξη.</string>
     <string name="adb_pairing_tutorial_content_steps">Μεταβείτε στις \"Επιλογές προγραμματιστή\"
@@ -123,10 +121,6 @@
     <string name="home_automation_description">Εφαρμογές όπως το Tasker και το MacroDroid μπορούν να
         στείλουν intents για την αυτόματη εκκίνηση/διακοπή του Shizuku.</string>
     <string name="home_automation_button_view_intents">Προβολή προθέσεων</string>
-    <string name="home_automation_dialog_label_action">Δράση</string>
-    <string name="home_automation_dialog_label_package">Πακέτο</string>
-    <string name="home_automation_dialog_label_class">Τάξη</string>
-    <string name="home_automation_dialog_label_target">Στόχος</string>
     <!-- Home - Learn more -->
     <string name="home_learn_more_title">Οδηγός προγραμματιστή</string>
     <string name="home_learn_more_description">Μάθετε πώς να αναπτύσσεστε με το Shizuku</string>
@@ -166,7 +160,6 @@
     <string name="rish_description"><![CDATA[Με το %1$s, μπορείτε να εκτελέσετε εντολές shell σε οποιαδήποτε εφαρμογή τερματικού.<p>Πατήστε για να μάθετε περισσότερα σχετικά με τον τρόπο χρήσης του.]]></string>
     <!-- Settings -->
     <string name="settings_title">Ρυθμίσεις</string>
-    <string name="settings_behavior">Συμπεριφορά</string>
     <string name="settings_start_on_boot">Ξεκινήστε από την εκκίνηση</string>
     <string name="settings_start_on_boot_summary">Απαιτεί Android 11+ ή root</string>
     <string name="settings_start_on_boot_bug">Λόγω ενός σφάλματος στο Android 11-12, η ασύρματη
@@ -177,7 +170,6 @@
     <string name="settings_watchdog">Άγρυπνος φρουρός</string>
     <string name="settings_watchdog_summary">Αυτόματη επανεκκίνηση του Shizuku σε περίπτωση διακοπής
         λειτουργίας</string>
-    <string name="settings_tcp_mode">Λειτουργία TCP</string>
     <string name="settings_tcp_mode_summary">"Επιτρέπει στο Shizuku να επανεκκινήσει χωρίς Wi-Fi.
         (Το Shizuku πρέπει να ξεκίνησε μία φορά από την επανεκκίνηση)"</string>
     <string name="settings_tcp_mode_dialog_close_port">"Η θύρα TCP θα κλείσει αμέσως. Θα χρειαστείτε
@@ -187,23 +179,11 @@
     <string name="settings_restart_dialog_message">Το Shizuku πρέπει να επανεκκινηθεί για να
         εφαρμοστεί αυτή η ρύθμιση.</string>
     <string name="settings_restart_dialog_message_wifi_required"><![CDATA[<br><br><b>Απαιτείται Wi-Fi. Το Shizuku θα συνεχίσει να εκτελείται και θα περιμένει σύνδεση Wi-Fi πριν από την επανεκκίνηση στο παρασκήνιο.</b>]]></string>
-    <string name="settings_tcp_port">Θύρα TCP</string>
-    <string name="settings_tcp_port_default">Προεπιλογή (5555)</string>
-    <string name="settings_tcp_port_hint">Αφήστε κενό για χρήση προεπιλογής (5555)</string>
-    <string name="settings_tcp_learn_more">Μάθετε περισσότερα σχετικά με τη χρήση εφαρμογών
-        αυτοματισμού για τον έλεγχο του Shizuku</string>
     <string name="settings_language">Γλώσσα</string>
-    <string name="settings_translation_contributors">Συνεισφέροντες στη μετάφραση</string>
     <string name="settings_translation">Συμμετοχή στη μετάφραση</string>
     <string name="settings_translation_summary">Βοηθήστε μας να μεταφράσουμε το %s στη γλώσσα σας</string>
-    <string name="settings_user_interface">Εμφάνιση</string>
-    <string name="settings_black_night_theme">Θέμα μαύρης νύχτας</string>
-    <string name="settings_black_night_theme_summary">Χρησιμοποιήστε το θέμα καθαρού μαύρου εάν
-        είναι ενεργοποιημένη η νυχτερινή λειτουργία</string>
-    <string name="settings_support">Υποστηρίζω</string>
     <string name="settings_help">Βοήθεια</string>
     <string name="settings_report_bug">Αναφορά σφάλματος</string>
-    <string name="settings_advanced">Προχωρημένος</string>
     <string name="settings_legacy_pairing">Σύζευξη παλαιού τύπου</string>
     <string name="settings_legacy_pairing_summary">Εισαγάγετε τον κωδικό σύζευξης σε ένα παράθυρο
         διαλόγου αντί για μια ειδοποίηση</string>
@@ -232,26 +212,16 @@
     <string name="toast_shizuku_already_starting">Το Shizuku ξεκινά ήδη στο παρασκήνιο</string>
     <string name="toast_accessibility_tv_only">Αυτή η υπηρεσία υποστηρίζεται μόνο σε συσκευές
         τηλεόρασης.</string>
-    <string name="toast_pairing_timeout">Το χρονικό όριο της υπηρεσίας σύζευξης Shizuku έληξε.</string>
     <!-- Dark Mode Setting Override -->
     <string name="dark_theme">Θέμα</string>
     <string name="dark_theme_off">Πάντα ελαφρύ</string>
     <string name="dark_theme_on">Πάντα σκοτεινό</string>
     <!-- About -->
-    <string name="action_about">Για</string>
-    <string name="about_dialog_button_close">Κλείνω</string>
-    <string name="about_view_source_code"><![CDATA[Δείτε τον πηγαίο κώδικα στη διεύθυνση %s]]></string>
     <!-- Start -->
-    <string name="action_start">Ξεκινήστε το Shizuku</string>
     <!-- Stop -->
     <string name="action_stop">Σταματήστε το Shizuku</string>
     <string name="dialog_stop_message">Η υπηρεσία Shizuku θα διακοπεί.</string>
     <!-- Notification -->
-    <string name="notification_channel_service_status">Κατάσταση έναρξης υπηρεσίας</string>
-    <string name="notification_service_starting">Η υπηρεσία Shizuku ξεκινά…</string>
-    <string name="notification_service_start_failed">Η έναρξη της υπηρεσίας Shizuku απέτυχε.</string>
-    <string name="notification_service_start_no_root">Αποτυχία αιτήματος δικαιωμάτων root.</string>
-    <string name="notification_working">Εργασία…</string>
     <string name="notification_channel_adb_pairing">Ασύρματη αντιστοίχιση εντοπισμού σφαλμάτων</string>
     <string name="notification_adb_pairing_input_paring_code">Εισαγάγετε τον κωδικό σύζευξης</string>
     <string name="notification_adb_pairing_searching_for_service_title">Αναζήτηση υπηρεσίας σύζευξης</string>
@@ -278,19 +248,16 @@
     <string name="wadb_notification_wifi_required">Αναμονή σύνδεσης Wi-Fi πριν προχωρήσετε</string>
     <string name="wadb_notification_retry">Αναμονή για επανάληψη</string>
     <string name="wadb_error_title">Σφάλμα κατά την εκκίνηση κατά την εκκίνηση</string>
-    <string name="wadb_error_notify_dev">Πατήστε για να ειδοποιήσετε τον προγραμματιστή.</string>
     <string name="wadb_permission_error_notification_title">Σφάλμα άδειας</string>
     <string name="wadb_permission_error_notification_content">Ο Shizuku χρειάζεται
         WRITE_SECURE_SETTINGS για να ξεκινήσει από την εκκίνηση. Αγγίξτε το για να μάθετε πώς
         μπορείτε να το εκχωρήσετε.</string>
-    <string name="wadb_notification_channel">Υπηρεσία αυτόματης εκκίνησης ADB</string>
     <!-- Watchdog -->
     <string name="watchdog_running">Το Watchdog τρέχει</string>
     <string name="watchdog_turn_off">Κλείνω</string>
     <string name="watchdog_shizuku_crashed_title">Ο Shizuku συνετρίβη πρόσφατα</string>
     <string name="watchdog_shizuku_crashed_text">Το Watchdog επανεκκίνησε την υπηρεσία. Πατήστε για
         να μάθετε σχετικά με πιθανές επιδιορθώσεις για την αποτροπή μελλοντικών σφαλμάτων.</string>
-    <string name="watchdog_shizuku_crashed_action_turn_off_alerts">Απενεργοποίηση ειδοποιήσεων</string>
     <!-- Misc -->
     <string name="dialog_cannot_open_browser_title">Δεν είναι δυνατή η εκκίνηση του προγράμματος
         περιήγησης</string>

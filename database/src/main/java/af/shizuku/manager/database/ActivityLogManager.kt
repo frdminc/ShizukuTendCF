@@ -19,14 +19,51 @@ import java.util.LinkedList
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * Data class representing an activity log record.
- */
+enum class ActivityEventType {
+    SERVICE_START,
+    SERVICE_STOP,
+
+    /** Connection lifecycle: drops, failed starts, reconnects, network loss. Kept longer than other entries. */
+    CONNECTION,
+    PERMISSION,
+    APP_MANAGEMENT,
+    WATCHDOG,
+    SYSTEM,
+    OTHER;
+
+    companion object {
+        /** Prefix that marks a connection event; checked first so wording like "stopped" can't misfile it. */
+        const val CONNECTION_PREFIX = "Connection:"
+
+        fun fromAction(action: String): ActivityEventType = when {
+            action.startsWith(CONNECTION_PREFIX) -> CONNECTION
+            action.contains("Service started", ignoreCase = true) -> SERVICE_START
+            action.contains("started via", ignoreCase = true) -> SERVICE_START
+            action.contains("Service stopped", ignoreCase = true) ||
+                action.contains("stopped", ignoreCase = true) -> SERVICE_STOP
+            action.contains("grant_permission", ignoreCase = true) ||
+                action.contains("revoke_permission", ignoreCase = true) ||
+                action.contains("Permission", ignoreCase = true) -> PERMISSION
+            action.contains("Long-press:", ignoreCase = true) ||
+                action.contains("freeze", ignoreCase = true) ||
+                action.contains("unfreeze", ignoreCase = true) ||
+                action.contains("Enhancement", ignoreCase = true) -> APP_MANAGEMENT
+            action.contains("Watchdog", ignoreCase = true) ||
+                action.contains("watchdog", ignoreCase = true) -> WATCHDOG
+            action.contains("Database", ignoreCase = true) ||
+                action.contains("System", ignoreCase = true) ||
+                action.contains("autofixed", ignoreCase = true) -> SYSTEM
+            else -> OTHER
+        }
+    }
+}
+
 data class ActivityLogRecord(
     val timestamp: Long = System.currentTimeMillis(),
     val appName: String,
     val packageName: String,
-    val action: String
+    val action: String,
+    val eventType: ActivityEventType = ActivityEventType.fromAction(action),
 )
 
 /**
@@ -66,6 +103,10 @@ object ActivityLogManager {
     val logs: StateFlow<List<ActivityLogRecord>> = _logs.asStateFlow()
     
     private var retentionCount = 100
+    private const val CONNECTION_RETENTION = 300
+    private const val COALESCE_WINDOW_MS = 10_000L
+    private val COALESCE_ACTIONS = setOf("Bound user service", "Connected to Shizuku")
+    private val REPEAT_SUFFIX_REGEX = Regex("^(.*) \\(×(\\d+)\\)$")
     private var appContext: Context? = null
     private var settings: ActivityLogSettings? = null
     
@@ -157,28 +198,67 @@ object ActivityLogManager {
             s.showNotification(appName, action)
         }
         
-        val record = ActivityLogRecord(
-            timestamp = System.currentTimeMillis(),
+        val now = System.currentTimeMillis()
+        var recordToSave = ActivityLogRecord(
+            timestamp = now,
             appName = appName,
             packageName = packageName,
             action = action
         )
-        
+
         synchronized(records) {
-            if (records.size >= retentionCount) {
-                records.removeAt(records.size - 1)
+            val head = records.firstOrNull()
+            if (head != null &&
+                action in COALESCE_ACTIONS &&
+                head.packageName == packageName &&
+                now - head.timestamp in 0L..COALESCE_WINDOW_MS
+            ) {
+                val match = REPEAT_SUFFIX_REGEX.matchEntire(head.action)
+                val baseAction = match?.groupValues?.get(1) ?: head.action
+                val prevCount = match?.groupValues?.get(2)?.toIntOrNull() ?: 1
+                if (baseAction == action) {
+                    val coalesced = ActivityLogRecord(
+                        timestamp = now,
+                        appName = appName,
+                        packageName = packageName,
+                        action = "$action (×${prevCount + 1})"
+                    )
+                    records[0] = coalesced
+                    _logs.value = records.toList()
+                    return
+                }
             }
-            records.add(0, record)
+            records.add(0, recordToSave)
+            trimLocked()
             _logs.value = records.toList()
         }
-        
-        saveToDatabase(record)
+
+        saveToDatabase(recordToSave)
         
         if (!isCleaningUp.get()) {
             cleanupOldRecords()
         }
     }
     
+    /**
+     * Caps general entries at [retentionCount] and connection entries at [CONNECTION_RETENTION]
+     * independently (records are newest-first), so a burst of per-app IPC logging can never push the
+     * rare, diagnostic connection drops out of history. Caller holds the records lock.
+     */
+    private fun trimLocked() {
+        var general = 0
+        var connection = 0
+        val it = records.iterator()
+        while (it.hasNext()) {
+            val r = it.next()
+            if (r.eventType == ActivityEventType.CONNECTION) {
+                if (++connection > CONNECTION_RETENTION) it.remove()
+            } else if (++general > retentionCount) {
+                it.remove()
+            }
+        }
+    }
+
     private fun saveToDatabase(record: ActivityLogRecord) {
         val d = dao ?: return
         scope.launch {
@@ -207,7 +287,8 @@ object ActivityLogManager {
         
         scope.launch {
             try {
-                dao?.deleteExcess(retentionCount)
+                dao?.deleteExcessGeneral(retentionCount)
+                dao?.deleteExcessConnection(CONNECTION_RETENTION)
             } catch (e: Exception) {
                 handleDatabaseError(e)
             } finally {

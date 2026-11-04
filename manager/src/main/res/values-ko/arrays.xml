@@ -30,18 +30,11 @@
         <item>Oppo Find X8 Ultra</item>
         <item>TCL 50 Pro</item>
     </string-array>
-    <string-array name="corner_style_entries">
-        <item>@string/corner_style_global</item>
-        <item>@string/corner_style_sharp</item>
-        <item>@string/corner_style_rounded</item>
-        <item>@string/corner_style_large</item>
-        <item>@string/corner_style_squircle</item>
-        <item>@string/corner_style_extra_large</item>
-    </string-array>
     <string-array name="corner_rounding_entries">
-        <item>강조 — 32dp (기본값)</item>
+        <item>@string/corner_style_sharp</item>
         <item>은은하게 — 20dp</item>
         <item>표준 M3 — 28dp</item>
+        <item>강조 — 32dp (기본값)</item>
         <item>크게 — 36dp</item>
         <item>최대 — 44dp</item>
         <item>시스템 기본값</item>
@@ -59,6 +52,8 @@
         <item>앰버 선셋</item>
         <item>로즈 페탈</item>
         <item>미드나잇 슬레이트</item>
+        <item>Cyber Neon Cyan</item>
+        <item>Synthwave Neon</item>
     </string-array>
     <string-array name="icon_styles">
         <item>표준 (채움)</item>

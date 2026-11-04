@@ -16,8 +16,23 @@ public class AppsAdapter extends BaseRecyclerViewAdapter<ClassCreatorPool> {
 
     public static final class HeaderMarker {}
 
+    public interface SelectionListener {
+        void onSelectionChanged(boolean inSelectionMode, int selectedCount);
+    }
+
     private boolean selectionMode = false;
     private final Set<String> selectedPackages = new HashSet<>();
+    private SelectionListener selectionListener;
+
+    public void setSelectionListener(SelectionListener listener) {
+        this.selectionListener = listener;
+    }
+
+    private void notifySelectionListener() {
+        if (selectionListener != null) {
+            selectionListener.onSelectionChanged(selectionMode, selectedPackages.size());
+        }
+    }
 
     public AppsAdapter() {
         super();
@@ -37,10 +52,17 @@ public class AppsAdapter extends BaseRecyclerViewAdapter<ClassCreatorPool> {
             selectedPackages.clear();
         }
         notifyDataSetChanged();
+        notifySelectionListener();
     }
 
     public Set<String> getSelectedPackages() {
         return selectedPackages;
+    }
+
+    public void selectAll(java.util.Collection<String> packageNames) {
+        selectedPackages.addAll(packageNames);
+        notifyDataSetChanged();
+        notifySelectionListener();
     }
 
     public void toggleSelection(String packageName) {
@@ -50,6 +72,7 @@ public class AppsAdapter extends BaseRecyclerViewAdapter<ClassCreatorPool> {
             selectedPackages.add(packageName);
         }
         notifyDataSetChanged();
+        notifySelectionListener();
     }
 
     @Override
@@ -91,9 +114,9 @@ public class AppsAdapter extends BaseRecyclerViewAdapter<ClassCreatorPool> {
 
             @Override
             public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-                // Switch/enhancement-badge state isn't derived from PackageInfo at all - it's
+                // Switch state isn't derived from PackageInfo at all - it's
                 // loaded asynchronously in AppViewHolder.onBind() and re-pushed via an explicit
-                // notifyItemChanged() right after any grant/revoke/enhancement change (see
+                // notifyItemChanged() right after any grant/revoke/freeze change (see
                 // AppViewHolder.onClick/onLongClick). Forcing this false unconditionally used to
                 // rebind (and restart icon + granted-state binder lookups for) every visible row
                 // on every updateData() call - including ones fired by search/filter keystrokes

@@ -1,4 +1,5 @@
 package af.shizuku.manager.update
+
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
 import android.annotation.SuppressLint
@@ -6,6 +7,7 @@ import android.app.DownloadManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -14,34 +16,109 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
+import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import rikka.shizuku.Shizuku
 import timber.log.Timber
 import java.io.File
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
- * Manages downloading and installing updates
+ * Manages downloading and installing updates with robust signature checking,
+ * internal cache staging to avoid Android 14+ FUSE SELinux denials, and seamless
+ * Shizuku migration fallback.
  */
 class UpdateManager(
     private val context: Context,
 ) {
     companion object {
         private const val TAG = "UpdateManager"
+<<<<<<< HEAD
         private const val STAGED_PREFIX = "update-"
+=======
+        private const val PARTIAL_DOWNLOAD_GRACE_MS = 60 * 60 * 1000L
+>>>>>>> upstream/master
         private const val NOTIFICATION_CHANNEL_ID = "update_channel"
         private const val NOTIFICATION_ID = 1001
         private const val DOWNLOAD_ID_PREF = "update_download_id"
+
+        const val ACTION_MIGRATE_UPDATE = "af.shizuku.manager.action.MIGRATE_UPDATE"
+        const val ACTION_SIGNATURE_MISMATCH = "af.shizuku.manager.action.SIGNATURE_MISMATCH"
+        const val EXTRA_UPDATE_FILE_PATH = "af.shizuku.manager.extra.UPDATE_FILE_PATH"
+        const val EXTRA_UPDATE_VERSION_NAME = "af.shizuku.manager.extra.UPDATE_VERSION_NAME"
     }
 
+    sealed class UpdateState {
+        object Idle : UpdateState()
+
+        data class Downloading(
+            val percent: Int,
+            val bytesDownloaded: Long,
+            val totalBytes: Long,
+            val versionName: String,
+        ) : UpdateState()
+
+        data class Installing(
+            val versionName: String,
+        ) : UpdateState()
+
+        data class Ready(
+            val file: File,
+            val versionName: String,
+        ) : UpdateState()
+
+        data class Completed(
+            val message: String,
+        ) : UpdateState()
+
+        data class Error(
+            val message: String,
+            val reason: Int? = null,
+        ) : UpdateState()
+    }
+
+    sealed class InstallResult {
+        object Success : InstallResult()
+
+        data class NeedsSystemInstaller(
+            val file: File,
+        ) : InstallResult()
+
+        data class SignatureMismatchCanMigrate(
+            val file: File,
+        ) : InstallResult()
+
+        data class SignatureMismatchManualRequired(
+            val file: File,
+        ) : InstallResult()
+
+        data class Failed(
+            val message: String,
+        ) : InstallResult()
+    }
+
+    private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val state: StateFlow<UpdateState> = _state.asStateFlow()
+
     private val notificationManager = NotificationManagerCompat.from(context)
-    private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+    private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
     private val job = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.Main + job)
     private var downloadId: Long = -1
     private var monitorJob: Job? = null
+    private var downloadJob: Job? = null
+    private var isManualDownload = false
 
-    /**
-     * Create notification channel for updates
-     */
+    // URL of the current download, so a damaged DownloadManager result can be fetched again
+    // once over the direct HTTP path before giving up.
+    private var currentDownloadUrl: String? = null
+    private var retriedDirect = false
+
     private fun createNotificationChannel() {
         val channel =
             NotificationChannelCompat
@@ -54,15 +131,8 @@ class UpdateManager(
         notificationManager.createNotificationChannel(channel)
     }
 
-    // True when the download was started by the user explicitly (manual check in Settings),
-    // as opposed to the automatic daily-check dialog in HomeActivity. Affects whether
-    // onDownloadComplete aborts silently when isAutoUpdateEnabled() has since been turned off.
-    private var isManualDownload = false
-
     /**
      * Download update APK
-     * @param downloadUrl URL to download the APK from
-     * @param versionName Version name for display
      */
     @SuppressLint("Range")
     fun downloadUpdate(
@@ -71,8 +141,11 @@ class UpdateManager(
         manual: Boolean = false,
     ) {
         isManualDownload = manual
+        currentDownloadUrl = downloadUrl
+        retriedDirect = false
         createNotificationChannel()
 
+<<<<<<< HEAD
         // Fail closed before spending the download: only a release asset URL has a SHA256SUMS
         // next to it to verify against (see UpdateVerifier).
         if (UpdateVerifier.checksumsUrlFor(downloadUrl) == null) {
@@ -93,53 +166,155 @@ class UpdateManager(
             if (file.exists()) {
                 file.delete()
             }
+=======
+        downloadJob?.cancel()
+        downloadJob =
+            scope.launch(Dispatchers.IO) {
+                // Plain ASCII name: '+' and other reserved characters in a file:// destination are
+                // decoded inconsistently by DownloadProvider and FileProvider.
+                val fileName = "ShizukuPlus-v${versionName.replace(Regex("[^A-Za-z0-9._-]"), "_")}.apk"
+                val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.cacheDir, fileName)
+>>>>>>> upstream/master
 
-            // Old update APKs are never referenced again once a newer one starts downloading.
-            cleanup()
+                if (file.exists()) {
+                    file.delete()
+                }
+                cleanup()
 
-            val request =
-                DownloadManager
-                    .Request(Uri.parse(downloadUrl))
-                    .setTitle(context.getString(R.string.update_downloading_title))
-                    .setDescription(context.getString(R.string.update_downloading_description, versionName))
-                    // HIDDEN, not VISIBLE_NOTIFY_COMPLETED — monitorDownload() already drives our own
-                    // progress/install notifications; VISIBLE_NOTIFY_COMPLETED would show a second,
-                    // redundant system download notification alongside them.
-                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
-                    .setDestinationUri(Uri.fromFile(file))
-                    .setAllowedOverMetered(true)
-                    .setAllowedOverRoaming(true)
-                    .setMimeType("application/vnd.android.package-archive")
+                _state.value = UpdateState.Downloading(0, 0, 0, versionName)
 
-            // Add after-download broadcast
-            request.addRequestHeader("User-Agent", "Shizuku+/$versionName")
+                if (downloadManager == null) {
+                    downloadDirectly(downloadUrl, file, versionName)
+                    return@launch
+                }
 
-            try {
-                downloadId = downloadManager.enqueue(request)
+                val request =
+                    DownloadManager
+                        .Request(Uri.parse(downloadUrl))
+                        .setTitle(context.getString(R.string.update_downloading_title))
+                        .setDescription(context.getString(R.string.update_downloading_description, versionName))
+                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
+                        .setDestinationUri(Uri.fromFile(file))
+                        .setAllowedOverMetered(true)
+                        .setAllowedOverRoaming(true)
+                        .setMimeType("application/vnd.android.package-archive")
 
-                // Save download ID
-                context
-                    .getSharedPreferences("update_prefs", Context.MODE_PRIVATE)
-                    .edit()
-                    .putLong(DOWNLOAD_ID_PREF, downloadId)
-                    .apply()
+                request.addRequestHeader("User-Agent", "Shizuku+/$versionName")
 
-                Timber.tag(TAG).d("Download started: $downloadUrl, ID: $downloadId")
+                try {
+                    downloadId = downloadManager.enqueue(request)
+                    context
+                        .getSharedPreferences("update_prefs", Context.MODE_PRIVATE)
+                        .edit()
+                        .putLong(DOWNLOAD_ID_PREF, downloadId)
+                        .apply()
 
+                    Timber.tag(TAG).d("Download started via DownloadManager: $downloadUrl, ID: $downloadId")
+                    monitorDownload(downloadId, file, versionName)
+                } catch (e: Exception) {
+                    Timber.tag(TAG).w(e, "DownloadManager failed to enqueue; falling back to direct HTTP stream")
+                    downloadDirectly(downloadUrl, file, versionName)
+                }
+            }
+    }
+
+<<<<<<< HEAD
                 // Monitor download progress
                 monitorDownload(downloadId, file, versionName, downloadUrl)
             } catch (e: Exception) {
                 // WARN not ERROR: some ROMs (MIUI/HyperOS) don't expose the DownloadManager
                 // content URI — expected incompatibility, not a crash (SHIZUKUPLUS-8N).
                 Timber.tag(TAG).w(e, "Failed to start download")
-                showDownloadErrorNotification()
+=======
+    /**
+     * Fallback direct HTTP download for OEM ROMs where DownloadManager is missing or restricted.
+     */
+    private suspend fun downloadDirectly(
+        downloadUrl: String,
+        file: File,
+        versionName: String,
+    ) = withContext(Dispatchers.IO) {
+        var connection: HttpURLConnection? = null
+        try {
+            var currentUrl = downloadUrl
+            var redirects = 0
+            while (redirects < 5) {
+                val url = URL(currentUrl)
+                connection = url.openConnection() as HttpURLConnection
+                connection.connectTimeout = 15_000
+                connection.readTimeout = 30_000
+                connection.instanceFollowRedirects = true
+                connection.setRequestProperty("User-Agent", "Shizuku+/$versionName")
+                connection.connect()
+
+                val code = connection.responseCode
+                if (code == HttpURLConnection.HTTP_MOVED_PERM ||
+                    code == HttpURLConnection.HTTP_MOVED_TEMP ||
+                    code == HttpURLConnection.HTTP_SEE_OTHER ||
+                    code == 307 ||
+                    code == 308
+                ) {
+                    val location = connection.getHeaderField("Location")
+                    if (!location.isNullOrBlank()) {
+                        currentUrl = location
+                        connection.disconnect()
+                        redirects++
+                        continue
+                    }
+                }
+                break
             }
+
+            val conn =
+                connection ?: run {
+                    _state.value = UpdateState.Error("Failed to open connection")
+                    showDownloadErrorNotification()
+                    return@withContext
+                }
+
+            val responseCode = conn.responseCode
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                Timber.tag(TAG).w("Direct HTTP download returned status $responseCode")
+                _state.value = UpdateState.Error("Server returned code $responseCode", responseCode)
+>>>>>>> upstream/master
+                showDownloadErrorNotification()
+                return@withContext
+            }
+
+            val contentLength = conn.contentLength.toLong()
+            var bytesReadTotal = 0L
+
+            conn.inputStream.use { input ->
+                FileOutputStream(file).use { output ->
+                    val buffer = ByteArray(8192)
+                    var bytes: Int
+                    while (input.read(buffer).also { bytes = it } != -1) {
+                        if (!isActive) {
+                            file.delete()
+                            return@withContext
+                        }
+                        output.write(buffer, 0, bytes)
+                        bytesReadTotal += bytes
+
+                        val percent = if (contentLength > 0) ((bytesReadTotal * 100) / contentLength).toInt() else 0
+                        _state.value = UpdateState.Downloading(percent, bytesReadTotal, contentLength, versionName)
+                        updateProgressNotification(percent, versionName)
+                    }
+                }
+            }
+
+            Timber.tag(TAG).d("Direct HTTP download completed: ${file.absolutePath}")
+            onDownloadComplete(file, versionName)
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "Direct HTTP download failed")
+            file.delete()
+            _state.value = UpdateState.Error(e.message ?: "Network error")
+            showDownloadErrorNotification()
+        } finally {
+            connection?.disconnect()
         }
     }
 
-    /**
-     * Monitor download progress
-     */
     private fun monitorDownload(
         downloadId: Long,
         file: File,
@@ -152,20 +327,15 @@ class UpdateManager(
                 while (isActive) {
                     try {
                         val query = DownloadManager.Query().setFilterById(downloadId)
-                        // Explicit projection avoids IllegalArgumentException("column local_filename is not allowed")
-                        // thrown by DownloadManager on some Android 10+ OEM builds when the default
-                        // projection internally includes the removed local_filename column.
                         val cursor =
                             try {
-                                withContext(Dispatchers.IO) { downloadManager.query(query) }
+                                withContext(Dispatchers.IO) { downloadManager?.query(query) }
                             } catch (e: IllegalArgumentException) {
-                                Timber.tag(TAG).w(e, "DownloadManager.query rejected by system; retrying bare filter")
+                                Timber.tag(TAG).w(e, "DownloadManager.query rejected; retrying bare filter")
                                 null
                             }
 
                         if (cursor != null && !cursor.moveToFirst()) {
-                            // Empty cursor — download entry is gone (cancelled, removed externally).
-                            // Nothing to act on; close to avoid leaking the cursor object.
                             cursor.close()
                         } else if (cursor != null) {
                             val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
@@ -177,32 +347,42 @@ class UpdateManager(
 
                             when (status) {
                                 DownloadManager.STATUS_SUCCESSFUL -> {
+                                    // DownloadManager may store the file under a different name
+                                    // than requested; use where it actually landed.
+                                    val localIdx = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+                                    val localPath =
+                                        if (localIdx >= 0) {
+                                            cursor.getString(localIdx)?.let { runCatching { Uri.parse(it).path }.getOrNull() }
+                                        } else {
+                                            null
+                                        }
                                     cursor.close()
+<<<<<<< HEAD
                                     Timber.tag(TAG).d("Download completed: ${file.absolutePath}")
                                     onDownloadComplete(file, versionName, downloadUrl)
+=======
+                                    val actual = localPath?.let { File(it) }?.takeIf { it.exists() } ?: file
+                                    Timber.tag(TAG).d("Download completed: ${actual.absolutePath}")
+                                    onDownloadComplete(actual, versionName)
+>>>>>>> upstream/master
                                     break
                                 }
                                 DownloadManager.STATUS_FAILED -> {
-                                    // COLUMN_REASON holds a DownloadManager.ERROR_* code when
-                                    // STATUS_FAILED - without it "Download failed" (SHIZUKUPLUS-8H)
-                                    // gives no way to tell insufficient-storage, HTTP errors, and
-                                    // unresumable transfers apart. WARN not ERROR: download failures
-                                    // are expected user-facing events (bad network, no storage, etc.).
                                     val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
                                     val reason = if (reasonIdx >= 0) cursor.getInt(reasonIdx) else -1
                                     cursor.close()
                                     Timber.tag(TAG).w("Download failed (reason=$reason)")
+                                    _state.value = UpdateState.Error("Download failed", reason)
                                     showDownloadErrorNotification(reason)
                                     break
                                 }
-                                DownloadManager.STATUS_PAUSED -> {
-                                    // Waiting for network
-                                }
                                 DownloadManager.STATUS_RUNNING -> {
-                                    // Update progress notification. progress/total are Long — an
-                                    // Int (progress * 100) would overflow for any file over ~21.4MB.
                                     val percent = if (total > 0) (progress * 100 / total).toInt() else 0
+                                    _state.value = UpdateState.Downloading(percent, progress, total, versionName)
                                     updateProgressNotification(percent, versionName)
+                                }
+                                DownloadManager.STATUS_PAUSED -> {
+                                    // Paused
                                 }
                             }
                             cursor.close()
@@ -215,9 +395,6 @@ class UpdateManager(
             }
     }
 
-    /**
-     * Update progress notification
-     */
     private fun updateProgressNotification(
         progress: Int,
         versionName: String,
@@ -237,24 +414,56 @@ class UpdateManager(
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
-    /**
-     * Called when download is complete
-     */
-    private fun onDownloadComplete(
+    private suspend fun onDownloadComplete(
         file: File,
         versionName: String,
         downloadUrl: String,
     ) {
-        // Remove progress notification
         notificationManager.cancel(NOTIFICATION_ID)
 
-        // If the user disabled auto-update after this download started (and this wasn't a
-        // manual check), silently discard the downloaded file rather than prompting to install.
         if (!isManualDownload && !ShizukuSettings.isAutoUpdateEnabled()) {
-            file.delete()
+            withContext(Dispatchers.IO) { file.delete() }
             return
         }
 
+        // Cache the APK on internal storage to bypass Android 14+ FUSE SELinux restrictions.
+        // A 16 MB copy and an APK parse: never on the main thread.
+        val readyApk =
+            withContext(Dispatchers.IO) {
+                try {
+                    val updatesDir = File(context.cacheDir, "updates").apply { mkdirs() }
+                    val cached = File(updatesDir, file.name)
+                    if (cached.absolutePath != file.absolutePath) file.copyTo(cached, overwrite = true)
+                    cached.setReadable(true, false)
+                    cached
+                } catch (e: Exception) {
+                    Timber.tag(TAG).w(e, "Failed to copy APK to cacheDir; using original")
+                    file
+                }
+            }
+
+        // Never hand an unparseable file to the system installer ("There was a problem parsing
+        // the package"): validate first, re-download once over direct HTTP, then fail clearly.
+        val problem = withContext(Dispatchers.IO) { validateApk(readyApk) }
+        if (problem != null) {
+            Timber.tag(TAG).w("Downloaded update is invalid (%s): %s", problem, readyApk.absolutePath)
+            withContext(Dispatchers.IO) {
+                readyApk.delete()
+                if (file.absolutePath != readyApk.absolutePath) file.delete()
+            }
+            val url = currentDownloadUrl
+            if (!retriedDirect && url != null) {
+                retriedDirect = true
+                _state.value = UpdateState.Downloading(0, 0, 0, versionName)
+                downloadDirectly(url, file, versionName)
+            } else {
+                _state.value = UpdateState.Error(context.getString(R.string.update_download_corrupt, problem))
+                showDownloadErrorNotification()
+            }
+            return
+        }
+
+<<<<<<< HEAD
         scope.launch {
             // Verify the SHA-256 published with the release and install only the app-private copy
             // that was hashed: the download dir is external storage, so the file there could be
@@ -268,6 +477,25 @@ class UpdateManager(
                     val result = staged?.let { UpdateVerifier.verifyAndStage(file, downloadUrl, it) }
                     file.delete()
                     result
+=======
+        _state.value = UpdateState.Ready(readyApk, versionName)
+
+        if (isManualDownload || ShizukuSettings.isAutoInstallEnabled()) {
+            scope.launch {
+                when (val result = performSmartInstall(readyApk)) {
+                    is InstallResult.Success -> {
+                        _state.value = UpdateState.Completed(context.getString(R.string.update_installed_success))
+                    }
+                    is InstallResult.NeedsSystemInstaller -> {
+                        launchSystemInstaller(result.file)
+                    }
+                    is InstallResult.SignatureMismatchCanMigrate,
+                    is InstallResult.SignatureMismatchManualRequired,
+                    is InstallResult.Failed,
+                    -> {
+                        showInstallNotification(readyApk, versionName)
+                    }
+>>>>>>> upstream/master
                 }
             if (verified == null) {
                 showDownloadErrorNotification(messageRes = R.string.update_verify_failed_message)
@@ -283,29 +511,194 @@ class UpdateManager(
             } else {
                 showInstallNotification(verified, versionName)
             }
+<<<<<<< HEAD
+=======
+        } else {
+            showInstallNotification(readyApk, versionName)
+>>>>>>> upstream/master
         }
     }
 
     /**
-     * Show notification to install the update
+     * Returns null if [apk] is a complete APK of this app, else a short reason. Catches truncated
+     * or HTML/JSON downloads and a wrong-flavor asset before any installer sees them.
      */
-    private fun showInstallNotification(
-        file: File,
-        versionName: String,
-    ) {
-        try {
-            val apkUri =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    shareableApkUri(file)
-                } else {
-                    Uri.fromFile(file)
+    private fun validateApk(apk: File): String? {
+        if (!apk.exists()) return "file missing"
+        if (apk.length() < 1024 * 1024) return "file too small (${apk.length()} bytes)"
+        val magic = ByteArray(4)
+        val read = runCatching { apk.inputStream().use { it.read(magic) } }.getOrDefault(-1)
+        if (read != 4 || magic[0] != 'P'.code.toByte() || magic[1] != 'K'.code.toByte()) return "not an APK"
+        val info =
+            runCatching { context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0) }.getOrNull()
+                ?: return "package could not be parsed"
+        if (info.packageName != context.packageName) return "wrong package (${info.packageName})"
+        return null
+    }
+
+    /**
+     * Inspects signatures and performs a smart, privileged or system installation.
+     */
+    suspend fun performSmartInstall(file: File): InstallResult =
+        withContext(Dispatchers.IO) {
+            try {
+                _state.value = UpdateState.Installing(file.name)
+                val isRoot =
+                    runCatching {
+                        Shell.getShell().isRoot
+                    }.getOrDefault(false)
+                val hasShizuku = rikka.shizuku.Shizuku.pingBinder()
+                val signaturesMatch = checkSignaturesMatch(file)
+
+                if (!signaturesMatch) {
+                    Timber.tag(TAG).w("Update signature mismatch detected.")
+                    return@withContext if (hasShizuku || isRoot) {
+                        InstallResult.SignatureMismatchCanMigrate(file)
+                    } else {
+                        InstallResult.SignatureMismatchManualRequired(file)
+                    }
                 }
 
+                when {
+                    isRoot -> {
+                        val result = Shell.cmd("pm install -r -d \"${file.absolutePath}\"").exec()
+                        if (result.isSuccess) {
+                            Timber.tag(TAG).i("Silent install via root succeeded")
+                            InstallResult.Success
+                        } else {
+                            Timber.tag(TAG).w("Root install failed: ${result.out}")
+                            InstallResult.Failed(result.out.joinToString("\n"))
+                        }
+                    }
+                    hasShizuku -> {
+                        val success = installViaShizukuStdin(file)
+                        if (success) {
+                            InstallResult.Success
+                        } else {
+                            InstallResult.Failed("Shizuku install failed")
+                        }
+                    }
+                    else -> {
+                        InstallResult.NeedsSystemInstaller(file)
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "performSmartInstall failed unexpectedly")
+                InstallResult.Failed(e.message ?: "Unknown installation error")
+            }
+        }
+
+    /**
+     * Launches the system PackageInstaller using an internal cacheDir FileProvider URI
+     * that system_server and com.google.android.packageinstaller can safely access without FUSE denials.
+     */
+    fun launchSystemInstaller(file: File): Boolean {
+        if (!file.exists() || file.length() == 0L) {
+            // The cached APK was cleared (cache trim, reinstall); the installer would only
+            // report a parse error for a missing file.
+            _state.value = UpdateState.Error(context.getString(R.string.update_download_corrupt, "file missing"))
+            return false
+        }
+        return try {
+            val apkUri = shareableApkUri(file)
             val installIntent =
                 Intent(Intent.ACTION_VIEW).apply {
                     setDataAndType(apkUri, "application/vnd.android.package-archive")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            context.startActivity(installIntent)
+            true
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "launchSystemInstaller failed")
+            false
+        }
+    }
+
+    /**
+     * Compares the signing certificate of the downloaded APK with the installed app.
+     */
+    fun checkSignaturesMatch(apkFile: File): Boolean =
+        try {
+            val pm = context.packageManager
+            val installedSignatures =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val pi = pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+                    val info = pi.signingInfo
+                    if (info != null) {
+                        if (info.hasMultipleSigners()) info.apkContentsSigners else info.signingCertificateHistory
+                    } else {
+                        emptyArray()
+                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    val pi = pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
+                    @Suppress("DEPRECATION")
+                    pi.signatures ?: emptyArray()
+                }
+
+            val apkSignatures =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val pi = pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNING_CERTIFICATES)
+                    val info = pi?.signingInfo
+                    if (info != null) {
+                        if (info.hasMultipleSigners()) info.apkContentsSigners else info.signingCertificateHistory
+                    } else {
+                        emptyArray()
+                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    val pi = pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNATURES)
+                    @Suppress("DEPRECATION")
+                    pi?.signatures ?: emptyArray()
+                }
+
+            if (installedSignatures.isEmpty() || apkSignatures.isEmpty()) {
+                true
+            } else {
+                installedSignatures.any { inst -> apkSignatures.any { apk -> inst == apk } }
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "Signature comparison failed; assuming match")
+            true
+        }
+
+    /**
+     * Show notification to install the update.
+     * Routes signature mismatches directly to HomeActivity migration dialogs to avoid cryptic OS errors.
+     */
+    fun showInstallNotification(
+        file: File,
+        versionName: String,
+    ) {
+        try {
+            val signaturesMatch = checkSignaturesMatch(file)
+            val hasPrivilege =
+                rikka.shizuku.Shizuku.pingBinder() ||
+                    runCatching { Shell.getShell().isRoot }.getOrDefault(false)
+
+            val installIntent =
+                if (!signaturesMatch && hasPrivilege) {
+                    Intent(context, af.shizuku.manager.home.HomeActivity::class.java).apply {
+                        action = ACTION_MIGRATE_UPDATE
+                        putExtra(EXTRA_UPDATE_FILE_PATH, file.absolutePath)
+                        putExtra(EXTRA_UPDATE_VERSION_NAME, versionName)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    }
+                } else if (!signaturesMatch) {
+                    Intent(context, af.shizuku.manager.home.HomeActivity::class.java).apply {
+                        action = ACTION_SIGNATURE_MISMATCH
+                        putExtra(EXTRA_UPDATE_FILE_PATH, file.absolutePath)
+                        putExtra(EXTRA_UPDATE_VERSION_NAME, versionName)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    }
+                } else {
+                    val apkUri = shareableApkUri(file)
+                    Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(apkUri, "application/vnd.android.package-archive")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
                 }
 
             val pendingIntent =
@@ -324,6 +717,7 @@ class UpdateManager(
                     .setContentText(context.getString(R.string.update_ready_description, versionName))
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setAutoCancel(true)
+                    .setOnlyAlertOnce(true)
                     .setContentIntent(pendingIntent)
                     .addAction(
                         R.drawable.ic_notification_icon,
@@ -333,35 +727,36 @@ class UpdateManager(
 
             notificationManager.notify(NOTIFICATION_ID + 1, notification)
         } catch (e: Exception) {
-            // Never let a download-complete notification crash the app (e.g. a FileProvider
-            // "Failed to find configured root" when the APK landed on a volume our paths don't
-            // cover). The download itself succeeded; degrade to the error notification.
             Timber.tag(TAG).e(e, "Failed to build install notification")
             showDownloadErrorNotification()
         }
     }
 
     /**
-     * Resolve a content:// URI that FileProvider can actually serve for [file].
-     *
-     * `getExternalFilesDir(...)` can return a secondary/removable volume (e.g. an SD card)
-     * that our `file_paths.xml` primary `<external-files-path>` root doesn't cover, so
-     * `getUriForFile` throws `IllegalArgumentException: Failed to find configured root`
-     * (SHIZUKUPLUS-6P). Fall back to a copy in `cacheDir`, which the `<cache-path>` root
-     * always covers, so the install action still works.
+     * Resolve a content:// URI backed by an internal cacheDir copy that FileProvider can safely serve
+     * without hitting Android 14+ FUSE SELinux denials.
      */
-    private fun shareableApkUri(file: File): Uri {
+    fun shareableApkUri(file: File): Uri {
         val authority = "${context.packageName}.fileprovider"
+        val updatesDir = File(context.cacheDir, "updates").apply { mkdirs() }
+        val cached = File(updatesDir, file.name)
+        if (!cached.exists() || cached.length() != file.length()) {
+            try {
+                file.copyTo(cached, overwrite = true)
+            } catch (e: Exception) {
+                Timber.tag(TAG).w(e, "Failed copying to updates cache, using direct file")
+            }
+        }
+        cached.setReadable(true, false)
         return try {
-            FileProvider.getUriForFile(context, authority, file)
-        } catch (e: IllegalArgumentException) {
-            Timber.tag(TAG).w(e, "APK path not FileProvider-shareable; copying to cache")
-            val cached = File(context.cacheDir, file.name)
-            file.copyTo(cached, overwrite = true)
             FileProvider.getUriForFile(context, authority, cached)
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "Failed FileProvider URI for cache; falling back to original file")
+            FileProvider.getUriForFile(context, authority, file)
         }
     }
 
+<<<<<<< HEAD
     /**
      * Show error notification. [reason] is a DownloadManager.ERROR_* code (from COLUMN_REASON)
      * when known — a few documented, OEM-independent codes get distinct, self-diagnosing text
@@ -373,6 +768,11 @@ class UpdateManager(
     ) {
         val text =
             messageRes ?: when (reason) {
+=======
+    private fun showDownloadErrorNotification(reason: Int? = null) {
+        val messageRes =
+            when (reason) {
+>>>>>>> upstream/master
                 DownloadManager.ERROR_INSUFFICIENT_SPACE -> R.string.update_download_failed_storage
                 DownloadManager.ERROR_CANNOT_RESUME -> R.string.update_download_failed_cannot_resume
                 DownloadManager.ERROR_HTTP_DATA_ERROR,
@@ -388,11 +788,13 @@ class UpdateManager(
                 .setContentText(context.getString(text))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
                 .build()
 
         notificationManager.notify(NOTIFICATION_ID + 2, notification)
     }
 
+<<<<<<< HEAD
     /**
      * Install APK directly (for auto-install when enabled).
      * Must be called from a background coroutine.
@@ -460,6 +862,8 @@ class UpdateManager(
      * Reads the APK in the app process and streams it to `pm install` via Shizuku stdin,
      * sidestepping Android 11+ scoped-storage restrictions on shell UID 2000.
      */
+=======
+>>>>>>> upstream/master
     private fun installViaShizukuStdin(file: File): Boolean {
         return try {
             val apkBytes = file.readBytes()
@@ -494,9 +898,6 @@ class UpdateManager(
         }
     }
 
-    /**
-     * Check if user has granted install permission
-     */
     fun canRequestPackageInstalls(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val packageManager = context.packageManager
@@ -506,22 +907,38 @@ class UpdateManager(
         }
 
     /**
-     * Cancel ongoing downloads and coroutines. Call when the owner is done with this manager.
+     * Stops the current download. Only that work is cancelled: this manager is shared, and
+     * cancelling its scope's root job made every later download silently do nothing.
      */
     fun cancel() {
         monitorJob?.cancel()
-        job.cancel()
+        downloadJob?.cancel()
+        if (downloadId != -1L) {
+            runCatching { downloadManager?.remove(downloadId) }
+            downloadId = -1
+        }
     }
 
     /**
-     * Clean up downloaded files
+     * Deletes downloaded update APKs that are no longer needed: ones at or below the installed
+     * version, and unreadable ones once they're old enough not to be a download in progress. A
+     * newer one is kept, since an install notification may still point at it. Call off the main
+     * thread.
      */
     fun cleanup() {
         try {
-            val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            downloadsDir?.listFiles { file -> file.name.endsWith(".apk") }?.forEach { file ->
-                file.delete()
-                Timber.tag(TAG).d("Cleaned up old APK: ${file.name}")
+            val installed =
+                androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(
+                    context.packageManager.getPackageInfo(context.packageName, 0),
+                )
+            val dirs = listOfNotNull(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), File(context.cacheDir, "updates"))
+            for (dir in dirs) {
+                dir.listFiles { file -> file.name.endsWith(".apk") }?.forEach { file ->
+                    if (isStaleUpdate(file, installed)) {
+                        file.delete()
+                        Timber.tag(TAG).d("Cleaned up old APK: ${file.name}")
+                    }
+                }
             }
             // Verified copies staged for install (see onDownloadComplete) live in the cache dir.
             context.cacheDir?.listFiles { file -> file.name.startsWith(STAGED_PREFIX) && file.name.endsWith(".apk") }?.forEach { file ->
@@ -531,5 +948,19 @@ class UpdateManager(
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Error cleaning up")
         }
+    }
+
+    private fun isStaleUpdate(
+        file: File,
+        installed: Long,
+    ): Boolean {
+        val version =
+            context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)?.let {
+                androidx.core.content.pm.PackageInfoCompat
+                    .getLongVersionCode(it)
+            }
+        if (version != null) return version <= installed
+        // Unreadable: a partial download is still being written, so only remove old ones.
+        return System.currentTimeMillis() - file.lastModified() > PARTIAL_DOWNLOAD_GRACE_MS
     }
 }
