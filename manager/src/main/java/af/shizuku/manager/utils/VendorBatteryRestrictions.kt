@@ -2,10 +2,6 @@ package af.shizuku.manager.utils
 
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
-<<<<<<< HEAD
-=======
-import af.shizuku.manager.database.ActivityLogManager
->>>>>>> upstream/master
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -23,18 +19,11 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /**
-<<<<<<< HEAD
- * #40: vendors add their own battery restrictions on top of Android's Doze exemption, and those can
- * stop the Watchdog even when the #36 exemption holds. At every start while the Watchdog is on (unlike
- * the one-shot #36 check: vendors re-apply these), undo what is readable and fixable from the server's
- * shell when Device Hardening is on, and otherwise tell the user once what still restricts the app.
-=======
  * Vendors add their own battery restrictions on top of Android's Doze exemption, and those can stop
  * the Watchdog even when the standard exemption holds. At every start while the Watchdog is on
  * (unlike the one-shot exemption check: vendors re-apply these), undo what is readable and fixable
  * from the server's shell when Device Hardening is on, and otherwise tell the user once what still
  * restricts the app.
->>>>>>> upstream/master
  */
 object VendorBatteryRestrictions {
     private const val CHANNEL_ID = "battery_optimization"
@@ -106,11 +95,7 @@ object VendorBatteryRestrictions {
      * Checks every vendor restriction while the Watchdog is on, undoing what Device Hardening allows
      * and reporting (once, per restriction set) what remains. The shell work runs on the caller's IO
      * thread; the report (the tap-target resolution and the notification) touches system services,
-<<<<<<< HEAD
-     * which the harness serves reliably only from the main looper.
-=======
      * which the Robolectric unit tests serve reliably only from the main looper.
->>>>>>> upstream/master
      */
     suspend fun check(context: Context) {
         if (!ShizukuSettings.getWatchdog()) return
@@ -138,11 +123,7 @@ object VendorBatteryRestrictions {
         }
 
         // The report touches system services (PackageManager for the tap target, NotificationManager),
-<<<<<<< HEAD
-        // which the harness serves reliably only from the main looper; the shell work above stays on
-=======
         // which the Robolectric unit tests serve reliably only from the main looper; the shell work above stays on
->>>>>>> upstream/master
         // the caller's IO thread.
         withContext(Dispatchers.Main) {
             try {
@@ -246,11 +227,7 @@ object VendorBatteryRestrictions {
         if (read.isEmpty() || read == "null") return null
         val listed = read.split(',').any { it.trim() == pkg }
         if (listed) return null
-<<<<<<< HEAD
-        // Report only: the issue says never to write this setting.
-=======
         // Report only: this setting is read, never written.
->>>>>>> upstream/master
         return Finding(
             KEY_XIAOMI_NO_RESTRICT,
             R.string.vendor_battery_restriction_xiaomi_no_restrict,
@@ -291,11 +268,7 @@ object VendorBatteryRestrictions {
                         else -> continue
                     }
                 }
-<<<<<<< HEAD
             ManagerActivityLog.log(context, action)
-=======
-            ActivityLogManager.log("Shizuku", context.packageName, action)
->>>>>>> upstream/master
         }
         lastLogged = reportSet
 
@@ -394,10 +367,7 @@ object VendorBatteryRestrictions {
             ?: context.packageManager.getApplicationEnabledSetting(pkg)
 
     private fun canPostNotification(context: Context): Boolean {
-<<<<<<< HEAD
-=======
         if (!ShizukuSettings.isNotificationSystemEnabled()) return false
->>>>>>> upstream/master
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

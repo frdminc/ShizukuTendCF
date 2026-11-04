@@ -767,15 +767,10 @@ class AppViewHolder(
                         // the case where the holder was recycled and rebound to a new item at the
                         // same position before this continuation ran.
                         if (gen == bindGeneration && adapterPosition != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-<<<<<<< HEAD
                             switchWidget.isChecked = auth.granted
                             applyAuthorization(auth)
+                            setGrantEmphasis(auth.granted, animate = false)
                             if (!isPlusMissing && auth.toggleable) switchWidget.isEnabled = true
-=======
-                            switchWidget.isChecked = granted
-                            setGrantEmphasis(granted, animate = false)
-                            if (!isPlusMissing) switchWidget.isEnabled = true
->>>>>>> upstream/master
                         }
                     }
                 }
@@ -868,22 +863,17 @@ class AppViewHolder(
                         !ShizukuSettings.isCustomApiEnabled()
                 withContext(Dispatchers.Main) {
                     if (gen == bindGeneration && adapterPosition != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-<<<<<<< HEAD
                         switchWidget.isChecked = auth.granted
+                        setGrantEmphasis(auth.granted, animate = true)
                         if (!(adapter as AppsAdapter).isSelectionMode()) {
                             applyAuthorization(auth)
                             switchWidget.isEnabled = !isPlusMissing && auth.toggleable
                         }
-=======
-                        switchWidget.isChecked = granted
-                        setGrantEmphasis(granted, animate = true)
->>>>>>> upstream/master
                     }
                 }
             }
     }
 
-<<<<<<< HEAD
     // The trusted-signer row follows Settings' "enabled by admin" pattern: checked switch shown
     // disabled, a summary line saying why, and no tap-to-toggle. Long-press, swipe and the
     // package-name copy keep working. Locked only when the server reports the app granted and
@@ -894,7 +884,8 @@ class AppViewHolder(
         val locked = auth?.locked == true
         trustedSigner.visibility = if (locked) View.VISIBLE else View.GONE
         itemView.isClickable = !locked
-=======
+    }
+
     /**
      * Apps without access get the same softened icon as an off setting, so granted apps stand out
      * when scanning the list; it springs back on grant.
@@ -916,7 +907,6 @@ class AppViewHolder(
             icon.springTo(androidx.dynamicanimation.animation.SpringAnimation.SCALE_Y, scale, com.google.android.material.R.attr.motionSpringFastSpatial)
             icon.springTo(androidx.dynamicanimation.animation.SpringAnimation.ALPHA, alpha, com.google.android.material.R.attr.motionSpringFastEffects)
         }
->>>>>>> upstream/master
     }
 
     override fun onRecycle() {

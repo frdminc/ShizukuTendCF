@@ -10,10 +10,7 @@ import af.shizuku.manager.service.WatchdogService
 import af.shizuku.manager.utils.DeviceOptimizer
 import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.LiveActivityNotificationManager
-<<<<<<< HEAD
-=======
 import af.shizuku.manager.utils.NetworkTrust
->>>>>>> upstream/master
 import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.utils.TcpNetworkGuard
 import android.content.Intent
@@ -46,10 +43,6 @@ class BehaviorSettingsFragment :
     // True when TCP mode is logically available on this device (TLS-capable or TV).
     // The Wireless ADB card is hidden otherwise, and always in root mode.
     private var tcpModeAvailable = false
-
-    private val watchdogRunningListener: (Boolean) -> Unit = {
-        syncWatchdogPreference()
-    }
 
     private val watchdogRunningListener: (Boolean) -> Unit = {
         syncWatchdogPreference()
@@ -212,18 +205,6 @@ class BehaviorSettingsFragment :
             true
         }
 
-<<<<<<< HEAD
-        findPreference<TwoStatePreference>(KEY_LIVE_ACTIVITY_ENABLED)?.setOnPreferenceChangeListener { _, newValue ->
-            val enable = newValue as Boolean
-            // Live activity is shown only inside the Watchdog's notification (1001). The switch
-            // no longer starts ShizukuLiveService: with the Watchdog on it only decides whether
-            // 1001 carries the live text. Turning it off stops any legacy live service still
-            // running and clears the live text from the Watchdog's notification.
-            if (!enable) {
-                val ctx = requireContext()
-                ctx.stopService(Intent(ctx, ShizukuLiveService::class.java))
-                LiveActivityNotificationManager.dismiss(ctx)
-=======
         findPreference<TwoStatePreference>("force_start_wadb")?.setOnPreferenceChangeListener { _, newValue ->
             if (newValue is Boolean) {
                 preferenceManager.sharedPreferences
@@ -231,7 +212,6 @@ class BehaviorSettingsFragment :
                     ?.putBoolean("force_start_wadb", newValue)
                     ?.apply()
                 ShizukuSettings.syncAllPlusFeaturesToServer()
->>>>>>> upstream/master
             }
             true
         }
@@ -336,12 +316,6 @@ class BehaviorSettingsFragment :
     override fun onResume() {
         super.onResume()
         preferenceScreen.sharedPreferences?.registerOnSharedPreferenceChangeListener(this)
-<<<<<<< HEAD
-        ShizukuStateMachine.addListener(stateListener)
-        WatchdogService.addRunningListener(watchdogRunningListener)
-        syncModeVisibility()
-        syncWatchdogPreference()
-=======
         WatchdogService.addRunningListener(watchdogRunningListener)
         syncModeVisibility()
         syncWatchdogPreference()
@@ -351,15 +325,10 @@ class BehaviorSettingsFragment :
         // preference change. Without this a new install never writes the file so external
         // automation reads stale or missing data.
         context?.let { syncUsbPhoneSwitchConfig(it, ShizukuSettings.isUsbPhoneSwitchNotifyEnabled()) }
->>>>>>> upstream/master
     }
 
     override fun onPause() {
         WatchdogService.removeRunningListener(watchdogRunningListener)
-<<<<<<< HEAD
-        ShizukuStateMachine.removeListener(stateListener)
-=======
->>>>>>> upstream/master
         preferenceScreen.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(this)
         super.onPause()
     }
@@ -369,20 +338,6 @@ class BehaviorSettingsFragment :
         key: String?,
     ) {
         if (key == KEY_WATCHDOG) syncWatchdogPreference()
-<<<<<<< HEAD
-    }
-
-    private fun syncWatchdogPreference() {
-        val isOn = watchdogShownOn()
-        watchdogPreference.isChecked = isOn
-        if (isOn && !WatchdogService.isRunning()) {
-            watchdogPreference.setSummary(R.string.settings_watchdog_not_running)
-        } else {
-            watchdogPreference.setSummary(R.string.settings_watchdog_summary)
-        }
-    }
-
-=======
         if (key == KEY_USB_PHONE_SWITCH_NOTIFY) {
             context?.let { ctx ->
                 syncUsbPhoneSwitchConfig(ctx, ShizukuSettings.isUsbPhoneSwitchNotifyEnabled())
@@ -430,7 +385,6 @@ class BehaviorSettingsFragment :
         }
     }
 
->>>>>>> upstream/master
     // A new install's Watchdog is on by default from its first server start; until then the
     // switch shows that default, and turning it off stores the choice.
     private fun watchdogShownOn(): Boolean =

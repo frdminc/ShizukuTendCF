@@ -644,11 +644,6 @@ object RootCompatHelper {
         } catch (e: Exception) {
             BridgeSelfTest.AppExec.Blocked(e.message?.take(160).orEmpty())
         }
-<<<<<<< HEAD
-        sb.append("\n\nRemember: the calling app must be authorized in ShizukuTendCF before its own commands " +
-            "through the bridge succeed.")
-=======
->>>>>>> upstream/master
 
         BridgeSelfTest(deployed && uid != null, tmpDir = tmpDir, deployed = deployed, uid = uid, appExec = appExec)
     }

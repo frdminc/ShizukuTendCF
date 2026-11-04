@@ -1,27 +1,18 @@
 package rikka.shizuku.server
 
-<<<<<<< HEAD
 import af.shizuku.server.IAIAutomationBridge
-=======
->>>>>>> upstream/master
 import android.util.Log
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
+import io.mockk.verify
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-<<<<<<< HEAD
-
-class AICorePlusImplTest {
-
-    private lateinit var aiCorePlusImpl: AICorePlusImpl
-    private lateinit var serviceMock: ShizukuService
-=======
 import java.io.ByteArrayOutputStream
 
 class AICorePlusImplTest {
@@ -31,7 +22,6 @@ class AICorePlusImplTest {
     private val shellInput = ByteArrayOutputStream()
 
     private fun impl() = AICorePlusImpl(mockk<ShizukuClientManager>(relaxed = true), service)
->>>>>>> upstream/master
 
     @Before
     fun setUp() {
@@ -40,12 +30,6 @@ class AICorePlusImplTest {
         every { Log.d(any(), any()) } returns 0
         every { Log.w(any(), any<String>()) } returns 0
 
-<<<<<<< HEAD
-        val clientManagerMock = mockk<ShizukuClientManager>(relaxed = true)
-        serviceMock = mockk(relaxed = true)
-        every { serviceMock.isPlusFeatureEnabled(any()) } returns true
-        aiCorePlusImpl = AICorePlusImpl(clientManagerMock, serviceMock)
-=======
         service = mockk(relaxed = true)
         every { service.isPlusFeatureEnabled(any()) } returns true
 
@@ -55,7 +39,6 @@ class AICorePlusImplTest {
         every { runtimeMock.exec("sh") } returns shell
         mockkStatic(Runtime::class)
         every { Runtime.getRuntime() } returns runtimeMock
->>>>>>> upstream/master
     }
 
     @After
@@ -64,33 +47,6 @@ class AICorePlusImplTest {
     }
 
     @Test
-<<<<<<< HEAD
-    fun `simulateTouch returns false when experimental feature is disabled`() {
-        every { serviceMock.isPlusFeatureEnabled(any()) } returns false
-
-        assertFalse("simulateTouch should return false when the experimental feature is disabled",
-            aiCorePlusImpl.simulateTouch(100.0f, 200.0f))
-    }
-
-    @Test
-    fun `simulateTouch delegates to the automation bridge`() {
-        val bridge = mockk<IAIAutomationBridge>()
-        every { bridge.simulateTouch(100.0f, 200.0f) } returns true
-        aiCorePlusImpl.setAutomationBridge(bridge)
-
-        assertTrue("simulateTouch should return the automation bridge result",
-            aiCorePlusImpl.simulateTouch(100.0f, 200.0f))
-    }
-
-    @Test
-    fun `simulateTouch returns false when the automation bridge throws`() {
-        val bridge = mockk<IAIAutomationBridge>()
-        every { bridge.simulateTouch(100.0f, 200.0f) } throws RuntimeException("Mocked exception")
-        aiCorePlusImpl.setAutomationBridge(bridge)
-
-        assertFalse("simulateTouch should return false when the automation bridge throws",
-            aiCorePlusImpl.simulateTouch(100.0f, 200.0f))
-=======
     fun `simulateTouch writes an input tap to the persistent shell`() {
         assertTrue(impl().simulateTouch(100f, 200f))
         assertEquals("input tap 100.0 200.0\n", shellInput.toString())
@@ -100,6 +56,27 @@ class AICorePlusImplTest {
     fun `simulateTouch returns false when the shell can't start`() {
         every { runtimeMock.exec("sh") } throws java.io.IOException("no sh")
         assertFalse(impl().simulateTouch(1f, 2f))
+    }
+
+    @Test
+    fun `simulateTouch delegates to the automation bridge, not the shell`() {
+        val bridge = mockk<IAIAutomationBridge>()
+        every { bridge.simulateTouch(100.0f, 200.0f) } returns true
+        val impl = impl()
+        impl.setAutomationBridge(bridge)
+
+        assertTrue("simulateTouch should return the automation bridge result", impl.simulateTouch(100.0f, 200.0f))
+        verify(exactly = 0) { runtimeMock.exec(any<String>()) }
+    }
+
+    @Test
+    fun `simulateTouch returns false when the automation bridge throws`() {
+        val bridge = mockk<IAIAutomationBridge>()
+        every { bridge.simulateTouch(100.0f, 200.0f) } throws RuntimeException("Mocked exception")
+        val impl = impl()
+        impl.setAutomationBridge(bridge)
+
+        assertFalse("simulateTouch should return false when the automation bridge throws", impl.simulateTouch(100.0f, 200.0f))
     }
 
     @Test
@@ -120,6 +97,5 @@ class AICorePlusImplTest {
         assertFalse(impl().simulateText("x"))
         verify(exactly = 0) { runtimeMock.exec(any<String>()) }
         verify(exactly = 0) { runtimeMock.exec(any<Array<String>>()) }
->>>>>>> upstream/master
     }
 }

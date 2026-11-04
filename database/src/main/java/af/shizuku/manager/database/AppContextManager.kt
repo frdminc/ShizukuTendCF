@@ -78,102 +78,10 @@ object AppContextManager {
 
     private var settings: AppContextSettings? = null
 
-<<<<<<< HEAD
-    private val staticDatabase = mutableMapOf<String, AppMetadata>().apply {
-        // --- Core Root & Modding ---
-        put("com.topjohnwu.magisk", AppMetadata("Magisk: The systemless root solution. ShizukuTendCF spoofs its presence to other apps.", emptyList(), true, rootSupportLevel = RootSupportLevel.PARTIAL))
-        put("eu.chainfire.supersu", AppMetadata("SuperSU: Legacy root solution. ShizukuTendCF spoofs its presence to other apps for maximum legacy compatibility.", emptyList(), true, rootSupportLevel = RootSupportLevel.PARTIAL))
-        put("org.lsposed.manager", AppMetadata("LSPosed: Xposed framework modern implementation. ShizukuTendCF successfully masks its presence.", emptyList(), true, rootSupportLevel = RootSupportLevel.PARTIAL))
-        put("com.vipercn.viper4android_v2", AppMetadata("ViPER4Android FX: Audio effects engine. Driver installation requires real root, but basic setup is mockable.", listOf(ENH_SHELL), true, rootSupportLevel = RootSupportLevel.ROOT_REQUIRED))
-
-        // --- Legacy Root Apps ---
-        put("org.adaway", AppMetadata("AdAway: Open-source ad blocker. SU path auto-configured; use 'Network Governor' in ShizukuTendCF for rootless DNS blocking.", listOf(ENH_SHELL, ENH_NETWORK), true))
-        put("dev.ukanth.ufirewall", AppMetadata("AFWall+: Firewall app. Fully functional rootless under ShizukuTendCF via automatic local iptables fallback mocking.", listOf(ENH_SHELL, ENH_NETWORK), true, "Menu > Preferences > SU path", rootSupportLevel = RootSupportLevel.FULL))
-        put("com.ramdaas.ramexe", AppMetadata("RamExe: RAM manager and process killer. SU path auto-configured via Android global settings (no root needed).", listOf(ENH_SHELL), true))
-        put("me.piebridge.prevent", AppMetadata("Prevent: Blocks apps from auto-starting to reduce memory and data leakage. SU path auto-configured via Android global settings.", listOf(ENH_SHELL), true))
-        put("com.samsung.android.hexinstall", AppMetadata("Hex Installer: Theming engine for Samsung. ShizukuTendCF provides the necessary Overlay Bridge for OneUI 8+.", listOf(ENH_WIN, ENH_OVERLAY), true))
-        put("com.samsung.android.themepark", AppMetadata("Theme Park: Official Samsung customization. Enhanced by ShizukuTendCF Overlay API.", listOf(ENH_WIN, ENH_OVERLAY), true))
-        put("com.keramidas.TitaniumBackup", AppMetadata("Titanium Backup: App data backup and restore fully works via SU Bridge using native 'bu' mapping.", emptyList(), true, "Menu > More > Preferences > su executable path", rootSupportLevel = RootSupportLevel.FULL))
-        put("eu.darken.sdm", AppMetadata("SD Maid (Legacy): Fully functional via SU Bridge; deep system paths and shell execution are safely routed.", emptyList(), true, "Settings > Root > Binary path", rootSupportLevel = RootSupportLevel.FULL))
-        put("com.speedsoftware.rootexplorer", AppMetadata("Root Explorer: File manager with elevated access. SU path auto-configured; Storage Bridge handles deep system browsing.", listOf(ENH_STORAGE), true, "Settings > Root access > SU path", rootSupportLevel = RootSupportLevel.FULL))
-        put("com.speedsoftware.explorer", AppMetadata("Speed Explorer: File manager by Speed Software.", listOf(ENH_STORAGE), true, rootSupportLevel = RootSupportLevel.FULL))
-        put("com.jrummy.root.browserfree", AppMetadata("Root Browser: File manager with elevated access. SU path auto-configured; Storage Bridge handles system browsing.", listOf(ENH_STORAGE), true, "Settings > Superuser > SU binary path", rootSupportLevel = RootSupportLevel.FULL))
-        put("com.estrongs.android.pop", AppMetadata("ES File Explorer: All-in-one file manager. SU path auto-configured via shared_prefs when running as root.", listOf(ENH_STORAGE), true, "Tools > Root Explorer > su path", rootSupportLevel = RootSupportLevel.FULL))
-        put("com.github.machiav3lli.backup", AppMetadata("OAndBackupX: Open-source backup for root users. SU path auto-configured via shared_prefs.", listOf(ENH_STORAGE, ENH_SHELL), true, "Preferences > Advanced > Custom shell", rootSupportLevel = RootSupportLevel.ROOT_REQUIRED))
-        put("com.jrummy.apps.build.prop.editor", AppMetadata("BuildProp Editor: Edit system properties. Fully functional rootless under ShizukuTendCF via build.prop shadow-copy redirection.", emptyList(), true, rootSupportLevel = RootSupportLevel.FULL))
-        put("com.machiav3lli.neo_backup", AppMetadata("Neo Backup: Modern open-source backup solution.", listOf(ENH_STORAGE), true, "Preferences > Advanced > Custom shell"))
-        put("projekt.substratum.lite", AppMetadata("Substratum Lite: Theming engine for Android.", listOf(ENH_WIN), true))
-        put("com.oasisfeng.greenify", AppMetadata("Greenify: Maximize battery savings by hibernating apps.", listOf(ENH_SHELL), true))
-        put("com.franco.doze", AppMetadata("Naptime: Aggressive Doze for better battery life.", listOf(ENH_SHELL), true))
-        put("com.uzumapps.wakelockdetector", AppMetadata("Wakelock Detector: Find apps draining your battery.", listOf(ENH_SHELL), true))
-        put("com.asksven.betterbatterystats", AppMetadata("BetterBatteryStats: Deep dive into battery drain.", listOf(ENH_SHELL), true))
-        put("org.swiftapps.swiftbackup", AppMetadata("Swift Backup: Uses native Shizuku integration — no SU Bridge path needed. Grant access in App Management, then use its own \"Grant with Root or Shizuku\" option.", listOf(ENH_STORAGE, ENH_SHELL), true, suPathSettingNav = "Shizuku-native: no SU path setting. Use Swift Backup's \"Grant with Root or Shizuku\" flow.", supportsShizukuNatively = true))
-
-        // --- thejaustin's Apps ---
-        put("thejaustin.hexodus", AppMetadata("Hexodus: Spiritual successor to Hex Installer for OneUI 8.", listOf(ENH_SHELL, ENH_WIN), true))
-        put("thejaustin.afdroid", AppMetadata("afdroid: Expressive F-Droid client.", listOf(ENH_SHELL, ENH_STORAGE), true))
-        put("thejaustin.pearity", AppMetadata("Pearity: iOS parity settings for OneUI.", listOf(ENH_SHELL), true))
-        put("thejaustin.termux_ai", AppMetadata("Termux AI: AI-powered terminal with NPU integration.", listOf(ENH_NPU, ENH_VM, ENH_SHELL), true))
-        put("thejaustin.appmanager", AppMetadata("AppManager: Advanced package manager with archiving.", listOf(ENH_SHELL, ENH_STORAGE), true))
-        put("thejaustin.simweather", AppMetadata("SimWeather: Material You weather tool.", listOf(ENH_SHELL), true))
-        put("thejaustin.contactsplus", AppMetadata("ContactsPlus: Fossify Contacts fork with M3 design.", listOf(ENH_SHELL), true))
-        put("thejaustin.obtainiumplus", AppMetadata("ObtainiumPlus: AI-assisted Obtainium fork.", listOf(ENH_SHELL), true))
-        put("thejaustin.snapback", AppMetadata("SnapBack: Secure Snapchat Backup Viewer.", listOf(ENH_STORAGE), true))
-
-        // --- Software Management & Freezers ---
-        put("com.aistra.hail", AppMetadata("Hail: Modern app freezer.", listOf(ENH_SHELL, ENH_DPM), true))
-        put("samolego.canta", AppMetadata("Canta: Powerful system app debloater.", listOf(ENH_SHELL), true))
-        put("rikka.appops", AppMetadata("App Ops: Manage hidden app permissions.", listOf(ENH_SHELL), true))
-        put("com.catchingnow.icebox", AppMetadata("Ice Box: Freeze apps to save battery.", listOf(ENH_SHELL, ENH_DPM), true))
-        put("com.zacharee.installwithoptions", AppMetadata("InstallWithOptions: Advanced APK installer.", listOf(ENH_SHELL), true))
-        put("cf.playhi.freezeyou", AppMetadata("FreezeYou: Battery and speed optimizer.", listOf(ENH_SHELL, ENH_DPM), true))
-        put("com.oasisfeng.island", AppMetadata("Island: App isolation and cloning.", listOf(ENH_DPM, ENH_SHELL), true))
-        put("com.oasisfeng.island.fdroid", AppMetadata("Insular: Island fork for F-Droid.", listOf(ENH_DPM, ENH_SHELL), true))
-
-        // --- File Management ---
-        put("bin.mt.plus", AppMetadata("MT Manager: Sophisticated file manager.", listOf(ENH_STORAGE), true))
-        put("pl.solidexplorer2", AppMetadata("Solid Explorer: Powerful file manager. SU path auto-configured via shared_prefs when running as root.", listOf(ENH_STORAGE), true, "Settings > Root access > Root binary"))
-        put("com.ghisler.android.TotalCommander", AppMetadata("Total Commander: Desktop-class file explorer. SU path auto-configured via shared_prefs when running as root.", listOf(ENH_STORAGE), true, "Config > Root path"))
-        put("com.lonelycatgames.Xplore", AppMetadata("X-Plore: Dual-pane file manager.", listOf(ENH_STORAGE), true))
-        put("ru.zdevs.zarchiver", AppMetadata("ZArchiver: Comprehensive archive manager.", listOf(ENH_STORAGE), true))
-        put("com.alphainventor.filemanager", AppMetadata("File Manager Plus: Cloud and local explorer.", listOf(ENH_STORAGE), true))
-
-        // --- Automation ---
-        put("net.dinglisch.android.taskerm", AppMetadata("Tasker: Advanced Android automation.", listOf(ENH_SHELL, ENH_STORAGE), true))
-        put("com.arlosoft.macrodroid", AppMetadata("MacroDroid: User-friendly automation.", listOf(ENH_SHELL), true))
-        put("henrichg.phoneprofilesplus", AppMetadata("PhoneProfilesPlus: Contextual device config.", listOf(ENH_SHELL), true))
-        put("eu.toneiv.ubktouch", AppMetadata("UbikiTouch: Global swipe gestures.", listOf(ENH_SHELL, ENH_WIN), true))
-
-        // --- Customization ---
-        put("com.kieronquinn.ambientmusicmod", AppMetadata("Ambient Music Mod: Now Playing for everyone.", listOf(ENH_SHELL), true))
-        put("com.kieronquinn.darq", AppMetadata("DarQ: Per-app force dark mode.", listOf(ENH_SHELL), true))
-        put("com.zacharee.tweaker", AppMetadata("System UI Tuner: Hidden system settings.", listOf(ENH_SHELL), true))
-        put("dev.lexip.hecate", AppMetadata("Adaptive-Theme: Smart dark mode.", listOf(ENH_SHELL), true))
-        put("mahmud0808.colorblendr", AppMetadata("ColorBlendr: Material You color editor.", listOf(ENH_SHELL), true))
-        put("com.kieronquinn.smartspacer", AppMetadata("Smartspacer: Enhanced 'At a Glance' widget.", listOf(ENH_SHELL, ENH_WIN), true))
-
-        // --- Network & Privacy ---
-        put("com.ysy.app.firewall", AppMetadata("NetWall: Rootless app firewall.", listOf(ENH_SHELL), true))
-        put("com.deltazefiro.amarokhider", AppMetadata("Amarok: Hide private files and apps.", listOf(ENH_SHELL, ENH_STORAGE), true))
-        put("ahmetcanarslan.shizuwall", AppMetadata("ShizuWall: Open-source app firewall.", listOf(ENH_SHELL), true))
-        put("tk.zwander.wifilist", AppMetadata("WiFiList: View saved WiFi passwords.", listOf(ENH_SHELL), true))
-
-        // --- Tools & Terminals ---
-        put("p.shashank.ashellyou", AppMetadata("aShell You: Material local ADB shell.", listOf(ENH_SHELL), true))
-        put("rohitkushvaha01.reterminal", AppMetadata("ReTerminal: Material 3 terminal emulator.", listOf(ENH_SHELL, ENH_VM), true))
-        put("com.imranr98.obtainium", AppMetadata("Obtainium: App updates from source.", listOf(ENH_SHELL), true))
-        put("com.aurora.store", AppMetadata("Aurora Store: Privacy Play Store client.", listOf(ENH_SHELL), true))
-        put("com.looker.droidify", AppMetadata("Droid-ify: Material F-Droid client.", listOf(ENH_SHELL), true))
-        put("eu.darken.sdmse", AppMetadata("SD Maid SE: System cleaning tool.", listOf(ENH_SHELL, ENH_STORAGE), true))
-        put("com.paget96.chargemonitor", AppMetadata("Battery Charge Limit: Cap charge % to preserve battery health. Needs Shizuku with root to write charge limit sysfs.", emptyList(), true, rootSupportLevel = RootSupportLevel.ROOT_REQUIRED))
-        put("com.mihonapp.mihon", AppMetadata("Mihon: Manga reader and extension manager.", listOf(ENH_SHELL), true))
-    }
-=======
     // Rebuilt whole and swapped, never mutated: the sync worker updates it while list rows read it.
     @Volatile private var merged: Map<String, AppMetadata>? = null
     @Volatile private var bundledRevision = 0
     @Volatile private var activeRevision = 0
->>>>>>> upstream/master
 
     fun initialize(settings: AppContextSettings) {
         this.settings = settings

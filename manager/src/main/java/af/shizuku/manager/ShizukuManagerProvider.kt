@@ -22,7 +22,6 @@ class ShizukuManagerProvider : ShizukuProvider() {
         return super.onCreate()
     }
 
-<<<<<<< HEAD
     private fun isTrustedServerCaller(): Boolean {
         // Read the kernel-provided caller identity before any binder handoff or IPC.
         val uid = Binder.getCallingUid()
@@ -32,7 +31,8 @@ class ShizukuManagerProvider : ShizukuProvider() {
             return false
         }
         return true
-=======
+    }
+
     private fun waitForBinderGracefully(onlyDuringColdStart: Boolean = false) {
         if (onlyDuringColdStart) {
             // Client getBinder: only while this process is cold-starting and the server's binder
@@ -55,7 +55,6 @@ class ShizukuManagerProvider : ShizukuProvider() {
                 }
             }
         }
->>>>>>> upstream/master
     }
 
     override fun call(

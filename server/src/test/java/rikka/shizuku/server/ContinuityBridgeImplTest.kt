@@ -172,19 +172,9 @@ class ContinuityBridgeImplTest {
     }
 
     @Test
-<<<<<<< HEAD
-    fun `listEligibleDevices uses fallback and returns empty list when no devices found`() {
-        setSdkInt(34) // Forcing fallback
-        mockkStatic(ActivityManagerApis::class)
-        mockkStatic(IContentProviderUtils::class)
-        val provider = mockk<IContentProvider>(relaxed = true)
-        every { ActivityManagerApis.getContentProviderExternal(any(), any(), any(), any()) } returns provider
-        every { IContentProviderUtils.callCompat(any(), any(), any(), any(), any(), any()) } returns null
-=======
     fun `listEligibleDevices uses fallback and returns empty list when the setting is empty`() {
         setSdkInt(34) // Forcing fallback
         mockSettingsProvider(null)
->>>>>>> upstream/master
 
         val devices = ContinuityBridgeImpl().listEligibleDevices()
 
@@ -195,17 +185,7 @@ class ContinuityBridgeImplTest {
     @Test
     fun `listEligibleDevices parses fallback output correctly`() {
         setSdkInt(34) // Forcing fallback
-<<<<<<< HEAD
-        mockkStatic(ActivityManagerApis::class)
-        mockkStatic(IContentProviderUtils::class)
-        val provider = mockk<IContentProvider>(relaxed = true)
-        val output = mockk<Bundle>(relaxed = true)
-        every { ActivityManagerApis.getContentProviderExternal(any(), any(), any(), any()) } returns provider
-        every { output.getString("value") } returns "device1,device2,device3"
-        every { IContentProviderUtils.callCompat(any(), any(), any(), any(), any(), any()) } returns output
-=======
         mockSettingsProvider("device1,device2,,device3")
->>>>>>> upstream/master
 
         val devices = ContinuityBridgeImpl().listEligibleDevices()
 

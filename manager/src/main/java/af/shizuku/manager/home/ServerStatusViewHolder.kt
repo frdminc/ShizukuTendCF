@@ -59,67 +59,6 @@ class ServerStatusViewHolder(
             af.shizuku.manager.utils.ShizukuStateMachine
                 .get()
 
-<<<<<<< HEAD
-        // Live Status Indicator — ok/error use M3 theme tokens so the dot respects dynamic color
-        // and custom accents; starting stays amber (no standard M3 "warning" token, and amber is
-        // universally understood as "in progress" regardless of active theme).
-        statusIndicator.backgroundTintList =
-            android.content.res.ColorStateList.valueOf(
-                when {
-                    ok ->
-                        com.google.android.material.color.MaterialColors.getColor(
-                            context,
-                            androidx.appcompat.R.attr.colorPrimary,
-                            ContextCompat.getColor(context, R.color.status_ok),
-                        )
-                    state == af.shizuku.manager.utils.ShizukuStateMachine.State.STARTING ->
-                        ContextCompat.getColor(context, R.color.status_starting)
-                    else ->
-                        com.google.android.material.color.MaterialColors.getColor(
-                            context,
-                            androidx.appcompat.R.attr.colorError,
-                            ContextCompat.getColor(context, R.color.status_error),
-                        )
-                },
-            )
-
-        // Pulse animation for Starting/Running state
-        if (state == af.shizuku.manager.utils.ShizukuStateMachine.State.STARTING || ok) {
-            val pulse =
-                android.view.animation.AlphaAnimation(0.4f, 1.0f).apply {
-                    duration = if (ok) 1500 else 600
-                    repeatMode = android.view.animation.Animation.REVERSE
-                    repeatCount = android.view.animation.Animation.INFINITE
-                    interpolator = android.view.animation.AccelerateDecelerateInterpolator()
-                }
-            statusIndicator.startAnimation(pulse)
-        } else {
-            statusIndicator.clearAnimation()
-        }
-
-        // Show Sentry offline button only if limit is reached
-        sentryButton.visibility =
-            if (af.shizuku.manager.ShizukuSettings
-                    .isSentryLimitReached()
-            ) {
-                View.VISIBLE
-            } else {
-                View.GONE
-            }
-        sentryButton.setOnClickListener {
-            com.google.android.material.dialog
-                .MaterialAlertDialogBuilder(context)
-                .setTitle(R.string.sentry_offline_notice_title)
-                .setMessage(R.string.sentry_offline_notice_learn_more)
-                .setPositiveButton(android.R.string.ok, null)
-                .setNeutralButton(R.string.update_view_on_github) { _, _ ->
-                    af.shizuku.manager.utils.CustomTabsHelper
-                        .launchUrlOrCopy(context, "https://github.com/frdminc/ShizukuTendCF/issues")
-                }.show()
-        }
-
-=======
->>>>>>> upstream/master
         // S-Pen / DeX Mouse Hover Effect (Expressive Polish)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             itemView.setOnHoverListener { v, event ->

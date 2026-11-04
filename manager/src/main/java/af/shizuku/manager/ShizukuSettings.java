@@ -862,8 +862,6 @@ public class ShizukuSettings {
     };
 
     /**
-<<<<<<< HEAD
-=======
      * One-time split of the safer defaults between new installs and updates. New installs start
      * with TCP mode (adbd listening on a network port) and the Tasker/Locale start-stop plugin off;
      * an update keeps what the earlier defaults gave it (both on), so nobody's setup changes.
@@ -913,7 +911,6 @@ public class ShizukuSettings {
     }
 
     /**
->>>>>>> upstream/master
      * The Watchdog is on by default for new installs only. Builds before this one read an absent
      * setting as off, so an install updated from one, where the user never touched the switch, is
      * given an explicit off and keeps the behaviour it had; a stored value (the user's, a fleet
@@ -1028,13 +1025,8 @@ public class ShizukuSettings {
         } else {
             // Dismiss the live notification before stopping the Watchdog service: while that
             // service still runs, dismiss() re-posts 1001 (without the live text) through
-<<<<<<< HEAD
             // WatchdogService.updateLiveStatus, and the stop right after removes 1001 for good
             // (#34). The other order leaves 1001 up until the service's asynchronous destroy.
-=======
-            // WatchdogService.updateLiveStatus, and the stop right after removes 1001 for good.
-            // The other order leaves 1001 up until the service's asynchronous destroy.
->>>>>>> upstream/master
             try {
                 context.stopService(new Intent(context, af.shizuku.manager.service.ShizukuLiveService.class));
                 af.shizuku.manager.utils.LiveActivityNotificationManager.INSTANCE.dismiss(context);

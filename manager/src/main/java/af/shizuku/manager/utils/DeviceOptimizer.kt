@@ -50,8 +50,6 @@ object DeviceOptimizer {
         return false
     }
 
-<<<<<<< HEAD
-=======
     /** True when a privileged shell (Shizuku or root) is available to run fixes. */
     fun hasPrivilegedShell(): Boolean = Shizuku.pingBinder() || EnvironmentUtils.isRooted()
 
@@ -135,7 +133,6 @@ object DeviceOptimizer {
             context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
         }
 
->>>>>>> upstream/master
     /** How long a read through [runCommandOutput] may take before it is abandoned. */
     private const val COMMAND_OUTPUT_TIMEOUT_SECONDS = 10L
 
@@ -214,8 +211,6 @@ object DeviceOptimizer {
             // 1. Whitelist Shizuku from Doze / Battery Optimization
             runCommand("dumpsys deviceidle whitelist +$pkgName")
             onAppWhitelistedForTesting?.invoke(pkgName)
-<<<<<<< HEAD
-=======
 
             // 1b. AppOps for background execution and standby bucket resilience
             runCommand("cmd appops set $pkgName RUN_ANY_IN_BACKGROUND allow")
@@ -227,7 +222,6 @@ object DeviceOptimizer {
                 runCommand("device_config put activity_manager max_phantom_processes 2147483647")
                 runCommand("device_config set_sync_disabled_for_tests persistent")
             }
->>>>>>> upstream/master
 
             // 2. Whitelist known terminal and companion packages if installed
             val clientPackages =

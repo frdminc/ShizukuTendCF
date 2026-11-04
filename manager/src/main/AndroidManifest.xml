@@ -350,29 +350,17 @@
             android:name=".starter.StarterActivity"
             android:exported="false"
             android:label="@string/starter" />
-<<<<<<< HEAD
-        <!-- Other apps reach the starter only through this alias, which StarterActivity
-             recognises and for which it ignores the caller-supplied ADB port: connecting to a
-             port chosen by another app would let that app relay adbd's auth challenge and have
-             it signed with this app's authorised key. -->
-        <activity-alias
-            android:name=".starter.ExternalStarterActivity"
-            android:exported="true"
-            android:label="@string/starter"
-            android:targetActivity=".starter.StarterActivity">
-=======
         <activity
             android:name=".starter.ExternalStartActivity"
             android:exported="true"
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:theme="@android:style/Theme.NoDisplay">
->>>>>>> upstream/master
             <intent-filter>
                 <action android:name="af.shizuku.manager.action.START_SERVICE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </activity-alias>
+        </activity>
         <activity
             android:name=".settings.BugReportDialogActivity"
             android:theme="@style/Theme.App.DialogHost"
@@ -442,11 +430,7 @@
         <!-- WorkManager's SystemForegroundService needs a declared foreground service type on Android 14+,
              covering every type a worker's ForegroundInfo asks for (else InvalidForegroundServiceTypeException).
              shortService: WatchdogWorker's brief heal. specialUse: AdbStartWorker while the device is locked,
-<<<<<<< HEAD
              which may wait for the unlock and then for the adbd dialog (up to 5 min); shortService is stopped
-=======
-             which waits for the unlock and then for the adbd authorization dialog; shortService is stopped
->>>>>>> upstream/master
              after about 3 minutes. -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
@@ -514,12 +498,8 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-<<<<<<< HEAD
                 android:value="Legacy entry point kept only so a stale start can reach startForeground()
                     before it stops; live status is shown in the Watchdog's notification instead." />
-=======
-                android:value="Legacy entry point that stops as soon as it starts; live status is shown in the Watchdog's notification." />
->>>>>>> upstream/master
         </service>
 
         <receiver
@@ -580,7 +560,6 @@
             </intent-filter>
         </receiver>
 
-<<<<<<< HEAD
         <!--
             Headless fleet control (ShizukuTendCF). Unlike START/STOP above, these are
             permission-gated to INTERACT_ACROSS_USERS_FULL, so only the ADB shell, root or
@@ -631,8 +610,6 @@
             </intent-filter>
         </activity>
 
-=======
->>>>>>> upstream/master
         <!-- An empty affinity gives it a task of its own, so finishing it returns to whatever
              was in front rather than bringing the manager's task forward. -->
         <activity
@@ -646,19 +623,15 @@
         <receiver
             android:name=".receiver.NotifAttemptReceiver"
             android:exported="false" />
-<<<<<<< HEAD
-        <receiver android:name=".receiver.NotifCancelReceiver" />
-        <receiver android:name=".receiver.NotifRestoreReceiver" />
-        <!-- Sent only by the system's network callback (WirelessDebugging.armResume). -->
-        <receiver
-            android:name=".receiver.WifiRestoreReceiver"
-=======
         <receiver
             android:name=".receiver.NotifCancelReceiver"
             android:exported="false" />
         <receiver
             android:name=".receiver.NotifRestoreReceiver"
->>>>>>> upstream/master
+            android:exported="false" />
+        <!-- Sent only by the system's network callback (WirelessDebugging.armResume). -->
+        <receiver
+            android:name=".receiver.WifiRestoreReceiver"
             android:exported="false" />
 
         <!-- WorkManager is initialized manually via Configuration.Provider in ShizukuApplication.

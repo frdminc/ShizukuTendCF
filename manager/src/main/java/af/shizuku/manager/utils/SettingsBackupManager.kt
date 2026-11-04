@@ -17,20 +17,16 @@ object SettingsBackupManager {
     // boundaries. User-facing preference keys (theme, features, API keys) are NOT excluded.
     private val EXCLUDED_KEYS =
         setOf(
-<<<<<<< HEAD
-            // Local ADB identity and daemon lifetime must stay on this installation.
+            // The ADB private key adbd trusts (AdbKey's preference). In a backup, or in the
+            // world-readable reinstall copy, it hands out an authorized ADB shell. After a restore
+            // the app makes a new key and asks for authorization once.
             "adbkey",
+            // The local ADB server pin and its daemon lifetime must stay on this installation.
             af.shizuku.manager.adb.PreferenceAdbServerPinStore.CONNECT_KEY,
             af.shizuku.manager.adb.PreferenceAdbServerPinStore.CONNECT_BOOT_KEY,
             af.shizuku.manager.adb.PreferenceAdbServerPinStore.GENERATION_KEY,
             "adb_server_pin_pending_port",
             "adb_server_pin_pending_boot",
-=======
-            // The ADB private key adbd trusts (AdbKey's preference). In a backup, or in the
-            // world-readable reinstall copy, it hands out an authorized ADB shell. After a restore
-            // the app makes a new key and asks for authorization once.
-            "adbkey",
->>>>>>> upstream/master
             // Remote DB cache
             ShizukuSettings.Keys.KEY_LAST_DB_UPDATE,
             ShizukuSettings.Keys.KEY_REMOTE_DB_JSON,
@@ -47,8 +43,6 @@ object SettingsBackupManager {
             ShizukuSettings.Keys.KEY_LAST_SEEN_CHANGELOG_VERSION,
             ShizukuSettings.Keys.KEY_SYNCED_START_ON_BOOT_DEFAULT,
             ShizukuSettings.Keys.KEY_WATCHDOG_DEFAULT,
-<<<<<<< HEAD
-=======
             // Per-flavor default (on for Drop-In, off for Shizuku+) - syncing it between the two
             // flavors would switch off MT Manager compatibility on the Drop-In build.
             ShizukuSettings.Keys.KEY_LEGACY_RISH_KEEPALIVE,
@@ -60,7 +54,6 @@ object SettingsBackupManager {
             ShizukuSettings.Keys.KEY_SECURITY_DEFAULTS_DECIDED,
             ShizukuSettings.Keys.KEY_CRASH_REPORTING,
             ShizukuSettings.Keys.KEY_CRASH_REPORTING_ASKED,
->>>>>>> upstream/master
             ShizukuSettings.Keys.KEY_WATCHDOG_EXEMPTION_PENDING,
             ShizukuSettings.Keys.KEY_WATCHDOG_VENDOR_BATTERY_REPORTED,
             // Ephemeral runtime state
@@ -416,15 +409,6 @@ object SettingsBackupManager {
             // install's pending new-install default turn the Watchdog on at its first start.
             if (!obj.has(ShizukuSettings.Keys.KEY_WATCHDOG) && !prefs.contains(ShizukuSettings.Keys.KEY_WATCHDOG)) {
                 editor.putBoolean(ShizukuSettings.Keys.KEY_WATCHDOG, false)
-<<<<<<< HEAD
-            }
-            if (synchronous) {
-                editor.commit()
-            } else {
-                editor.apply()
-                true
-=======
->>>>>>> upstream/master
             }
             heldBack = held
             val written =

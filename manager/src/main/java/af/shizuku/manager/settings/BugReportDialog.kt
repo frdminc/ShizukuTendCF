@@ -33,19 +33,11 @@ class BugReportDialog : DialogFragment() {
 
         val wikiLink =
             getString(R.string.bug_report_dialog_link_wiki)
-<<<<<<< HEAD
-                .asLink("https://github.com/thejaustin/ShizukuPlus/wiki#troubleshooting")
-
-        val issuesLink =
-            getString(R.string.bug_report_dialog_link_issues)
-                .asLink("https://github.com/frdminc/ShizukuTendCF/issues")
-=======
                 .asLink("https://github.com/thejaustin/ShizukuPlus/wiki/ShizukuPlus-Knowledgebase")
 
         val issuesLink =
             getString(R.string.bug_report_dialog_link_issues)
-                .asLink("https://github.com/thejaustin/ShizukuPlus/issues")
->>>>>>> upstream/master
+                .asLink("https://github.com/frdminc/ShizukuTendCF/issues")
 
         binding.apply {
             updateText.applyTemplateArgs(updateLink)

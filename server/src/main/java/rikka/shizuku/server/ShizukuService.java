@@ -85,37 +85,8 @@ import rikka.shizuku.server.ClientRecord;
 
 public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuClientManager, ShizukuConfigManager> {
 
-    // Held for the life of the process; the kernel releases the abstract socket name on exit.
-    @SuppressWarnings("unused")
-    private static android.net.LocalServerSocket instanceLock;
-
-    /**
-     * One server at a time. Two starters running close together (the manager's auto-restart
-     * reacting to a restart started from adb, a PC or automation) each kill the old server
-     * before either new one exists, and both new servers then ran, each sending its binder to
-     * every client. The second one now waits briefly (the old server may still be dying after
-     * the starter's kill) and exits if another live server keeps the name.
-     */
-    private static boolean acquireInstanceLock() {
-        long deadline = android.os.SystemClock.uptimeMillis() + 3_000;
-        while (true) {
-            try {
-                instanceLock = new android.net.LocalServerSocket("shizuku_plus_server.instance");
-                return true;
-            } catch (java.io.IOException e) {
-                if (android.os.SystemClock.uptimeMillis() >= deadline) return false;
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException ie) {
-                    return false;
-                }
-            }
-        }
-    }
-
     public static void main(String[] args) {
         DdmHandleAppName.setAppName("shizuku_plus_server", 0);
-<<<<<<< HEAD
         // Before the config is loaded or a binder registered: two starters running close together
         // (the watchdog's and one from outside the app) could each start a server, and both would
         // then rewrite the same config file. The second one leaves here instead.
@@ -131,13 +102,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             System.exit(ServerConstants.MANAGER_APP_NOT_FOUND);
             return;
         }
-=======
-        if (!acquireInstanceLock()) {
-            LOGGER.w("Another shizuku_plus_server is already running; exiting this duplicate (pid %d)", android.os.Process.myPid());
-            System.exit(0);
-            return;
-        }
->>>>>>> upstream/master
         RishConfig.setLibraryPath(System.getProperty("shizuku.library.path"));
 
         Looper.prepareMainLooper();
@@ -274,7 +238,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             };
             for (String pkg : managerIds) {
                 if (pkg == null) continue;
-<<<<<<< HEAD
                 // The other flavor's package only while it is signed like the manager, checked
                 // again now, and only under the uid that check found.
                 if (!pkg.equals(MANAGER_APPLICATION_ID)) {
@@ -286,10 +249,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                         continue;
                     }
                 }
-=======
-                // WRITE_SECURE_SETTINGS and DUMP only go to the manager and a same-signed flavor.
-                if (!isSignedLikeManager(pkg)) continue;
->>>>>>> upstream/master
                 try {
                     Android17Compat.grantRuntimePermission(pkg, WRITE_SECURE_SETTINGS, userId);
                     Android17Compat.grantRuntimePermission(pkg, "android.permission.DUMP", userId);
@@ -394,7 +353,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         }
     }
 
-<<<<<<< HEAD
     private boolean putPhantomProcessSetting(IContentProvider provider, String callingPackage,
                                             String table, String key, String value)
             throws RemoteException {
@@ -416,7 +374,8 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 : error instanceof RemoteException ? "provider IPC failed"
                 : error.getClass().getSimpleName();
         LOGGER.i("phantom killer: %s unavailable (%s)", mechanism, reason);
-=======
+    }
+
     private void ensureAdbTcpPersistence() {
         try {
             int uid = android.os.Process.myUid();
@@ -454,7 +413,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         } catch (Throwable t) {
             LOGGER.w("Failed to ensure ADB TCP persistence", t);
         }
->>>>>>> upstream/master
     }
 
     public ShizukuService() {
@@ -489,17 +447,9 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         // ever picks ONE as MANAGER_APPLICATION_ID, so if the other flavor is also installed, its
         // clients would otherwise fail every checkCallerManagerPermission() check with "is not
         // manager" (SHIZUKUPLUS-7C) even though it's the developer's own signed app, not a third
-<<<<<<< HEAD
         // party. Track its uid too so isManagerAppId() can trust either; the other flavor counts
         // only while it is signed like the manager.
         applySecondaryManager(ManagerFlavours.resolveSecondary(), false);
-=======
-        // party. Track its uid too so isManagerAppId() can trust either.
-        String otherApplicationId = ServerConstants.DROPIN_APPLICATION_ID.equals(ServerConstants.MANAGER_APPLICATION_ID)
-                ? ServerConstants.PLUS_APPLICATION_ID : ServerConstants.DROPIN_APPLICATION_ID;
-        ApplicationInfo secondaryAi = Android17Compat.getApplicationInfo(otherApplicationId, 0, 0);
-        secondaryManagerAppId = secondaryAi != null && isSignedLikeManager(otherApplicationId) ? secondaryAi.uid : -1;
->>>>>>> upstream/master
 
         configManager = getConfigManager();
         clientManager = getClientManager();
@@ -644,41 +594,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         return false;
     }
 
-    /**
-     * Whether {@code packageName} is the running manager or is signed with the same certificate.
-     * Plus and Drop-In are one codebase under two ids and may be installed side by side; trusting
-     * the other id by name alone would make any app sideloaded under it (or stock Shizuku, which
-     * uses the Drop-In id) a manager with WRITE_SECURE_SETTINGS and every API unprompted.
-     */
-    private static boolean isSignedLikeManager(String packageName) {
-        String manager = MANAGER_APPLICATION_ID;
-        if (manager == null || packageName == null) return false;
-        if (manager.equals(packageName)) return true;
-        try {
-            Signature[] expected = currentSigners(manager);
-            Signature[] actual = currentSigners(packageName);
-            if (expected == null || actual == null || expected.length == 0) return false;
-            return new java.util.HashSet<>(java.util.Arrays.asList(expected))
-                    .equals(new java.util.HashSet<>(java.util.Arrays.asList(actual)));
-        } catch (Throwable e) {
-            LOGGER.w(e, "signature check failed for %s", packageName);
-            return false;
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    private static Signature[] currentSigners(String packageName) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            PackageInfo pi = Android17Compat.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES, 0);
-            if (pi == null || pi.signingInfo == null) return null;
-            return pi.signingInfo.hasMultipleSigners()
-                    ? pi.signingInfo.getApkContentsSigners()
-                    : pi.signingInfo.getSigningCertificateHistory();
-        }
-        PackageInfo pi = Android17Compat.getPackageInfo(packageName, PackageManager.GET_SIGNATURES, 0);
-        return pi != null ? pi.signatures : null;
-    }
-
     private boolean isManagerAppId(int appId) {
         int cleanAppId = UserHandleCompat.getAppId(appId);
         int cleanManagerAppId = UserHandleCompat.getAppId(managerAppId);
@@ -701,19 +616,11 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             return false;
         }
         managerAppId = ai.uid;
-<<<<<<< HEAD
         applySecondaryManager(ManagerFlavours.resolveSecondary(), true);
-=======
-        String otherApplicationId = ServerConstants.DROPIN_APPLICATION_ID.equals(ServerConstants.MANAGER_APPLICATION_ID)
-                ? ServerConstants.PLUS_APPLICATION_ID : ServerConstants.DROPIN_APPLICATION_ID;
-        ApplicationInfo secondaryAi = Android17Compat.getApplicationInfo(otherApplicationId, 0, 0);
-        secondaryManagerAppId = secondaryAi != null && isSignedLikeManager(otherApplicationId) ? secondaryAi.uid : -1;
->>>>>>> upstream/master
         LOGGER.i("Re-resolved manager appId=%d secondary=%d", managerAppId, secondaryManagerAppId);
         return true;
     }
 
-<<<<<<< HEAD
     /**
      * Records what resolving the other flavor found and watches its APK, so a change re-resolves
      * it. A result that could not be read keeps the current value when {@code keepOnUnknown}
@@ -759,55 +666,12 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         ManagerFlavours.Secondary found = ManagerFlavours.resolveSecondary();
         applySecondaryManager(found, true);
         return found.uid;
-=======
-    // Packages allowed to define a Shizuku API permission: the two manager flavors, the second of
-    // which shares its package name with the Compat Hub and stock Shizuku.
-    private static final String[] PERMISSION_DEFINERS = {
-            ServerConstants.PLUS_APPLICATION_ID, ServerConstants.DROPIN_APPLICATION_ID
-    };
-    private static final long TRUSTED_PERMISSION_TTL_MS = 10_000;
-    private static final long UNTRUSTED_PERMISSION_TTL_MS = 1_000;
-    private final java.util.concurrent.ConcurrentHashMap<String, long[]> trustedPermissionCache =
-            new java.util.concurrent.ConcurrentHashMap<>();
-
-    /**
-     * Whether [name] is defined, as a dangerous (user-granted) permission, by a package in
-     * {@link #PERMISSION_DEFINERS}. Cached briefly: it runs on every binder call's permission check.
-     */
-    private boolean isTrustedPermission(String name) {
-        long now = android.os.SystemClock.elapsedRealtime();
-        long[] cached = trustedPermissionCache.get(name);
-        // "Not trusted" is kept only briefly: a lookup during a package update can miss the
-        // definer, and a long negative cache would deny every legitimate client meanwhile.
-        if (cached != null && now - cached[1] < (cached[0] == 1 ? TRUSTED_PERMISSION_TTL_MS : UNTRUSTED_PERMISSION_TTL_MS))
-            return cached[0] == 1;
-        boolean trusted = false;
-        for (String pkg : PERMISSION_DEFINERS) {
-            try {
-                PackageInfo pi = Android17Compat.getPackageInfo(pkg, PackageManager.GET_PERMISSIONS, 0);
-                if (pi == null || pi.permissions == null) continue;
-                for (android.content.pm.PermissionInfo p : pi.permissions) {
-                    if (name.equals(p.name) &&
-                        (p.protectionLevel & android.content.pm.PermissionInfo.PROTECTION_MASK_BASE) == android.content.pm.PermissionInfo.PROTECTION_DANGEROUS) {
-                        trusted = true;
-                        break;
-                    }
-                }
-            } catch (Throwable tr) {
-                LOGGER.w(tr, "isTrustedPermission %s in %s", name, pkg);
-            }
-            if (trusted) break;
-        }
-        trustedPermissionCache.put(name, new long[] {trusted ? 1 : 0, now});
-        return trusted;
->>>>>>> upstream/master
     }
 
     private int checkCallingPermission() {
         try {
             int pid = Binder.getCallingPid();
             int uid = Binder.getCallingUid();
-<<<<<<< HEAD
             if (ActivityManagerApis.checkPermission(ServerConstants.PERMISSION, pid, uid) == PackageManager.PERMISSION_GRANTED
                     && PermissionDefiners.isTrusted(ServerConstants.PERMISSION, this::isManagerAppId))
                 return PackageManager.PERMISSION_GRANTED;
@@ -816,17 +680,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 return PackageManager.PERMISSION_GRANTED;
             if (ActivityManagerApis.checkPermission(ServerConstants.PERMISSION_ORIGINAL, pid, uid) == PackageManager.PERMISSION_GRANTED
                     && PermissionDefiners.isTrusted(ServerConstants.PERMISSION_ORIGINAL, this::isManagerAppId))
-=======
-            // An OS grant only counts when one of our packages (or stock Shizuku) defines the
-            // permission as dangerous. A permission no trusted package defines can be declared by
-            // any app as "normal" and is then granted at install, which was a silent
-            // authorization. PERMISSION_LEGACY is defined by nothing, so it is never accepted.
-            if (isTrustedPermission(ServerConstants.PERMISSION) &&
-                ActivityManagerApis.checkPermission(ServerConstants.PERMISSION, pid, uid) == PackageManager.PERMISSION_GRANTED)
-                return PackageManager.PERMISSION_GRANTED;
-            if (isTrustedPermission(ServerConstants.PERMISSION_ORIGINAL) &&
-                ActivityManagerApis.checkPermission(ServerConstants.PERMISSION_ORIGINAL, pid, uid) == PackageManager.PERMISSION_GRANTED)
->>>>>>> upstream/master
                 return PackageManager.PERMISSION_GRANTED;
             return PackageManager.PERMISSION_DENIED;
         } catch (Throwable tr) {
@@ -896,14 +749,8 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             Thread.sleep(500);
         } catch (Throwable ignored) {
         }
-<<<<<<< HEAD
-        // The config manager is created in super(), before this handler is installed, but the
-        // field is assigned only further down the constructor. Until then the only write that can
-        // be waiting is the start-up batch, which the next start works out again.
-=======
         // configManager is null until the constructor assigns it; until then the only write that
         // can be waiting is start-up's batch, which the next start works out again.
->>>>>>> upstream/master
         saveConfigAndExit(1);
     }
 
@@ -912,14 +759,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
     /**
      * Writes a config change still waiting for the worker, then exits. The worker writes a change
-<<<<<<< HEAD
-     * the operator made at once, but one made just before an exit can still be in its queue. The
-     * write runs on a thread of its own and the exit waits for it for at most
-     * {@link #exitFlushTimeoutMillis()}: it can wait on the worker's write in progress and on the
-     * config manager's lock, and an exit, the crash path's above all, must not hang on either. A
-     * change the write did not save (it failed, or a change came after it) and a write that does
-     * not finish in time are each logged here, and the exit goes ahead.
-=======
      * the user made at once, but one made just before an exit can still be in its queue, and
      * System.exit (or the starter killing this process for a restart) would drop it. The write
      * runs on a thread of its own and the exit waits for it for at most
@@ -927,7 +766,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
      * manager's lock, and an exit, the crash path's above all, must not hang on either. A
      * change the write did not save (it failed, or a change came after it) and a write that does
      * not finish in time are each logged, and the exit goes ahead.
->>>>>>> upstream/master
      */
     private void saveConfigAndExit(int status) {
         ShizukuConfigManager config = configManager;
@@ -1014,27 +852,12 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             throw new SecurityException("Request package " + requestPackageName + "does not belong to uid " + callingUid);
         }
 
-<<<<<<< HEAD
         // Either manager flavor's applicationId, from a uid that is the manager: the other flavor
         // counts only when signed like it - see secondaryManagerAppId's declaration.
         isManager = (MANAGER_APPLICATION_ID.equals(requestPackageName)
                 || ServerConstants.DROPIN_APPLICATION_ID.equals(requestPackageName)
                 || ServerConstants.PLUS_APPLICATION_ID.equals(requestPackageName))
                 && checkCallerManagerPermission("attachApplication", callingUid, callingPid);
-=======
-        // Accept either manager flavor's applicationId - see secondaryManagerAppId's declaration.
-        // The other flavor's id only counts when it is the trusted secondary manager (same signing
-        // certificate) - anyone can install an app under that package name.
-        // When PackageManager returned no packages above, the uid→package check was skipped, so the
-        // primary id is only trusted if the uid is the manager's (re-resolved once if it looks stale).
-        int callingAppId = UserHandleCompat.getAppId(callingUid);
-        isManager = (MANAGER_APPLICATION_ID.equals(requestPackageName)
-                    && (!packages.isEmpty() || isManagerAppId(callingAppId)
-                        || (refreshManagerAppIdsThrottled() && isManagerAppId(callingAppId))))
-                || ((ServerConstants.DROPIN_APPLICATION_ID.equals(requestPackageName)
-                        || ServerConstants.PLUS_APPLICATION_ID.equals(requestPackageName))
-                    && isManagerAppId(UserHandleCompat.getAppId(callingUid)));
->>>>>>> upstream/master
 
         if (isManager) {
             grantManagerEssentialPermissions();
@@ -1071,15 +894,10 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         reply.putInt(BIND_APPLICATION_SERVER_PATCH_VERSION, ShizukuApiConstants.SERVER_PATCH_VERSION);
         if (!isManager) {
             ClientRecord record = Objects.requireNonNull(clientRecord);
-<<<<<<< HEAD
             // Root mode decides exactly as ADB mode does: allowed only by an existing grant (config
             // entry, trusted signer, or the runtime permission). ShizukuPlus e3b2f7f2 allowed every
             // client here when the server ran as uid 0, which gave any app privileged access with
             // no dialog; a client without a grant must call requestPermission() and get the dialog.
-=======
-            // Root mode asks like ADB mode does. It used to allow every attached client, and any
-            // app can obtain the binder, so every app on a rooted device got root silently.
->>>>>>> upstream/master
             if (!record.allowed) {
                 if (checkCallingPermission() == PackageManager.PERMISSION_GRANTED ||
                     (getFlagsForUidInternal(callingUid, ConfigManager.MASK_PERMISSION, true) & ConfigManager.FLAG_ALLOWED) == ConfigManager.FLAG_ALLOWED) {
@@ -2981,19 +2799,12 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 }
 
                 try {
-<<<<<<< HEAD
                     if ((Android17Compat.checkPermission(PERMISSION, uid) == PackageManager.PERMISSION_GRANTED
                             && PermissionDefiners.isTrusted(PERMISSION, this::isManagerAppId)) ||
                         (Android17Compat.checkPermission(ServerConstants.PERMISSION_LEGACY, uid) == PackageManager.PERMISSION_GRANTED
                             && PermissionDefiners.isTrusted(ServerConstants.PERMISSION_LEGACY, this::isManagerAppId)) ||
                         (Android17Compat.checkPermission(ServerConstants.PERMISSION_ORIGINAL, uid) == PackageManager.PERMISSION_GRANTED
                             && PermissionDefiners.isTrusted(ServerConstants.PERMISSION_ORIGINAL, this::isManagerAppId))) {
-=======
-                    // Same trust rule as checkCallingPermission().
-                    if ((isTrustedPermission(PERMISSION) && Android17Compat.checkPermission(PERMISSION, uid) == PackageManager.PERMISSION_GRANTED) ||
-                        (isTrustedPermission(ServerConstants.PERMISSION_ORIGINAL) &&
-                            Android17Compat.checkPermission(ServerConstants.PERMISSION_ORIGINAL, uid) == PackageManager.PERMISSION_GRANTED)) {
->>>>>>> upstream/master
                         return ConfigManager.FLAG_ALLOWED;
                     }
                 } catch (Throwable e) {
@@ -3270,23 +3081,15 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             reply.writeNoException();
             reply.writeInt(version);
             return true;
-<<<<<<< HEAD
         } else if (code == IBinder.FIRST_CALL_TRANSACTION + 16 /* 17: two different calls share this code */) {
-=======
-        } else if (code == IBinder.FIRST_CALL_TRANSACTION + 16 /* two different calls share this code */) {
->>>>>>> upstream/master
             data.enforceInterface(ShizukuApiConstants.BINDER_DESCRIPTOR);
             // Told apart by the parcel, never by the caller. The generated
             // shouldShowRequestPermissionRationale() of every client library sends 17 with no
             // arguments. The ShizukuPlus client library's attachApplication sends a bare 17 with
             // (binder, int, Bundle) (api Shizuku.java attachApplicationV13): that one falls through
-<<<<<<< HEAD
             // to Service.onTransact, which rewinds the parcel and attaches. Answering it as the
             // rationale left every ShizukuPlus-library client, this manager and its rish shell
             // included, unattached.
-=======
-            // to Service.onTransact, which rewinds the parcel and attaches.
->>>>>>> upstream/master
             if (data.dataAvail() == 0) {
                 boolean rationale = shouldShowRequestPermissionRationale();
                 reply.writeNoException();
@@ -3303,7 +3106,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             reply.writeNoException();
             return true;
         }
-<<<<<<< HEAD
         if (code == TrustedSigners.CONFIRMATION_TRANSACTION && (flags & IBinder.FLAG_ONEWAY) == 0) {
             // The manager sends Deny without FLAG_ONEWAY to learn what took effect; the AIDL
             // handler for this oneway method would run it but write no reply. Same parcel layout.
@@ -3355,19 +3157,6 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         for (ClientRecord record : unallowed) {
             record.allowed = true;
         }
-=======
-        try {
-            return super.onTransact(code, data, reply, flags);
-        } catch (SecurityException e) {
-            // Permission denials are already logged by enforceCallingPermission().
-            throw e;
-        } catch (RuntimeException e) {
-            // Binder writes the exception into the reply for the caller and logs nothing on this
-            // side, so the client sees e.g. IllegalStateException with no server-side trace.
-            LOGGER.w(e, "onTransact code=%d from uid=%d pid=%d failed", code, Binder.getCallingUid(), Binder.getCallingPid());
-            throw e;
-        }
->>>>>>> upstream/master
     }
 
     void sendBinderToClient() {
@@ -3445,8 +3234,8 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         String other = ServerConstants.DROPIN_APPLICATION_ID.equals(MANAGER_APPLICATION_ID)
                 ? ServerConstants.PLUS_APPLICATION_ID
                 : ServerConstants.DROPIN_APPLICATION_ID;
-        ApplicationInfo ai = Android17Compat.getApplicationInfo(other, 0, 0);
-        return (ai != null && isSignedLikeManager(other)) ? other : null;
+        // Only while it counts as the manager (ManagerFlavours: signed like it or by a trusted key).
+        return ManagerFlavours.resolveSecondary().uid >= 0 ? other : null;
     }
 
     private static void sendBinderToManager(Binder binder) {

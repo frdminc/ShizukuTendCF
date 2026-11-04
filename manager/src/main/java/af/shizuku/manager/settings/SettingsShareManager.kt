@@ -31,11 +31,7 @@ object SettingsShareManager {
         if (context.packageName == DROPIN_PACKAGE) OFFICIAL_PLUS_PACKAGE else DROPIN_PACKAGE
 
     fun getPeerLabel(context: Context): String =
-<<<<<<< HEAD
-        if (context.packageName == DROPIN_PACKAGE) "ShizukuTendCF" else "Shizuku"
-=======
-        if (context.packageName == DROPIN_PACKAGE) "Shizuku+ (Standalone App)" else "Shizuku+ (Drop-In)"
->>>>>>> upstream/master
+        if (context.packageName == DROPIN_PACKAGE) "ShizukuTendCF (Standalone App)" else "ShizukuTendCF (Drop-In)"
 
     fun getPeerAuthority(context: Context): String =
         "${getPeerPackage(context)}.settings.share"

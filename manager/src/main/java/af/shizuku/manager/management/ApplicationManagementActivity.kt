@@ -516,7 +516,12 @@ open class ApplicationManagementActivity :
             var failed = 0
             for ((pkg, uid) in targets) {
                 runCatching {
-                    if (grant) AuthorizationManager.grant(pkg, uid) else AuthorizationManager.revoke(pkg, uid)
+                    if (grant) {
+                        AuthorizationManager.grant(pkg, uid)
+                    } else if (!TrustedSignerApps.isAlwaysAllowed(uid)) {
+                        // A trusted-signer app is always allowed; the server ignores the revoke anyway.
+                        AuthorizationManager.revoke(pkg, uid)
+                    }
                 }.onFailure { failed++ }
             }
             withContext(Dispatchers.Main) {
@@ -535,37 +540,8 @@ open class ApplicationManagementActivity :
                 10 -> { // Select all (through the adapter so the toolbar count updates)
                     viewModel.packages.value
                         ?.data
-<<<<<<< HEAD
-                        ?.forEach { adapter.selectedPackages.add(it.packageName) }
-                    adapter.notifyItemRangeChanged(0, adapter.itemCount)
-                }
-                11 -> { // Grant all
-                    adapter.selectedPackages.toList().forEach { pkg ->
-                        val pi =
-                            viewModel.packages.value
-                                ?.data
-                                ?.find { it.packageName == pkg }
-                        pi?.applicationInfo?.uid?.let { uid -> AuthorizationManager.grant(pkg, uid) }
-                    }
-                    adapter.isSelectionMode = false
-                    viewModel.load()
-                }
-                12 -> { // Revoke all
-                    adapter.selectedPackages.toList().forEach { pkg ->
-                        val pi =
-                            viewModel.packages.value
-                                ?.data
-                                ?.find { it.packageName == pkg }
-                        pi?.applicationInfo?.uid?.let { uid ->
-                            if (!TrustedSignerApps.isAlwaysAllowed(uid)) AuthorizationManager.revoke(pkg, uid)
-                        }
-                    }
-                    adapter.isSelectionMode = false
-                    viewModel.load()
-=======
                         ?.map { it.packageName }
                         ?.let { adapter.selectAll(it) }
->>>>>>> upstream/master
                 }
                 11 -> bulkSetAuthorized(grant = true)
                 12 -> bulkSetAuthorized(grant = false)

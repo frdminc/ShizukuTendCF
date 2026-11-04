@@ -807,12 +807,9 @@ class ShizukuApplication :
         // Watchdog setting: tells a new install (Watchdog on at its first server start) from an
         // update (keeps the off an absent setting meant). See decideWatchdogDefaultIfNeeded().
         ShizukuSettings.decideWatchdogDefaultIfNeeded(this)
-<<<<<<< HEAD
-=======
         ShizukuSettings.decideLegacyRishKeepaliveDefaultIfNeeded(this)
         ShizukuSettings.decideSecurityDefaultsIfNeeded(this)
         ShizukuSettings.clearSeededCustomAppNameOnce()
->>>>>>> upstream/master
 
         // 0. Initialize Timber
         if (BuildConfig.DEBUG) {
@@ -915,12 +912,9 @@ class ShizukuApplication :
         try {
             initializeManagers()
             initPeerSettingsSync()
-<<<<<<< HEAD
-=======
             if (ShizukuSettings.isAdbProxyEnabled()) {
                 startService(Intent(this, af.shizuku.manager.service.AdbProxyService::class.java))
             }
->>>>>>> upstream/master
         } catch (e: Throwable) {
             Timber.e(e, "Failed to initialize managers")
             Sentry.captureException(e)

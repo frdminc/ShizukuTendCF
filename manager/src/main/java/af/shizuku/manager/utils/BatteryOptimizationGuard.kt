@@ -1,10 +1,6 @@
 package af.shizuku.manager.utils
 
 import af.shizuku.manager.R
-<<<<<<< HEAD
-=======
-import af.shizuku.manager.database.ActivityLogManager
->>>>>>> upstream/master
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -14,13 +10,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
 /**
-<<<<<<< HEAD
  * #36: when a new install's Watchdog default turns the Watchdog on (not when the user turns it on
  * by hand — that path already asks), and the app is still not exempt from Android's battery
-=======
- * When a new install's Watchdog default turns the Watchdog on (not when the user turns it on by
- * hand — that path already asks), and the app is still not exempt from Android's battery
->>>>>>> upstream/master
  * optimization after Device Hardening's pass, record the gap in the activity log and post one
  * notification whose tap opens the exemption request.
  */
@@ -51,30 +42,20 @@ object BatteryOptimizationGuard {
 
         if (!canPostNotification(context)) {
             // Retried at every start while blocked (a Watchdog restart included): log the gap once.
-<<<<<<< HEAD
             if (gapLoggedWhileBlocked.compareAndSet(false, true)) ManagerActivityLog.log(context, GAP_LOG_ACTION)
             return false
         }
         ManagerActivityLog.log(context, GAP_LOG_ACTION)
-=======
-            if (gapLoggedWhileBlocked.compareAndSet(false, true)) ActivityLogManager.log("Shizuku", context.packageName, GAP_LOG_ACTION)
-            return false
-        }
-        ActivityLogManager.log("Shizuku", context.packageName, GAP_LOG_ACTION)
->>>>>>> upstream/master
         postNotification(context)
         return true
     }
 
     private fun canPostNotification(context: Context): Boolean {
-<<<<<<< HEAD
-=======
         if (!af.shizuku.manager.ShizukuSettings
                 .isNotificationSystemEnabled()
         ) {
             return false
         }
->>>>>>> upstream/master
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
