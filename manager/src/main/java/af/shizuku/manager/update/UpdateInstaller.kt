@@ -2,23 +2,15 @@ package af.shizuku.manager.update
 
 import android.content.Context
 import android.os.Environment
+import rikka.shizuku.Shizuku
+import timber.log.Timber
 import java.io.File
 
 object UpdateInstaller {
+    private const val TAG = "UpdateInstaller"
     const val AUTO_BACKUP_FILENAME = "shizuku_plus_auto_backup.json"
 
-<<<<<<< HEAD
-    /**
-     * Settings backup written by the former "force update" path, which uninstalled the app and
-     * reinstalled whatever APK it was given. That path was removed because it bypassed Android's
-     * same-signer rule for updates; MainActivity still restores a backup an older build left behind.
-     */
-    fun getBackupFile(context: Context): File? {
-        val extDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir ?: return null
-        return File(extDir, AUTO_BACKUP_FILENAME)
-    }
-=======
-    /** Reinstall copy kept by [SettingsBackupManager.saveAutoBackup] (shell-owned, survives uninstall). */
+    /** Reinstall copy kept by [af.shizuku.manager.utils.SettingsBackupManager.saveAutoBackup] (shell-owned, survives uninstall). */
     const val REINSTALL_BACKUP_DIR = "/data/local/tmp/shizukuplus"
 
     /** Per flavor: Plus and Drop-In each keep their own copy instead of overwriting each other. */
@@ -125,134 +117,18 @@ object UpdateInstaller {
     }
 
     /**
-     * Performs a seamless background update when standard in-place installation is
-     * blocked (e.g. signature mismatch between Debug and Release builds, or corrupted install).
-     *
-     * Automatically backs up all preferences and app authorization state to a persistent location,
-     * detaches a shell process via Shizuku (UID 2000) or Root, removes the conflicting package,
-     * installs the new APK, auto-grants permissions, and relaunches the app so the backup is
-     * immediately imported on startup.
+     * The former "force update" path (uninstall this package, then install whatever APK it was
+     * given) is removed in this fork: it bypassed Android's same-signer rule for updates, which is
+     * what the updater's authenticity rests on (see [UpdateVerifier]), and HomeActivity's exported
+     * migrate action could hand it any file. Kept as a refusing stub so callers still compile;
+     * a signature mismatch is resolved by the user reinstalling by hand.
      */
+    @Suppress("UNUSED_PARAMETER")
     fun forceUpdateWithShizuku(
         context: Context,
         apkFile: File,
     ): Boolean {
-        val hasShizuku = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
-        val isRoot = !hasShizuku && runCatching { Shell.getShell().isRoot }.getOrDefault(false)
-        if (!hasShizuku && !isRoot) {
-            Timber.tag(TAG).w("No root or Shizuku available for force update.")
-            return false
-        }
-        if (!isNotOlderThanInstalled(context, apkFile)) {
-            Timber.tag(TAG).w("Force update refused: the APK is older than the installed version")
-            return false
-        }
-
-        return try {
-            // The handoff file is world-readable (the reinstalled app runs as a new user), so it
-            // gets the same secret-free copy as the reinstall backup.
-            val backupJson = SettingsBackupManager.withoutSecrets(SettingsBackupManager.export(context))
-            val files =
-                mapOf(
-                    "$TMP/update.apk" to apkFile.readBytes(),
-                    "$TMP/shizukuplus_settings.json" to backupJson.toByteArray(Charsets.UTF_8),
-                    "$TMP/force_update.sh" to forceUpdateScript(context.packageName).toByteArray(Charsets.UTF_8),
-                )
-            val staged = if (isRoot) stageWithRoot(context, files) else stageWithShizuku(files)
-            if (!staged) {
-                Timber.tag(TAG).e("Force update: staging files failed")
-                return false
-            }
-            val launch = "chmod 755 $TMP/force_update.sh && nohup /system/bin/sh $TMP/force_update.sh >/dev/null 2>&1 &"
-            val started =
-                if (isRoot) {
-                    Shell.cmd(launch).exec().isSuccess
-                } else {
-                    @Suppress("DEPRECATION")
-                    Shizuku.newProcess(arrayOf("sh", "-c", launch), null, null)?.waitFor() == 0
-                }
-            Timber.tag(TAG).i("Detached force update started via %s: %s", if (isRoot) "root" else "Shizuku", started)
-            started
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Failed to force update with Shizuku/Root")
-            false
-        }
+        Timber.tag(TAG).w("Force update (uninstall and reinstall) is disabled; reinstall manually.")
+        return false
     }
-
-    private const val TMP = "/data/local/tmp"
-
-    /** Same version is allowed: switching between differently signed builds of one release. */
-    private fun isNotOlderThanInstalled(
-        context: Context,
-        apk: File,
-    ): Boolean {
-        val pm = context.packageManager
-        val candidate = pm.getPackageArchiveInfo(apk.absolutePath, 0) ?: return false
-        if (candidate.packageName != context.packageName) return false
-        val installed = pm.getPackageInfo(context.packageName, 0)
-        return androidx.core.content.pm.PackageInfoCompat
-            .getLongVersionCode(candidate) >=
-            androidx.core.content.pm.PackageInfoCompat
-                .getLongVersionCode(installed)
-    }
-
-    /** Shell (uid 2000) can't read the app's files, so each one is piped in over stdin. */
-    private fun stageWithShizuku(files: Map<String, ByteArray>): Boolean =
-        files.all { (path, bytes) ->
-            @Suppress("DEPRECATION")
-            val proc = Shizuku.newProcess(arrayOf("sh", "-c", "cat > $path && chmod 644 $path"), null, null) ?: return false
-            proc.outputStream.use { it.write(bytes) }
-            proc.waitFor() == 0
-        }
-
-    /** The app can't write to /data/local/tmp itself; root copies the files in from its cache. */
-    private fun stageWithRoot(
-        context: Context,
-        files: Map<String, ByteArray>,
-    ): Boolean {
-        val dir = File(context.cacheDir, "force_update").apply { mkdirs() }
-        return try {
-            val commands =
-                files.map { (path, bytes) ->
-                    val local = File(dir, File(path).name).apply { writeBytes(bytes) }
-                    "cp '${local.absolutePath}' $path && chmod 644 $path"
-                }
-            Shell.cmd(*commands.toTypedArray()).exec().isSuccess
-        } finally {
-            dir.deleteRecursively()
-        }
-    }
-
-    /**
-     * Runs detached as shell or root. Tries an in-place install first; only when that fails
-     * (signature mismatch) does it uninstall, and if the new APK then won't install either it
-     * puts the previous version back rather than leaving no app at all.
-     */
-    private fun forceUpdateScript(packageName: String): String =
-        """
-        #!/system/bin/sh
-        sleep 1
-        OLD_APK=${'$'}(pm path $packageName | head -n 1 | cut -d: -f2)
-        [ -n "${'$'}OLD_APK" ] && cp "${'$'}OLD_APK" $TMP/previous.apk 2>/dev/null
-        INSTALLED=1
-        if ! pm install -r $TMP/update.apk; then
-            pm uninstall $packageName
-            if ! pm install $TMP/update.apk; then
-                INSTALLED=0
-                [ -f $TMP/previous.apk ] && pm install $TMP/previous.apk
-            fi
-        fi
-        if [ ${'$'}INSTALLED -eq 1 ]; then
-            pm grant $packageName android.permission.POST_NOTIFICATIONS 2>/dev/null
-            pm grant $packageName android.permission.WRITE_SECURE_SETTINGS 2>/dev/null
-            appops set $packageName SYSTEM_ALERT_WINDOW allow 2>/dev/null
-            appops set $packageName GET_USAGE_STATS allow 2>/dev/null
-            appops set $packageName MANAGE_EXTERNAL_STORAGE allow 2>/dev/null
-            cp $TMP/shizukuplus_settings.json "$TMP/$AUTO_BACKUP_FILENAME" 2>/dev/null
-            chmod 644 "$TMP/$AUTO_BACKUP_FILENAME" 2>/dev/null
-            am start -n $packageName/af.shizuku.manager.MainActivity
-        fi
-        rm -f $TMP/shizukuplus_settings.json $TMP/update.apk $TMP/previous.apk $TMP/force_update.sh
-        """.trimIndent()
->>>>>>> upstream/master
 }

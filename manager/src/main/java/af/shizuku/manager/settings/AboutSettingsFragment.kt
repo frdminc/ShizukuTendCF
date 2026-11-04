@@ -3,14 +3,8 @@ package af.shizuku.manager.settings
 import af.shizuku.manager.BuildConfig
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
-<<<<<<< HEAD
-import af.shizuku.manager.backup.BackupKeyUnavailableException
-import af.shizuku.manager.backup.BackupRestoreManager
-import af.shizuku.manager.backup.CryptoUtils
-import af.shizuku.manager.fleet.FleetApplyReport
-=======
 import af.shizuku.manager.database.AppContextManager
->>>>>>> upstream/master
+import af.shizuku.manager.fleet.FleetApplyReport
 import af.shizuku.manager.home.ChangelogDialogFragment
 import af.shizuku.manager.update.UpdateChecker
 import af.shizuku.manager.update.UpdateDialogHelper
@@ -20,11 +14,7 @@ import af.shizuku.manager.utils.HapticUtils
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-<<<<<<< HEAD
-import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.text.format.DateUtils
-=======
->>>>>>> upstream/master
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
@@ -38,12 +28,8 @@ class AboutSettingsFragment : BaseSettingsFragment() {
     companion object {
         private const val TAG = "AboutSettingsFragment"
         private const val KEY_CHECK_FOR_UPDATE = "check_for_update"
-<<<<<<< HEAD
-        private const val RELEASES_URL = "https://github.com/frdminc/ShizukuTendCF/releases"
-=======
         private const val KEY_UPDATE_CHANNEL = "update_channel"
-        private const val RELEASES_URL = "https://github.com/thejaustin/ShizukuPlus/releases"
->>>>>>> upstream/master
+        private const val RELEASES_URL = "https://github.com/frdminc/ShizukuTendCF/releases"
     }
 
     private val updateManager: UpdateManager by inject()
@@ -51,146 +37,15 @@ class AboutSettingsFragment : BaseSettingsFragment() {
     private var isCheckingForUpdate = false
     private var checkingDatabase = false
 
-<<<<<<< HEAD
-    private fun backupErrorMessage(
-        prefix: String,
-        e: Exception,
-    ): String =
-        when (e) {
-            is KeyPermanentlyInvalidatedException ->
-                "$prefix: your device's screen lock or biometrics changed since this backup's " +
-                    "encryption key was created, which permanently invalidates it by design. " +
-                    if (prefix == "Restore failed") {
-                        "This backup can no longer be decrypted."
-                    } else {
-                        "Please try again to generate a new key."
-                    }
-            is BackupKeyUnavailableException -> "$prefix: ${e.message}"
-            is AEADBadTagException ->
-                "$prefix: this backup could not be decrypted. It was most likely created by a different " +
-                    "installation of ShizukuTendCF — backups are encrypted per-install and can't be restored " +
-                    "after reinstalling or clearing the app's data."
-            else -> "$prefix: ${e.message ?: e.javaClass.simpleName}"
-        }
-
-    private val createPlainBackupLauncher =
-        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-            if (uri == null) return@registerForActivityResult
-            val ctx = requireContext()
-            try {
-                val payload = BackupRestoreManager.createPlainBackupPayload(ctx)
-                ctx.contentResolver.openOutputStream(uri)?.use { os ->
-                    OutputStreamWriter(os, Charsets.UTF_8).use { it.write(payload) }
-                }
-                Toast.makeText(ctx, R.string.backup_plain_exported, Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                Toast.makeText(ctx, ctx.getString(R.string.backup_failed_generic, e.message), Toast.LENGTH_LONG).show()
-            }
-        }
-
-    private val createBackupLauncher =
-        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-            if (uri == null) return@registerForActivityResult
-            val ctx = requireContext()
-            val lock = BiometricLock(requireActivity())
-            val useAuth = lock.canAuthenticate(ctx)
-
-            if (!useAuth) {
-                try {
-                    val cipher = CryptoUtils.getCipherForEncryption(userAuthRequired = false)
-                    val payload = BackupRestoreManager.createBackupPayload(ctx, cipher)
-                    ctx.contentResolver.openOutputStream(uri)?.use { os ->
-                        OutputStreamWriter(os, Charsets.UTF_8).use { it.write(payload) }
-                    }
-                    Toast.makeText(ctx, R.string.backup_exported_success, Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Toast.makeText(ctx, backupErrorMessage("Backup failed", e), Toast.LENGTH_LONG).show()
-                }
-                return@registerForActivityResult
-            }
-
-            try {
-                val cipher = CryptoUtils.getCipherForEncryption(userAuthRequired = true)
-                lock.authenticate(onSuccess = { crypto ->
-                    try {
-                        val payload = BackupRestoreManager.createBackupPayload(ctx, crypto?.cipher ?: cipher)
-                        ctx.contentResolver.openOutputStream(uri)?.use { os ->
-                            OutputStreamWriter(os, Charsets.UTF_8).use { it.write(payload) }
-                        }
-                        Toast.makeText(ctx, R.string.backup_exported_success, Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        Toast.makeText(ctx, backupErrorMessage("Backup failed", e), Toast.LENGTH_LONG).show()
-                    }
-                }, onError = { errCode ->
-                    Toast.makeText(ctx, ctx.getString(R.string.backup_auth_failed, errCode), Toast.LENGTH_SHORT).show()
-                }, crypto = BiometricPrompt.CryptoObject(cipher))
-            } catch (e: Exception) {
-                Toast.makeText(ctx, ctx.getString(R.string.backup_failed_generic, e.message), Toast.LENGTH_LONG).show()
-            }
-        }
-
-    private val restoreBackupLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            if (uri == null) return@registerForActivityResult
-            val ctx = requireContext()
-            val lock = BiometricLock(requireActivity())
-            val useAuth = lock.canAuthenticate(ctx)
-
-            try {
-                val payload =
-                    ctx.contentResolver.openInputStream(uri)?.use { `is` ->
-                        InputStreamReader(`is`, Charsets.UTF_8).readText()
-                    } ?: return@registerForActivityResult
-
-                if (!BackupRestoreManager.isEncrypted(payload)) {
-                    try {
-                        BackupRestoreManager.restoreFromPlainPayload(ctx, payload)
-                        onRestoreSuccess()
-                    } catch (e: Exception) {
-                        Toast.makeText(ctx, ctx.getString(R.string.restore_failed_generic, e.message), Toast.LENGTH_LONG).show()
-                    }
-                    return@registerForActivityResult
-                }
-
-                val iv = BackupRestoreManager.extractIv(payload)
-
-                if (!useAuth) {
-                    try {
-                        val cipher = CryptoUtils.getCipherForDecryption(iv, userAuthRequired = false)
-                        BackupRestoreManager.restoreFromPayload(ctx, payload, cipher)
-                        onRestoreSuccess()
-                    } catch (e: Exception) {
-                        Toast.makeText(ctx, backupErrorMessage("Restore failed", e), Toast.LENGTH_LONG).show()
-                    }
-                    return@registerForActivityResult
-                }
-
-                val cipher = CryptoUtils.getCipherForDecryption(iv, userAuthRequired = true)
-                lock.authenticate(onSuccess = { crypto ->
-                    try {
-                        BackupRestoreManager.restoreFromPayload(ctx, payload, crypto?.cipher ?: cipher)
-                        onRestoreSuccess()
-                    } catch (e: Exception) {
-                        Toast.makeText(ctx, backupErrorMessage("Restore failed", e), Toast.LENGTH_LONG).show()
-                    }
-                }, onError = { errCode ->
-                    Toast.makeText(ctx, ctx.getString(R.string.backup_auth_failed, errCode), Toast.LENGTH_SHORT).show()
-                }, crypto = BiometricPrompt.CryptoObject(cipher))
-            } catch (e: Exception) {
-                Toast.makeText(ctx, ctx.getString(R.string.restore_failed_generic, e.message), Toast.LENGTH_LONG).show()
-=======
     private fun updateDatabaseSummary(pref: Preference) {
         val last = ShizukuSettings.getLastDbUpdate()
         val count = AppContextManager.appCount()
         pref.summary =
             if (last > 0) {
-                val checked =
-                    android.text.format.DateUtils
-                        .getRelativeTimeSpanString(last, System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS)
+                val checked = DateUtils.getRelativeTimeSpanString(last, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
                 getString(R.string.settings_update_app_database_status, count, checked)
             } else {
                 getString(R.string.settings_update_app_database_status_never, count)
->>>>>>> upstream/master
             }
     }
 
@@ -233,24 +88,14 @@ class AboutSettingsFragment : BaseSettingsFragment() {
             }
         }
 
-<<<<<<< HEAD
-        setupCheckForUpdatePreference()
-        setupAutoUpdatePreference()
-        setupAutoInstallPreference()
-        setupChannelPreference()
-        updateLastCheckSummary()
-        updateFleetProfileSummary()
-=======
         setupUpdateCardPreference()
->>>>>>> upstream/master
+        updateFleetProfileSummary()
 
         findPreference<Preference>("changelog")?.setOnPreferenceClickListener {
             val activity = activity as? androidx.fragment.app.FragmentActivity ?: return@setOnPreferenceClickListener true
             activity.lifecycleScope.launch {
-<<<<<<< HEAD
+                // versionName is "<app name> <tag>" (e.g. "ShizukuTendCF 13.6.0.r1234"): the tag is the last word.
                 val currentTag = BuildConfig.VERSION_NAME.substringAfterLast(' ').trim()
-=======
-                val currentTag = BuildConfig.VERSION_NAME.removePrefix("Shizuku+ ").trim()
                 val currentCode =
                     try {
                         activity.packageManager.getPackageInfo(activity.packageName, 0).versionCode
@@ -261,7 +106,6 @@ class AboutSettingsFragment : BaseSettingsFragment() {
                     af.shizuku.manager.ShizukuSettings
                         .getLastSeenChangelogVersion()
                 val since = if (lastSeenCode > 0 && lastSeenCode < currentCode) lastSeenCode else 0
->>>>>>> upstream/master
                 val releases =
                     try {
                         UpdateChecker.fetchReleasesSince(sinceVersionCode = since, maxReleases = 25)
@@ -278,27 +122,17 @@ class AboutSettingsFragment : BaseSettingsFragment() {
             true
         }
 
-<<<<<<< HEAD
-        findPreference<Preference>("source_code")?.setOnPreferenceClickListener {
-            CustomTabsHelper.launchUrlOrCopy(context, "https://github.com/frdminc/ShizukuTendCF")
-            true
-        }
-
-        findPreference<Preference>("open_source_licenses")?.setOnPreferenceClickListener {
-            CustomTabsHelper.launchUrlOrCopy(requireContext(), "https://github.com/frdminc/ShizukuTendCF/blob/master/OPEN_SOURCE_LICENSES.md")
-=======
         findPreference<Preference>("feature_tour")?.setOnPreferenceClickListener {
             val intent =
                 Intent(requireContext(), af.shizuku.manager.onboarding.OnboardingActivity::class.java).apply {
                     putExtra(af.shizuku.manager.onboarding.OnboardingActivity.EXTRA_NEW_FEATURES_ONLY, true)
                 }
             startActivity(intent)
->>>>>>> upstream/master
             true
         }
 
         findPreference<Preference>("source_code")?.setOnPreferenceClickListener {
-            CustomTabsHelper.launchUrlOrCopy(context, "https://github.com/thejaustin/ShizukuPlus")
+            CustomTabsHelper.launchUrlOrCopy(context, "https://github.com/frdminc/ShizukuTendCF")
             true
         }
 
@@ -315,7 +149,7 @@ class AboutSettingsFragment : BaseSettingsFragment() {
         findPreference<Preference>("open_source_licenses")?.setOnPreferenceClickListener {
             CustomTabsHelper.launchUrlOrCopy(
                 requireContext(),
-                "https://github.com/thejaustin/ShizukuPlus/blob/main/OPEN_SOURCE_LICENSES.md",
+                "https://github.com/frdminc/ShizukuTendCF/blob/master/OPEN_SOURCE_LICENSES.md",
             )
             true
         }
@@ -324,9 +158,7 @@ class AboutSettingsFragment : BaseSettingsFragment() {
     override fun onResume() {
         super.onResume()
         updateLastCheckSummary()
-<<<<<<< HEAD
         updateFleetProfileSummary()
-        applyBackupCategoryVisibility()
     }
 
     private fun updateFleetProfileSummary() {
@@ -348,25 +180,13 @@ class AboutSettingsFragment : BaseSettingsFragment() {
             }
     }
 
-    private fun applyBackupCategoryVisibility() {
-        val hide = ShizukuSettings.isHideBackupSettingsEnabled()
-        findPreference<af.shizuku.manager.settings.CollapsiblePreferenceCategory>("category_backup")
-            ?.isVisible = !hide
-    }
-
-    private fun onRestoreSuccess() {
-        if (!isAdded) return
-        Toast.makeText(requireContext(), R.string.backup_restored_success, Toast.LENGTH_SHORT).show()
-        Snackbar
-            .make(
-                requireView(),
-                R.string.backup_restored_restart_hint,
-                Snackbar.LENGTH_LONG,
-            ).setAction(R.string.backup_restored_restart_now) {
-                requireActivity().recreate()
-            }.show()
-=======
->>>>>>> upstream/master
+    private fun setChildAvailable(
+        pref: Preference,
+        available: Boolean,
+    ) {
+        val key = pref.key ?: return
+        (pref.parent as? CollapsiblePreferenceCategory)?.setChildAvailable(key, available)
+            ?: run { pref.isVisible = available }
     }
 
     private fun setupUpdateCardPreference() {

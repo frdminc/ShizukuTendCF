@@ -29,24 +29,23 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Manages downloading and installing updates with robust signature checking,
- * internal cache staging to avoid Android 14+ FUSE SELinux denials, and seamless
- * Shizuku migration fallback.
+ * Manages downloading and installing updates: SHA-256 verification against the release's
+ * SHA256SUMS (see [UpdateVerifier]), internal cache staging to avoid Android 14+ FUSE SELinux
+ * denials, and signature checking. A signature mismatch is never worked around by uninstalling
+ * and reinstalling: authenticity rests on Android's same-signer rule for updates.
  */
 class UpdateManager(
     private val context: Context,
 ) {
     companion object {
         private const val TAG = "UpdateManager"
-<<<<<<< HEAD
-        private const val STAGED_PREFIX = "update-"
-=======
         private const val PARTIAL_DOWNLOAD_GRACE_MS = 60 * 60 * 1000L
->>>>>>> upstream/master
+        private const val STAGED_PREFIX = "update-"
         private const val NOTIFICATION_CHANNEL_ID = "update_channel"
         private const val NOTIFICATION_ID = 1001
         private const val DOWNLOAD_ID_PREF = "update_download_id"
 
+        // Not sent by this fork (see showInstallNotification); kept for HomeActivity's handler.
         const val ACTION_MIGRATE_UPDATE = "af.shizuku.manager.action.MIGRATE_UPDATE"
         const val ACTION_SIGNATURE_MISMATCH = "af.shizuku.manager.action.SIGNATURE_MISMATCH"
         const val EXTRA_UPDATE_FILE_PATH = "af.shizuku.manager.extra.UPDATE_FILE_PATH"
@@ -89,6 +88,7 @@ class UpdateManager(
             val file: File,
         ) : InstallResult()
 
+        /** Not produced by this fork: a mismatch is never migrated by uninstalling (see [performSmartInstall]). */
         data class SignatureMismatchCanMigrate(
             val file: File,
         ) : InstallResult()
@@ -145,28 +145,15 @@ class UpdateManager(
         retriedDirect = false
         createNotificationChannel()
 
-<<<<<<< HEAD
         // Fail closed before spending the download: only a release asset URL has a SHA256SUMS
         // next to it to verify against (see UpdateVerifier).
         if (UpdateVerifier.checksumsUrlFor(downloadUrl) == null) {
             Timber.tag(TAG).w("Refusing to download update from unverifiable URL: $downloadUrl")
+            _state.value = UpdateState.Error(context.getString(R.string.update_verify_failed_message))
             showDownloadErrorNotification(messageRes = R.string.update_verify_failed_message)
             return
         }
 
-        // Callers invoke this from a UI click handler; the file-exists check, delete, and
-        // cleanup() below are all blocking disk I/O, so this whole body runs on IO instead of
-        // whatever thread called downloadUpdate() (previously janked/risked ANR on slow storage
-        // or with many stale APKs to clean up).
-        scope.launch(Dispatchers.IO) {
-            val fileName = "Shizuku+-v$versionName.apk"
-            val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
-
-            // Check if file already exists and delete it
-            if (file.exists()) {
-                file.delete()
-            }
-=======
         downloadJob?.cancel()
         downloadJob =
             scope.launch(Dispatchers.IO) {
@@ -174,7 +161,6 @@ class UpdateManager(
                 // decoded inconsistently by DownloadProvider and FileProvider.
                 val fileName = "ShizukuPlus-v${versionName.replace(Regex("[^A-Za-z0-9._-]"), "_")}.apk"
                 val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.cacheDir, fileName)
->>>>>>> upstream/master
 
                 if (file.exists()) {
                     file.delete()
@@ -210,7 +196,7 @@ class UpdateManager(
                         .apply()
 
                     Timber.tag(TAG).d("Download started via DownloadManager: $downloadUrl, ID: $downloadId")
-                    monitorDownload(downloadId, file, versionName)
+                    monitorDownload(downloadId, file, versionName, downloadUrl)
                 } catch (e: Exception) {
                     Timber.tag(TAG).w(e, "DownloadManager failed to enqueue; falling back to direct HTTP stream")
                     downloadDirectly(downloadUrl, file, versionName)
@@ -218,14 +204,6 @@ class UpdateManager(
             }
     }
 
-<<<<<<< HEAD
-                // Monitor download progress
-                monitorDownload(downloadId, file, versionName, downloadUrl)
-            } catch (e: Exception) {
-                // WARN not ERROR: some ROMs (MIUI/HyperOS) don't expose the DownloadManager
-                // content URI — expected incompatibility, not a crash (SHIZUKUPLUS-8N).
-                Timber.tag(TAG).w(e, "Failed to start download")
-=======
     /**
      * Fallback direct HTTP download for OEM ROMs where DownloadManager is missing or restricted.
      */
@@ -276,7 +254,6 @@ class UpdateManager(
             if (responseCode != HttpURLConnection.HTTP_OK) {
                 Timber.tag(TAG).w("Direct HTTP download returned status $responseCode")
                 _state.value = UpdateState.Error("Server returned code $responseCode", responseCode)
->>>>>>> upstream/master
                 showDownloadErrorNotification()
                 return@withContext
             }
@@ -304,7 +281,7 @@ class UpdateManager(
             }
 
             Timber.tag(TAG).d("Direct HTTP download completed: ${file.absolutePath}")
-            onDownloadComplete(file, versionName)
+            onDownloadComplete(file, versionName, downloadUrl)
         } catch (e: Exception) {
             Timber.tag(TAG).w(e, "Direct HTTP download failed")
             file.delete()
@@ -357,14 +334,9 @@ class UpdateManager(
                                             null
                                         }
                                     cursor.close()
-<<<<<<< HEAD
-                                    Timber.tag(TAG).d("Download completed: ${file.absolutePath}")
-                                    onDownloadComplete(file, versionName, downloadUrl)
-=======
                                     val actual = localPath?.let { File(it) }?.takeIf { it.exists() } ?: file
                                     Timber.tag(TAG).d("Download completed: ${actual.absolutePath}")
-                                    onDownloadComplete(actual, versionName)
->>>>>>> upstream/master
+                                    onDownloadComplete(actual, versionName, downloadUrl)
                                     break
                                 }
                                 DownloadManager.STATUS_FAILED -> {
@@ -426,36 +398,50 @@ class UpdateManager(
             return
         }
 
-        // Cache the APK on internal storage to bypass Android 14+ FUSE SELinux restrictions.
-        // A 16 MB copy and an APK parse: never on the main thread.
-        val readyApk =
+        // Verify the SHA-256 published with the release and continue only with the app-private copy
+        // that was hashed: the download dir is external storage, so the file there could be swapped
+        // between a check and the install. The copy also sits on internal storage, which bypasses
+        // Android 14+ FUSE SELinux restrictions. A 16 MB copy and hash: never on the main thread.
+        val verified =
             withContext(Dispatchers.IO) {
-                try {
-                    val updatesDir = File(context.cacheDir, "updates").apply { mkdirs() }
-                    val cached = File(updatesDir, file.name)
-                    if (cached.absolutePath != file.absolutePath) file.copyTo(cached, overwrite = true)
-                    cached.setReadable(true, false)
-                    cached
-                } catch (e: Exception) {
-                    Timber.tag(TAG).w(e, "Failed to copy APK to cacheDir; using original")
-                    file
-                }
+                // Unique, fixed-shape name: nothing from the release reaches the path, and a second
+                // verification cannot overwrite a copy that has already been verified.
+                // createTempFile throws when the cache dir is full or unwritable.
+                val staged =
+                    runCatching {
+                        val updatesDir = File(context.cacheDir, "updates").apply { mkdirs() }
+                        File.createTempFile(STAGED_PREFIX, ".apk", updatesDir)
+                    }.getOrNull()
+                val result = staged?.let { UpdateVerifier.verifyAndStage(file, downloadUrl, it) }
+                file.delete()
+                result?.setReadable(true, false)
+                result
             }
+        if (verified == null) {
+            // Fail closed. A truncated DownloadManager result also lands here, so fetch it once
+            // more over direct HTTP; the retry is verified the same way.
+            if (!retriedDirect) {
+                retriedDirect = true
+                _state.value = UpdateState.Downloading(0, 0, 0, versionName)
+                downloadDirectly(downloadUrl, file, versionName)
+            } else {
+                _state.value = UpdateState.Error(context.getString(R.string.update_verify_failed_message))
+                showDownloadErrorNotification(messageRes = R.string.update_verify_failed_message)
+            }
+            return
+        }
+        val readyApk: File = verified
 
         // Never hand an unparseable file to the system installer ("There was a problem parsing
         // the package"): validate first, re-download once over direct HTTP, then fail clearly.
         val problem = withContext(Dispatchers.IO) { validateApk(readyApk) }
         if (problem != null) {
             Timber.tag(TAG).w("Downloaded update is invalid (%s): %s", problem, readyApk.absolutePath)
-            withContext(Dispatchers.IO) {
-                readyApk.delete()
-                if (file.absolutePath != readyApk.absolutePath) file.delete()
-            }
-            val url = currentDownloadUrl
-            if (!retriedDirect && url != null) {
+            withContext(Dispatchers.IO) { readyApk.delete() }
+            if (!retriedDirect) {
                 retriedDirect = true
                 _state.value = UpdateState.Downloading(0, 0, 0, versionName)
-                downloadDirectly(url, file, versionName)
+                downloadDirectly(downloadUrl, file, versionName)
             } else {
                 _state.value = UpdateState.Error(context.getString(R.string.update_download_corrupt, problem))
                 showDownloadErrorNotification()
@@ -463,21 +449,6 @@ class UpdateManager(
             return
         }
 
-<<<<<<< HEAD
-        scope.launch {
-            // Verify the SHA-256 published with the release and install only the app-private copy
-            // that was hashed: the download dir is external storage, so the file there could be
-            // swapped between a check and the install. Any failure discards the APK (fail closed).
-            val verified =
-                withContext(Dispatchers.IO) {
-                    // Unique, fixed-shape name: nothing from the release reaches the path, and a
-                    // second verification cannot overwrite a copy that has already been verified.
-                    // createTempFile throws when the cache dir is full or unwritable.
-                    val staged = runCatching { File.createTempFile(STAGED_PREFIX, ".apk", context.cacheDir) }.getOrNull()
-                    val result = staged?.let { UpdateVerifier.verifyAndStage(file, downloadUrl, it) }
-                    file.delete()
-                    result
-=======
         _state.value = UpdateState.Ready(readyApk, versionName)
 
         if (isManualDownload || ShizukuSettings.isAutoInstallEnabled()) {
@@ -495,27 +466,10 @@ class UpdateManager(
                     -> {
                         showInstallNotification(readyApk, versionName)
                     }
->>>>>>> upstream/master
                 }
-            if (verified == null) {
-                showDownloadErrorNotification(messageRes = R.string.update_verify_failed_message)
-                return@launch
             }
-
-            if (ShizukuSettings.isAutoInstallEnabled()) {
-                if (!installApk(verified)) {
-                    // No silent route (root or Shizuku) installed it — fall back to the system
-                    // installer prompt.
-                    showInstallNotification(verified, versionName)
-                }
-            } else {
-                showInstallNotification(verified, versionName)
-            }
-<<<<<<< HEAD
-=======
         } else {
             showInstallNotification(readyApk, versionName)
->>>>>>> upstream/master
         }
     }
 
@@ -537,7 +491,10 @@ class UpdateManager(
     }
 
     /**
-     * Inspects signatures and performs a smart, privileged or system installation.
+     * Inspects signatures and performs a privileged (root or Shizuku) or system installation.
+     * A signature mismatch always needs the user to reinstall by hand: the updater never
+     * uninstalls and reinstalls, since that would install an APK from any signer over this
+     * package. A privileged install that fails or times out falls back to the system installer.
      */
     suspend fun performSmartInstall(file: File): InstallResult =
         withContext(Dispatchers.IO) {
@@ -547,46 +504,57 @@ class UpdateManager(
                     runCatching {
                         Shell.getShell().isRoot
                     }.getOrDefault(false)
-                val hasShizuku = rikka.shizuku.Shizuku.pingBinder()
+                val hasShizuku = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
                 val signaturesMatch = checkSignaturesMatch(file)
 
                 if (!signaturesMatch) {
                     Timber.tag(TAG).w("Update signature mismatch detected.")
-                    return@withContext if (hasShizuku || isRoot) {
-                        InstallResult.SignatureMismatchCanMigrate(file)
-                    } else {
-                        InstallResult.SignatureMismatchManualRequired(file)
-                    }
+                    return@withContext InstallResult.SignatureMismatchManualRequired(file)
                 }
 
-                when {
-                    isRoot -> {
-                        val result = Shell.cmd("pm install -r -d \"${file.absolutePath}\"").exec()
-                        if (result.isSuccess) {
-                            Timber.tag(TAG).i("Silent install via root succeeded")
-                            InstallResult.Success
-                        } else {
-                            Timber.tag(TAG).w("Root install failed: ${result.out}")
-                            InstallResult.Failed(result.out.joinToString("\n"))
+                // 60 s covers piping a multi-MB APK over Shizuku stdin + pm install processing.
+                val installed =
+                    withTimeoutOrNull(60_000) {
+                        when {
+                            isRoot -> installViaRoot(file)
+                            // Shell UID 2000 cannot read app storage on Android 11+; the bytes are
+                            // piped to pm install via stdin instead.
+                            hasShizuku -> installViaShizukuStdin(file)
+                            else -> null
                         }
                     }
-                    hasShizuku -> {
-                        val success = installViaShizukuStdin(file)
-                        if (success) {
-                            InstallResult.Success
-                        } else {
-                            InstallResult.Failed("Shizuku install failed")
-                        }
-                    }
-                    else -> {
-                        InstallResult.NeedsSystemInstaller(file)
-                    }
+                when (installed) {
+                    true -> InstallResult.Success
+                    // No privileged route, or it failed or timed out: the system installer prompt.
+                    else -> InstallResult.NeedsSystemInstaller(file)
                 }
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "performSmartInstall failed unexpectedly")
                 InstallResult.Failed(e.message ?: "Unknown installation error")
             }
         }
+
+    /**
+     * The verified copy is in app-private storage, which system_server (the process that opens a
+     * path given to pm) cannot read. Copy it as root to /data/local/tmp first. The source path is
+     * cacheDir plus a generated name, so nothing from the release is interpolated into the command.
+     * No downgrade flag, and deliberately no uninstall-and-reinstall fallback.
+     */
+    private fun installViaRoot(file: File): Boolean {
+        val tmp = "/data/local/tmp/update.apk"
+        val result =
+            Shell
+                .cmd("cp '${file.absolutePath}' $tmp && chmod 644 $tmp && pm install -r $tmp")
+                .exec()
+                .also { Shell.cmd("rm -f $tmp").exec() }
+        return if (result.isSuccess) {
+            Timber.tag(TAG).i("Silent install via root succeeded")
+            true
+        } else {
+            Timber.tag(TAG).w("Root install failed: ${result.out}")
+            false
+        }
+    }
 
     /**
      * Launches the system PackageInstaller using an internal cacheDir FileProvider URI
@@ -665,7 +633,7 @@ class UpdateManager(
 
     /**
      * Show notification to install the update.
-     * Routes signature mismatches directly to HomeActivity migration dialogs to avoid cryptic OS errors.
+     * Routes signature mismatches to HomeActivity's manual-reinstall dialog to avoid cryptic OS errors.
      */
     fun showInstallNotification(
         file: File,
@@ -673,19 +641,11 @@ class UpdateManager(
     ) {
         try {
             val signaturesMatch = checkSignaturesMatch(file)
-            val hasPrivilege =
-                rikka.shizuku.Shizuku.pingBinder() ||
-                    runCatching { Shell.getShell().isRoot }.getOrDefault(false)
 
+            // A mismatch always goes to the manual-reinstall explanation, never to the migrate
+            // (uninstall-and-reinstall) dialog.
             val installIntent =
-                if (!signaturesMatch && hasPrivilege) {
-                    Intent(context, af.shizuku.manager.home.HomeActivity::class.java).apply {
-                        action = ACTION_MIGRATE_UPDATE
-                        putExtra(EXTRA_UPDATE_FILE_PATH, file.absolutePath)
-                        putExtra(EXTRA_UPDATE_VERSION_NAME, versionName)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    }
-                } else if (!signaturesMatch) {
+                if (!signaturesMatch) {
                     Intent(context, af.shizuku.manager.home.HomeActivity::class.java).apply {
                         action = ACTION_SIGNATURE_MISMATCH
                         putExtra(EXTRA_UPDATE_FILE_PATH, file.absolutePath)
@@ -756,11 +716,10 @@ class UpdateManager(
         }
     }
 
-<<<<<<< HEAD
     /**
      * Show error notification. [reason] is a DownloadManager.ERROR_* code (from COLUMN_REASON)
      * when known — a few documented, OEM-independent codes get distinct, self-diagnosing text
-     * (#414) instead of the generic message.
+     * (#414) instead of the generic message. [messageRes] overrides both.
      */
     private fun showDownloadErrorNotification(
         reason: Int? = null,
@@ -768,11 +727,6 @@ class UpdateManager(
     ) {
         val text =
             messageRes ?: when (reason) {
-=======
-    private fun showDownloadErrorNotification(reason: Int? = null) {
-        val messageRes =
-            when (reason) {
->>>>>>> upstream/master
                 DownloadManager.ERROR_INSUFFICIENT_SPACE -> R.string.update_download_failed_storage
                 DownloadManager.ERROR_CANNOT_RESUME -> R.string.update_download_failed_cannot_resume
                 DownloadManager.ERROR_HTTP_DATA_ERROR,
@@ -794,76 +748,10 @@ class UpdateManager(
         notificationManager.notify(NOTIFICATION_ID + 2, notification)
     }
 
-<<<<<<< HEAD
-    /**
-     * Install APK directly (for auto-install when enabled).
-     * Must be called from a background coroutine.
-     * @return true only if the APK was installed silently without user interaction.
-     *   Returns false for any failure or timeout — the caller then shows the install notification.
-     */
-    suspend fun installApk(file: File): Boolean =
-        try {
-            // 60 s covers piping a multi-MB APK over Shizuku stdin + pm install processing.
-            withTimeoutOrNull(60_000) {
-                val isRoot =
-                    withContext(Dispatchers.IO) {
-                        runCatching {
-                            com.topjohnwu.superuser.Shell
-                                .getShell()
-                                .isRoot
-                        }.getOrDefault(false)
-                    }
-                val hasShizuku = rikka.shizuku.Shizuku.pingBinder()
-
-                when {
-                    isRoot -> {
-                        // The verified copy is in app-private storage, which system_server (the
-                        // process that opens a path given to pm) cannot read. Copy it as root to
-                        // /data/local/tmp first. The source path is cacheDir plus a generated
-                        // name, so nothing from the release is interpolated into the command.
-                        val tmp = "/data/local/tmp/update.apk"
-                        val result =
-                            withContext(Dispatchers.IO) {
-                                com.topjohnwu.superuser.Shell
-                                    .cmd("cp '${file.absolutePath}' $tmp && chmod 644 $tmp && pm install -r $tmp")
-                                    .exec()
-                                    .also {
-                                        com.topjohnwu.superuser.Shell
-                                            .cmd("rm -f $tmp")
-                                            .exec()
-                                    }
-                            }
-                        if (result.isSuccess) {
-                            Timber.tag(TAG).i("Silent install via root succeeded")
-                            true
-                        } else {
-                            // Deliberately no uninstall-and-reinstall fallback here: that would
-                            // install an APK from any signer over this package without the user
-                            // seeing anything. Fall back to the system installer prompt instead.
-                            Timber.tag(TAG).w("Root install failed: ${result.out}")
-                            false
-                        }
-                    }
-                    hasShizuku -> {
-                        // Shell UID 2000 cannot read getExternalFilesDir on Android 11+ scoped
-                        // storage. Read bytes in the app process (which owns the file) and pipe
-                        // them to pm install via stdin — same pattern as compat hub install.
-                        withContext(Dispatchers.IO) { installViaShizukuStdin(file) }
-                    }
-                    else -> false
-                }
-            } == true
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "installApk failed unexpectedly")
-            false
-        }
-
     /**
      * Reads the APK in the app process and streams it to `pm install` via Shizuku stdin,
      * sidestepping Android 11+ scoped-storage restrictions on shell UID 2000.
      */
-=======
->>>>>>> upstream/master
     private fun installViaShizukuStdin(file: File): Boolean {
         return try {
             val apkBytes = file.readBytes()
@@ -871,7 +759,7 @@ class UpdateManager(
                 "cat > /data/local/tmp/update.apk && chmod 644 /data/local/tmp/update.apk" +
                     " && pm install -r /data/local/tmp/update.apk 2>&1; echo EXIT:\$?; rm -f /data/local/tmp/update.apk"
             val process =
-                rikka.shizuku.Shizuku.newProcess(arrayOf("sh", "-c", script), null, null)
+                Shizuku.newProcess(arrayOf("sh", "-c", script), null, null)
                     ?: run {
                         Timber.tag(TAG).w("Shizuku.newProcess returned null")
                         return false
@@ -940,7 +828,7 @@ class UpdateManager(
                     }
                 }
             }
-            // Verified copies staged for install (see onDownloadComplete) live in the cache dir.
+            // Older builds staged verified copies directly in the cache dir.
             context.cacheDir?.listFiles { file -> file.name.startsWith(STAGED_PREFIX) && file.name.endsWith(".apk") }?.forEach { file ->
                 file.delete()
                 Timber.tag(TAG).d("Cleaned up staged APK: ${file.name}")

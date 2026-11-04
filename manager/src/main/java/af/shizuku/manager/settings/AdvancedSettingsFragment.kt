@@ -48,7 +48,7 @@ class AdvancedSettingsFragment : BaseSettingsFragment() {
             is BackupKeyUnavailableException -> "$prefix: ${e.message}"
             is AEADBadTagException ->
                 "$prefix: this backup could not be decrypted. It was most likely created by a different " +
-                    "installation of Shizuku+ — backups are encrypted per-install and can't be restored " +
+                    "installation of ShizukuTendCF — backups are encrypted per-install and can't be restored " +
                     "after reinstalling or clearing the app's data."
             else -> "$prefix: ${e.message ?: e.javaClass.simpleName}"
         }
