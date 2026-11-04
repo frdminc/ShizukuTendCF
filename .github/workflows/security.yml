@@ -15,21 +15,6 @@ on:
 # TODO: restore the Gitleaks job (gitleaks/gitleaks-action@v2) once the org has a
 # GITLEAKS_LICENSE secret; without it the job fails on every push (removed 2026-10-03).
 jobs:
-<<<<<<< HEAD
-=======
-  gitleaks:
-    name: Gitleaks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
-        with:
-          fetch-depth: 0
-      - name: Gitleaks
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
->>>>>>> upstream/master
   trufflehog:
     name: TruffleHog
     runs-on: ubuntu-latest

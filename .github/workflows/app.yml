@@ -64,19 +64,12 @@ jobs:
       - name: Accept SDK Licenses
         run: yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
 
-      - name: Run Lint
-        run: ./gradlew :manager:lint
-
-<<<<<<< HEAD
       - name: Check Formatting (Spotless)
         run: ./gradlew :manager:spotlessCheck
 
-      - name: Run Unit Tests
-        run: ./gradlew --continue :manager:testShizukuplusDebugUnitTest :server:testDebugUnitTest :database:testDebugUnitTest
+      - name: Run Lint
+        run: ./gradlew :manager:lint
 
-      - name: Check Unit Test Counts
-        run: python3 scripts/dev/check-test-counts.py
-=======
   unit-tests:
     needs: [pre-push-guard]
     runs-on: ubuntu-latest
@@ -106,6 +99,9 @@ jobs:
       - name: Run unit tests
         run: ./gradlew --continue :manager:testShizukuplusDebugUnitTest :server:testDebugUnitTest :database:testDebugUnitTest
 
+      - name: Check Unit Test Counts
+        run: python3 scripts/dev/check-test-counts.py
+
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -115,7 +111,6 @@ jobs:
             **/build/reports/tests/
             **/build/test-results/
           retention-days: 7
->>>>>>> upstream/master
 
   build:
     needs: [pre-push-guard]
@@ -171,6 +166,7 @@ jobs:
 
       - name: Validate Signing Config
         env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
           KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
@@ -187,22 +183,6 @@ jobs:
           fi
 
       - name: Create signing.properties
-<<<<<<< HEAD
-        if: ${{ env.IS_DEBUG == 'false' }}
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
-          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
-        run: |
-          # Secrets reach the script through env, never interpolated into the command text.
-          {
-            printf 'KEYSTORE_PASSWORD=%s\n' "$KEYSTORE_PASSWORD"
-            printf 'KEYSTORE_ALIAS=%s\n' "$KEYSTORE_ALIAS"
-            printf 'KEYSTORE_ALIAS_PASSWORD=%s\n' "$KEYSTORE_ALIAS_PASSWORD"
-            printf 'KEYSTORE_FILE=%s\n' "$GITHUB_WORKSPACE/key.jks"
-          } > signing.properties
-          printf "%s" "$KEYSTORE" | base64 --decode > key.jks
-=======
         if: ${{ env.IS_DEBUG == 'false' && env.HAS_KEYSTORE == 'true' }}
         env:
           KEYSTORE: ${{ secrets.KEYSTORE }}
@@ -223,7 +203,6 @@ jobs:
       # Refuse a gradle-wrapper.jar that doesn't match an official Gradle release.
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
->>>>>>> upstream/master
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
@@ -255,15 +234,9 @@ jobs:
       - name: Build with Gradle
         id: buildWithGradle
         env:
-<<<<<<< HEAD
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
-          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
-=======
           SIGN_KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
           SIGN_KEY_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
           SIGN_KEY_PASS: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
->>>>>>> upstream/master
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
           [ -n "$SENTRY_DSN" ] && echo "SENTRY_DSN=${SENTRY_DSN}" >> gradle.properties || true
@@ -317,35 +290,21 @@ jobs:
             echo "filePath=${RENAMED}" >> $GITHUB_OUTPUT
           else
             CMD="./gradlew :manager:assembleShizukuplusRelease :manager:assembleDropinRelease $ARGS"
-<<<<<<< HEAD
-            # manager/build.gradle only registers the Sentry upload tasks when a
-            # token is set, and Gradle fails on -x for a task that does not exist.
+            # Without SENTRY_AUTH_TOKEN, manager/build.gradle turns off proguard-mapping, native-symbol
+            # and source-context upload, so the Sentry plugin never registers those tasks, and
+            # Gradle fails task selection on -x for a task that does not exist (the fork's CI has no
+            # token, so this is the path that runs here). Upstream skips the proguard-mapping tasks
+            # unconditionally; that is only safe where the token is always set.
             SENTRY_SKIP=""
             if [ -n "$SENTRY_AUTH_TOKEN" ]; then
               SENTRY_SKIP="-x uploadSentryProguardMappingsShizukuplusRelease \
                 -x uploadSentryProguardMappingsDropinRelease \
                 -x uploadSentryNativeSymbolsForShizukuplusRelease \
-=======
-            # Without SENTRY_AUTH_TOKEN, manager/build.gradle turns off native-symbol and
-            # source-context upload, so the Sentry plugin never registers those tasks, and
-            # Gradle fails task selection on -x for a task that does not exist.
-            SENTRY_SKIP=""
-            if [ -n "$SENTRY_AUTH_TOKEN" ]; then
-              SENTRY_SKIP="-x uploadSentryNativeSymbolsForShizukuplusRelease \
->>>>>>> upstream/master
                 -x uploadSentryNativeSymbolsForDropinRelease \
                 -x sentryUploadSourceBundleShizukuplusRelease \
                 -x sentryUploadSourceBundleDropinRelease"
             fi
-<<<<<<< HEAD
             eval $CMD --stacktrace --info $SENTRY_SKIP -x :manager:lint
-=======
-            eval $CMD --stacktrace --info \
-              -x uploadSentryProguardMappingsShizukuplusRelease \
-              -x uploadSentryProguardMappingsDropinRelease \
-              $SENTRY_SKIP \
-              -x :manager:lint
->>>>>>> upstream/master
 
             sign_apk() {
               local FILE="$1"
@@ -355,15 +314,9 @@ jobs:
                   BUILD_TOOLS_VERSION=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)
                   # Passwords come from step env (below), never pasted into the script text.
                   $ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner sign --ks key.jks \
-<<<<<<< HEAD
-                    --ks-pass env:KEYSTORE_PASSWORD \
-                    --ks-key-alias "$KEYSTORE_ALIAS" \
-                    --key-pass env:KEYSTORE_ALIAS_PASSWORD \
-=======
                     --ks-pass env:SIGN_KS_PASS \
                     --ks-key-alias "$SIGN_KEY_ALIAS" \
                     --key-pass env:SIGN_KEY_PASS \
->>>>>>> upstream/master
                     "$FILE"
                 else
                   echo "::error::Release APK $FILE is unsigned and key.jks is missing"
@@ -430,13 +383,8 @@ jobs:
         run: |
           ./gradlew :manager:uploadSentryProguardMappingsShizukuplusRelease :manager:uploadSentryNativeSymbolsForShizukuplusRelease
 
-<<<<<<< HEAD
       - name: Upload ShizukuTendCF Artifact
-        uses: actions/upload-artifact@v4
-=======
-      - name: Upload ShizukuPlus Artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
->>>>>>> upstream/master
         with:
           name: ${{ steps.buildWithGradle.outputs.artifactName }}
           path: ${{ steps.buildWithGradle.outputs.filePath }}
@@ -601,13 +549,8 @@ jobs:
           # Mirror the tag locally so git tag --list in the release-notes step sees this release.
           git tag "$TAG_NAME" "${{ github.sha }}" 2>/dev/null || true
 
-<<<<<<< HEAD
       - name: Download ShizukuTendCF Artifact
-        uses: actions/download-artifact@v4
-=======
-      - name: Download ShizukuPlus Artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
->>>>>>> upstream/master
         with:
           name: ${{ needs.build.outputs.artifactName }}
           path: files/main
@@ -636,15 +579,6 @@ jobs:
           # Matches both the new r{N} format and legacy v{semver}.r{N} tags for continuity.
           PREV_TAG=$(git tag --list --sort=-creatordate | grep -E '^(r[0-9]+|[0-9]+\.[0-9]+\.[0-9]+\.r[0-9]+|v[0-9]+\.[0-9]+\.[0-9]+\.r[0-9]+)$' | grep -v "^${TAG_NAME}$" | head -1)
 
-<<<<<<< HEAD
-          # Most recent MAJOR release to spotlight in every release's notes. Bump these two lines
-          # when a new headline release ships (keep MAJOR_DESC to one short clause). For the CURRENT
-          # build the headline major == the era major, so a single callout is correct here. When you
-          # bump this, also re-run scripts/backfill_majors.py (add the new major to its MAJORS list)
-          # so older release pages show BOTH this headline and the major of their own era.
-          MAJOR_RELEASE=""
-          MAJOR_DESC=""
-=======
           # Most recent MAJOR release (this one included), decided by scripts/ci/major_release.sh:
           # a release that adds several user-facing CHANGELOG.md entries alongside feature work,
           # or that a commit marks with a "Release-Type: major" trailer. Highlights are the
@@ -652,7 +586,6 @@ jobs:
           MAJOR_OUT=$(bash scripts/ci/major_release.sh || true)
           MAJOR_RELEASE=$(printf '%s\n' "$MAJOR_OUT" | sed -n 1p)
           MAJOR_DESC=$(printf '%s\n' "$MAJOR_OUT" | sed -n 2p)
->>>>>>> upstream/master
 
           # Most recent CRITICAL FIX to spotlight — a distinct, lower tier from MAJOR_RELEASE
           # above: not new capability, but a regression severe enough that users on the

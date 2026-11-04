@@ -108,14 +108,9 @@
     <string name="home_status_service_not_running_summary">%1$s is stopped</string>
     <string name="home_status_service_user_root">root</string>
     <string name="home_status_service_user_adb">adb</string>
-<<<<<<< HEAD
-    <string name="home_status_service_version">Protocol version %2$s, %1$s</string>
-    <string name="home_status_service_version_update"><![CDATA[Protocol version %2$s, %1$s<br>Start again to update to version %3$s]]></string>
-=======
     <!-- %2$s is the Shizuku service API version (e.g. 13.6), not the app version. -->
     <string name="home_status_service_version">Service API %2$s · %1$s</string>
     <string name="home_status_service_version_update"><![CDATA[Service API %2$s · %1$s<br>Restart Shizuku+ to update to API %3$s]]></string>
->>>>>>> upstream/master
 
     <!-- Home - Adb -->
     <string name="home_adb_title"><![CDATA[Start by connecting to a computer]]></string>
@@ -305,16 +300,12 @@
     <string name="app_management_item_summary_requires_root">* requires Shizuku runs with root</string>
     <string name="app_management_item_summary_partial_root">⚠ Partially supported — some functions still need Shizuku with root</string>
     <string name="app_management_item_summary_requires_plus">* requires Shizuku+ Enhanced API</string>
-<<<<<<< HEAD
     <string name="app_management_item_summary_trusted_signer">Always allowed: signed with a key this build trusts</string>
     <string name="app_management_item_state_trusted_signer">Always on, can\'t be turned off</string>
-    <string name="app_management_item_context">About this app: %s</string>
     <string name="app_management_enhancements">Enhancements</string>
     <string name="app_management_enhancements_desc">Enable Plus features for this app to improve performance and compatibility.</string>
     <string name="app_management_badge_enhanced">Enhanced</string>
     <string name="app_management_badge_upgrade">Plus upgrade available</string>
-=======
->>>>>>> upstream/master
     <string name="app_management_toggle_all">Toggle all</string>
     <string name="app_management_bulk_grant">Grant selected</string>
     <string name="app_management_bulk_revoke">Revoke selected</string>
@@ -512,11 +503,6 @@
     <string name="settings_start_on_boot_bug">Due to a bug in Android 11-12, wireless debugging does not remember any authorized networks.\n\nYou will need to re-authorize the network on each reboot by tapping \"Allow\" when the authorization dialog pops up.</string>
     <string name="settings_use_system_color">Use system theme color</string>
     <string name="settings_watchdog">Watchdog</string>
-<<<<<<< HEAD
-    <string name="settings_watchdog_summary">Automatically restart Shizuku+ after a crash or unexpected stop. Cannot reconnect when the underlying network disconnects (e.g. USB cable unplugged while using RNDIS/USB ADB).</string>
-    <string name="settings_watchdog_not_running">On, not running right now</string>
-    <string name="settings_device_hardening">Device Hardening &amp; Keepalive</string>
-=======
     <string name="settings_watchdog_summary">Keeps Shizuku+ in the background with a status notification that shows when something\'s wrong, and restarts it after a crash or unexpected stop. Cannot reconnect when the underlying network disconnects (e.g. USB cable unplugged while using RNDIS/USB ADB).</string>
     <string name="settings_problems_on_home">Show problems on Home</string>
     <string name="settings_problems_on_home_summary">Shizuku+\'s status card says what\'s wrong, even with helper notifications off</string>
@@ -526,7 +512,6 @@
     <string name="settings_watchdog_auto_restart_summary">Off, the Watchdog only shows the status notification and tells you when Shizuku+ stops</string>
     <string name="settings_watchdog_not_running">On, not running right now</string>
     <string name="settings_device_hardening">Device hardening &amp; keepalive</string>
->>>>>>> upstream/master
     <string name="settings_device_hardening_summary">Exempt Shizuku and terminal clients from Doze, auto-grant WRITE_SECURE_SETTINGS, sync starter binaries, and while the Watchdog is on, lift background and battery limits on this app</string>
     <string name="doctor_check_device_hardening">Device Hardening &amp; Doze Exemption</string>
     <string name="device_hardening_applied">Device hardening &amp; Doze optimizations applied</string>
@@ -1062,8 +1047,6 @@
     <string name="wadb_error_generic_short">ADB connection failed</string>
     <string name="wadb_permission_error_notification_title">Permission Error</string>
     <string name="wadb_permission_error_notification_content">Shizuku needs WRITE_SECURE_SETTINGS to start on boot. Tap to learn how to grant it.</string>
-<<<<<<< HEAD
-    <string name="wadb_notification_channel">ADB auto-start service</string>
     <!-- Restoring the ADB TCP port through wireless debugging (after a reboot or anything that closed it). -->
     <string name="wadb_restore_no_wifi_title">Waiting for Wi-Fi</string>
     <string name="wadb_restore_no_wifi_text">Connect to Wi-Fi once so Shizuku can restore its ADB connection. It continues by itself when Wi-Fi connects.</string>
@@ -1072,8 +1055,6 @@
     <string name="wadb_restore_locked_title">Unlock to restore Shizuku\'s ADB connection</string>
     <string name="wadb_restore_locked_text">Wireless debugging went off while the phone was locked: this Wi-Fi network or access point is not allowed for it yet, and this phone asks only while unlocked. After the next unlock Shizuku tries once more; choose \"Always allow on this network\" when the system asks. Until then it retries quietly in case the phone moves to an access point that is allowed.</string>
     <string name="wadb_restore_open_wireless_debugging">Open Wireless debugging</string>
-=======
->>>>>>> upstream/master
 
     <!-- Watchdog -->
     <string name="watchdog_running">Watchdog is running</string>
@@ -1100,10 +1081,6 @@
     <string name="watchdog_turn_off">Turn Off</string>
     <string name="watchdog_shizuku_crashed_title">Shizuku crashed recently</string>
     <string name="watchdog_shizuku_crashed_text">Watchdog restarted the service. Tap to learn about potential fixes to prevent future crashes.</string>
-<<<<<<< HEAD
-    <string name="watchdog_shizuku_crashed_action_turn_off_alerts">Turn Off Alerts</string>
-=======
->>>>>>> upstream/master
     <string name="battery_exemption_channel_name">Battery optimization</string>
     <string name="battery_exemption_notification_title">Allow Shizuku+ to run in the background</string>
     <string name="battery_exemption_notification_text">The Watchdog was turned on automatically. Exempt Shizuku+ from battery optimization so it can restart the service when it stops.</string>
@@ -1129,8 +1106,6 @@
     <string name="dialog_requesting_legacy_button_open_shizuku">Open Shizuku</string>
     <string name="wadb_notification_attempt_now">Attempt now</string>
     <string name="wadb_notification_ask_again">Ask again</string>
-<<<<<<< HEAD
-=======
     <string name="wadb_notification_awaiting_auth">Waiting for you to accept the \"Allow USB debugging\" prompt on this phone</string>
     <string name="wadb_notification_ask_again_from">If you tapped Deny, Ask again shows the prompt once more from %1$s</string>
     <string name="wadb_notification_ask_again_ready">If you tapped Deny, tap Ask again to show the prompt once more</string>
@@ -1138,7 +1113,6 @@
     <string name="wadb_notification_ask_again_used_untimed">This is the last prompt for this wait</string>
     <string name="wadb_notification_wait_ends">This wait ends at %1$s</string>
     <string name="wadb_notification_auth_timed_out">The \"Allow USB debugging\" prompt was not accepted in time. Tap Attempt now to try again</string>
->>>>>>> upstream/master
 
 
 
@@ -1431,18 +1405,7 @@
     <string name="update_checking">Checking for updates…</string>
     <string name="ok">OK</string>
     <string name="no_file_picker">No file picker app found on this device</string>
-<<<<<<< HEAD
-    <string name="wadb_notification_awaiting_auth">Waiting for you to accept the \"Allow USB debugging\" prompt on this phone</string>
-    <string name="wadb_notification_ask_again_from">If you tapped Deny, Ask again shows the prompt once more from %1$s</string>
-    <string name="wadb_notification_ask_again_ready">If you tapped Deny, tap Ask again to show the prompt once more</string>
-    <string name="wadb_notification_ask_again_used">This is the last prompt for this wait, which ends at %1$s</string>
-    <string name="wadb_notification_ask_again_used_untimed">This is the last prompt for this wait</string>
-    <string name="wadb_notification_wait_ends">This wait ends at %1$s</string>
     <string name="wadb_auth_fingerprint">Only accept a prompt showing the fingerprint %1$s</string>
-    <string name="wadb_notification_auth_timed_out">The \"Allow USB debugging\" prompt was not accepted in time. Tap Attempt now to try again</string>
-    <string name="wadb_notification_discovery_timeout">ADB port discovery timed out — retrying…</string>
-=======
->>>>>>> upstream/master
     <string name="shell_export_success">Files exported successfully</string>
     <string name="shell_export_failed">Export failed — no files could be written</string>
     <string name="shell_export_partial">%1$d of %2$d files exported (some failed)</string>
@@ -1827,23 +1790,6 @@
     <string name="accessibility_sim_toggle_automation">Toggle Automation card visibility</string>
     <string name="accessibility_sim_toggle_activity_log">Toggle Activity Log card visibility</string>
     <string name="accessibility_sim_toggle_learn_more">Toggle Learn More card visibility</string>
-<<<<<<< HEAD
-
-    <!-- About: result of the last fleet-profile apply (see fleet/FleetApplyReport.kt) -->
-    <string name="settings_fleet_profile_title">Fleet profile</string>
-    <string name="settings_fleet_profile_applied">Applied %1$s</string>
-    <string name="settings_fleet_profile_failed">Failed %1$s: %2$s</string>
-
-    <!-- Permission dialog: the server kept a trusted-signer app allowed despite Deny -->
-    <string name="permission_always_allowed_by_policy">Always allowed by this build\'s policy</string>
-
-    <!-- App list: the server could not be asked for this app's permission state; tap retries -->
-    <string name="app_management_item_state_unresolved">Permission state unavailable, tap to retry</string>
-    <string name="adb_first_cert_title">Record wireless debugging key?</string>
-    <string name="adb_first_cert_message">No wireless debugging key is recorded for this boot yet. Record the key shown by this connection and start?\n\nNew key: %1$s</string>
-    <string name="adb_pin_missing_notice">No key recorded for this boot yet. Wireless debugging was left on so you can open the app and tap Start to confirm the key.</string>
-    <string name="adb_pin_changed_notice">Wireless debugging’s key changed. Wireless debugging was left on so you can open the app and tap Start to confirm it.</string>
-=======
     <string name="tcp_guard_title">TCP debugging is open on an untrusted network</string>
     <string name="tcp_guard_text">ADB TCP port %1$d is listening and %2$s. Close it unless you need it right now.</string>
     <string name="tcp_guard_reason_open">you are on an open Wi-Fi network</string>
@@ -2093,5 +2039,16 @@
     <string name="onboarding_icon_style_title">Icon Style</string>
     <string name="onboarding_m3e_desc">Personalize your experience with adaptive icon styles, AMOLED+ contrast, and fluid motion.</string>
     <string name="onboarding_m3e_title">Expressive Look &amp; Feel</string>
->>>>>>> upstream/master
+    <!-- About: result of the last fleet-profile apply (see fleet/FleetApplyReport.kt) -->
+    <string name="settings_fleet_profile_title">Fleet profile</string>
+    <string name="settings_fleet_profile_applied">Applied %1$s</string>
+    <string name="settings_fleet_profile_failed">Failed %1$s: %2$s</string>
+    <!-- Permission dialog: the server kept a trusted-signer app allowed despite Deny -->
+    <string name="permission_always_allowed_by_policy">Always allowed by this build\'s policy</string>
+    <!-- App list: the server could not be asked for this app's permission state; tap retries -->
+    <string name="app_management_item_state_unresolved">Permission state unavailable, tap to retry</string>
+    <string name="adb_first_cert_title">Record wireless debugging key?</string>
+    <string name="adb_first_cert_message">No wireless debugging key is recorded for this boot yet. Record the key shown by this connection and start?\n\nNew key: %1$s</string>
+    <string name="adb_pin_missing_notice">No key recorded for this boot yet. Wireless debugging was left on so you can open the app and tap Start to confirm the key.</string>
+    <string name="adb_pin_changed_notice">Wireless debugging’s key changed. Wireless debugging was left on so you can open the app and tap Start to confirm it.</string>
 </resources>

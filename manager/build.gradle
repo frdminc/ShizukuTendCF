@@ -313,10 +313,7 @@ dependencies {
     testImplementation libs.mavericks.testing
     testImplementation libs.androidx.test.core
     testImplementation "junit:junit:4.13.2"
-<<<<<<< HEAD
-=======
     // Runs the JUnit 4 (Robolectric) tests under useJUnitPlatform(); without it Gradle skips them.
->>>>>>> upstream/master
     testRuntimeOnly libs.junit.vintage.engine
     androidTestImplementation "androidx.test.ext:junit:1.2.1"
     androidTestImplementation "androidx.test:runner:1.6.2"
@@ -325,13 +322,6 @@ dependencies {
 
 android {
     testOptions {
-<<<<<<< HEAD
-        // Robolectric needs the merged resources: without them every getString() in the start
-        // path (ManagerActivityLog, the start notification) throws Resources.NotFoundException.
-        unitTests.includeAndroidResources = true
-        unitTests.all {
-            useJUnitPlatform()
-=======
         unitTests.all { t ->
             t.useJUnitPlatform()
             // MockK needs ByteBuddy's agent. Load it up front instead of self-attaching, which
@@ -354,7 +344,6 @@ androidComponents {
     onVariants(selector().all()) { variant ->
         ["org/conscrypt/**", "org/bouncycastle/**"].each { pattern ->
             variant.unitTest?.instrumentation?.excludes?.addAll(pattern)
->>>>>>> upstream/master
         }
     }
 }

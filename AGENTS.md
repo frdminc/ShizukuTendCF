@@ -57,7 +57,7 @@ the same rules. Jules has its own setup notes in [`JULES.md`](JULES.md).
 - **Theme:** `Theme.Material3Expressive.*` — use M3 components, not AppCompat
 - **App widgets:** `RemoteViews` only allows framework views — do NOT use
   `MaterialButton` / `MaterialSwitch` etc. inside `widget_*.xml`
-<<<<<<< HEAD
+
 ## CFEngine reference book — query it, don't guess (2026-10-03)
 
 `Learning CFEngine` (Diego Zamboni, 2nd ed.; covers CFEngine 3.12) is in the
@@ -78,7 +78,6 @@ query it rather than relying on recall:
 Never read `~/kb/raw/learning-cfengine.md`: that is the entire book, ~115k
 tokens. The index exists so you don't have to. Full detail, including how to add
 a book: `site-private/AGENTS.md` ("Book knowledge base").
-=======
 
 ## Branding
 
@@ -104,4 +103,3 @@ Naming rules:
 - User-facing text uses the `+` form (`Shizuku+`, `Obtainium+`); repo names, URLs, and code identifiers spell it `Plus` (`ShizukuPlus`, `PlusSettingsProvider`). Never write "Shizuku Plus" or "ObtainiumPlus" in UI strings.
 - `SuperShade` is one word, capital S twice — never "Super Shade" / "Supershade".
 - Refer to upstreams by their own names (Shizuku, Obtainium) and credit them; don't rebrand upstream attributions or license notices.
->>>>>>> upstream/master
