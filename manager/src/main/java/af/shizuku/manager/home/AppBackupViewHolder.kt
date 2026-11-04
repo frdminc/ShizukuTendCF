@@ -9,10 +9,8 @@ import af.shizuku.manager.ktx.startWithSceneTransition
 import af.shizuku.manager.model.ServiceStatus
 import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.IconStyleHelper
-import af.shizuku.manager.utils.MotionUtils.applySpringTouch
 import android.content.Intent
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import rikka.core.content.asActivity
@@ -35,21 +33,7 @@ class AppBackupViewHolder(
 
     init {
         containerBinding.root.setOnClickListener(this)
-        containerBinding.root.applySpringTouch()
-        containerBinding.root.setOnLongClickListener {
-            HomeEditMode.enter()
-            true
-        }
-        containerBinding.dragHandle.apply {
-            setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_DOWN) HomeEditMode.startDragCallback?.invoke(this@AppBackupViewHolder)
-                false
-            }
-            setOnLongClickListener {
-                HomeEditMode.enter()
-                true
-            }
-        }
+        HomeEditMode.bindCardGestures(containerBinding, this)
     }
 
     private val originalIcon = binding.icon.drawable
@@ -63,7 +47,6 @@ class AppBackupViewHolder(
         HomeEditMode.applyOverlay(containerBinding)
         IconStyleHelper.applyToCardIcon(iconView, originalIcon, "home_app_backup")
         if (!data.isRunning) {
-            itemView.isEnabled = false
             title.setText(R.string.home_backup_title)
             summary.text =
                 context.getString(
@@ -71,7 +54,6 @@ class AppBackupViewHolder(
                     context.getString(R.string.app_name),
                 )
         } else {
-            itemView.isEnabled = true
             title.setText(R.string.home_backup_title)
             // Show where backups go: the configured export dir if set, or the default summary.
             val exportPath =
@@ -89,11 +71,10 @@ class AppBackupViewHolder(
     }
 
     override fun onClick(v: View) {
+        if (!data.isRunning) return
         val activity = v.context.asActivity<android.app.Activity>() ?: return
         activity.startWithSceneTransition(
             Intent(activity, AppBackupActivity::class.java),
-            iconView,
-            "icon_backup",
         )
     }
 }

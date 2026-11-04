@@ -94,6 +94,37 @@ class OnePromptScenariosTest {
             }
         }
 
+    // An unlock with the server down is a start on boot that could not run before (the receiver's
+    // USER_PRESENT path): a plain start, so it keeps to the marker like every background start.
+    @Test
+    fun `unlock-start-respects-marker`() =
+        scenario {
+            markerSetAt(now)
+            userPresent()
+            check {
+                assertEquals("no start enqueued", null, awaitStartWork())
+                assertNotNull("marker kept", marker)
+                expectOffers(0)
+            }
+        }
+
+    @Test
+    fun `unlock-with-server-down-offers-once`() =
+        scenario {
+            userPresent()
+            keyOffered()
+            dialogAccepted()
+            check {
+                expectOffers(1)
+                assertEquals(WorkInfo.State.SUCCEEDED, lastWork)
+                assertNull("marker after acceptance", marker)
+                assertTrue("server up", serverRunning)
+                userPresent()
+                assertEquals("an unlock while running starts nothing more", 1, startsRun)
+                expectOffers(1)
+            }
+        }
+
     @Test
     fun `headless-plain-respects-marker`() =
         scenario {

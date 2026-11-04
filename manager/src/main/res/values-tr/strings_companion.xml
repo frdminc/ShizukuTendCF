@@ -21,6 +21,5 @@
     <string name="compat_hub_install_signature_conflict">Yüklenemiyor: farklı bir uygulama (örn. orijinal Shizuku) uyumsuz bir imza ile zaten moe.shizuku.privileged.api olarak yüklü. Önce onu kaldırın.</string>
     <string name="compat_hub_install_fail_storage">Yüklenemiyor: cihazda yeterli boş depolama alanı yok.</string>
     <string name="compat_hub_install_fail_abi">Yüklenemiyor: Compat Hub bu cihazın CPU mimarisini desteklemiyor.</string>
-    <string name="compat_hub_install_manual_launched">Yükleyici açılıyor — yüklemeyi tamamlamak için ekrandaki talimatları izleyin.</string>
     <string name="compat_hub_install_fail_newprocess">Cihazınız Shizuku\'nun işlem oluşturma API\'sini kısıtlıyor. Bunun yerine sistem yükleyicisi açılıyor — istendiğinde Yükle\'ye dokunun.</string>
 </resources>

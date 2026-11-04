@@ -21,6 +21,5 @@
     <string name="compat_hub_install_signature_conflict">تعذر التثبيت: هناك تطبيق آخر (مثل نسخة Shizuku الأصلية) مثبت بالفعل كـ moe.shizuku.privileged.api بتوقيع غير متوافق. يرجى إلغاء تثبيته أولاً.</string>
     <string name="compat_hub_install_fail_storage">تعذر التثبيت: المساحة التخزينية المتاحة على الجهاز غير كافية.</string>
     <string name="compat_hub_install_fail_abi">تعذر التثبيت: لا يدعم Compat Hub بنية المعالج (CPU) لهذا الجهاز.</string>
-    <string name="compat_hub_install_manual_launched">جارٍ فتح مثبت الحزم — اتبع التعليمات على الشاشة لإكمال التثبيت.</string>
     <string name="compat_hub_install_fail_newprocess">يفرض جهازك قيودًا على واجهة برمجة التطبيقات لإنشاء العمليات في Shizuku. يتم فتح مثبت النظام بدلاً من ذلك — اضغط على تثبيت عند المطالبة.</string>
 </resources>

@@ -10,6 +10,7 @@ import af.shizuku.manager.databinding.ActivityRootCompatibilityBinding
 import af.shizuku.manager.databinding.AppListItemBinding
 import af.shizuku.manager.databinding.ListSectionHeaderBinding
 import af.shizuku.manager.shell.ShellTutorialActivity
+import af.shizuku.manager.starter.StarterActivity
 import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -95,13 +96,44 @@ class RootCompatibilityActivity : AppBarActivity() {
         // tmp deploy is always skipped. Show a banner directing the user to the export flow instead.
         if (isAdbMode && Build.VERSION.SDK_INT >= 36) {
             binding.api36AdbWarningCard.visibility = View.VISIBLE
-            binding.btnApi36Export.setContent {
-                af.shizuku.core.ui.compose.Button(
-                    onClick = {
-                        startActivity(Intent(this@RootCompatibilityActivity, ShellTutorialActivity::class.java))
-                    },
-                ) {
-                    androidx.compose.material3.Text(getString(R.string.su_bridge_export_files))
+            binding.btnApi36Export.apply {
+                setViewCompositionStrategy(
+                    androidx.compose.ui.platform.ViewCompositionStrategy
+                        .DisposeOnLifecycleDestroyed(lifecycle),
+                )
+                setContent {
+                    af.shizuku.core.ui.compose.Button(
+                        onClick = {
+                            startActivity(Intent(this@RootCompatibilityActivity, ShellTutorialActivity::class.java))
+                        },
+                    ) {
+                        androidx.compose.material3.Text(getString(R.string.su_bridge_export_files))
+                    }
+                }
+            }
+        }
+
+        // KernelSU installed but Shizuku is running as ADB (uid=2000): offer a one-tap restart
+        // under KernelSU so the bridge escalates from shell-uid to true root (uid=0).
+        val kernelSuInstalled = RootCompatHelper.isKernelSuInstalled(this)
+        if (kernelSuInstalled && isAdbMode) {
+            binding.kernelsuUpgradeCard.visibility = View.VISIBLE
+            binding.btnKernelsuRestart.apply {
+                setViewCompositionStrategy(
+                    androidx.compose.ui.platform.ViewCompositionStrategy
+                        .DisposeOnLifecycleDestroyed(lifecycle),
+                )
+                setContent {
+                    af.shizuku.core.ui.compose.Button(
+                        onClick = {
+                            startActivity(
+                                Intent(this@RootCompatibilityActivity, StarterActivity::class.java)
+                                    .putExtra(StarterActivity.EXTRA_IS_ROOT, true),
+                            )
+                        },
+                    ) {
+                        androidx.compose.material3.Text(getString(R.string.su_bridge_kernelsu_restart_shizuku))
+                    }
                 }
             }
         }
@@ -115,12 +147,18 @@ class RootCompatibilityActivity : AppBarActivity() {
         }
         binding.globalSetupCard.isVisible = exportPath != null || Shizuku.pingBinder()
 
-        binding.btnCopyGlobal.setContent {
-            af.shizuku.core.ui.compose.Button(
-                // Read the field at click time so a later /data/local/tmp deploy is reflected.
-                onClick = { copyToClipboard(resolvedSuPath ?: return@Button) },
-            ) {
-                androidx.compose.material3.Text(getString(R.string.su_bridge_copy_path))
+        binding.btnCopyGlobal.apply {
+            setViewCompositionStrategy(
+                androidx.compose.ui.platform.ViewCompositionStrategy
+                    .DisposeOnLifecycleDestroyed(lifecycle),
+            )
+            setContent {
+                af.shizuku.core.ui.compose.Button(
+                    // Read the field at click time so a later /data/local/tmp deploy is reflected.
+                    onClick = { copyToClipboard(resolvedSuPath ?: return@Button) },
+                ) {
+                    androidx.compose.material3.Text(getString(R.string.su_bridge_copy_path))
+                }
             }
         }
 
@@ -145,27 +183,47 @@ class RootCompatibilityActivity : AppBarActivity() {
         }
 
         // "Setup All" works for both root (all automatable apps) and ADB mode (GLOBAL_SETTINGS_APPS only).
-        binding.btnSetupAll.setContent {
-            af.shizuku.core.ui.compose.Button(
-                onClick = {
-                    val path =
-                        resolvedSuPath ?: run {
-                            Toast.makeText(this@RootCompatibilityActivity, R.string.su_bridge_no_export, Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                    lifecycleScope.launch {
-                        val count = RootCompatHelper.autoSetupAll(this@RootCompatibilityActivity, path)
-                        if (!isFinishing && !isDestroyed) {
-                            if (count > 0) {
-                                Toast.makeText(this@RootCompatibilityActivity, getString(R.string.su_bridge_magic_setup_all_summary, count), Toast.LENGTH_LONG).show()
-                            } else {
-                                Toast.makeText(this@RootCompatibilityActivity, R.string.su_bridge_magic_setup_all_no_apps, Toast.LENGTH_SHORT).show()
+        binding.btnSetupAll.apply {
+            setViewCompositionStrategy(
+                androidx.compose.ui.platform.ViewCompositionStrategy
+                    .DisposeOnLifecycleDestroyed(lifecycle),
+            )
+            setContent {
+                af.shizuku.core.ui.compose.Button(
+                    onClick = {
+                        val path =
+                            resolvedSuPath ?: run {
+                                Toast.makeText(this@RootCompatibilityActivity, R.string.su_bridge_no_export, Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                        lifecycleScope.launch {
+                            val count = RootCompatHelper.autoSetupAll(this@RootCompatibilityActivity, path)
+                            if (!isFinishing && !isDestroyed) {
+                                if (count > 0) {
+                                    Toast.makeText(this@RootCompatibilityActivity, getString(R.string.su_bridge_magic_setup_all_summary, count), Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(this@RootCompatibilityActivity, R.string.su_bridge_magic_setup_all_no_apps, Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
-                    }
+                    },
+                ) {
+                    androidx.compose.material3.Text(getString(R.string.su_bridge_setup_all))
+                }
+            }
+        }
+
+        // Terminal & Environment Setup Card (for Termux, bash, zsh, scripts)
+        val termuxCmd = "export PATH=\"${resolvedSuPath?.substringBeforeLast('/') ?: "/data/local/tmp"}:\$PATH\""
+        binding.termuxCommandPreview.text = termuxCmd
+        binding.btnCopyTermuxSetup.setContent {
+            af.shizuku.core.ui.compose.Button(
+                onClick = {
+                    copyToClipboard(termuxCmd)
+                    Toast.makeText(this@RootCompatibilityActivity, R.string.su_bridge_termux_setup_copied, Toast.LENGTH_SHORT).show()
                 },
             ) {
-                androidx.compose.material3.Text(getString(R.string.su_bridge_setup_all))
+                androidx.compose.material3.Text(getString(R.string.su_bridge_copy_termux_setup))
             }
         }
 
@@ -230,6 +288,49 @@ class RootCompatibilityActivity : AppBarActivity() {
                 addDataScheme("package")
             }
         ContextCompat.registerReceiver(this, packageReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    private data class ResumeProbe(
+        val alive: Boolean,
+        val uid: Int,
+        val suPath: String?,
+        val kernelSu: Boolean,
+    )
+
+    override fun onResume() {
+        super.onResume()
+        val prevRoot = isRoot
+        val prevAdb = isAdbMode
+        val prevPath = resolvedSuPath
+        // Shizuku binder calls never on the main thread: a hung server would ANR on every resume.
+        lifecycleScope.launch {
+            val (alive, uid, latestExportPath, kernelSu) =
+                withContext(Dispatchers.IO) {
+                    val ping = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
+                    ResumeProbe(
+                        alive = ping,
+                        uid = if (ping) runCatching { Shizuku.getUid() }.getOrDefault(-1) else -1,
+                        suPath = resolveSuPath(),
+                        kernelSu = RootCompatHelper.isKernelSuInstalled(this@RootCompatibilityActivity),
+                    )
+                }
+            if (isFinishing || isDestroyed) return@launch
+            isRoot = uid == 0
+            isAdbMode = uid == 2000
+            if (latestExportPath != null && resolvedSuPath == null) {
+                resolvedSuPath = latestExportPath
+            }
+            val path = resolvedSuPath
+            if (path != null) {
+                binding.globalSuPath.text = path
+            }
+            binding.globalSetupCard.isVisible = path != null || alive
+            binding.kernelsuUpgradeCard.visibility =
+                if (kernelSu && isAdbMode) View.VISIBLE else View.GONE
+            if (prevRoot != isRoot || prevAdb != isAdbMode || prevPath != resolvedSuPath) {
+                refreshList()
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -361,6 +462,11 @@ class RootCompatibilityActivity : AppBarActivity() {
                 }
                 return true
             }
+            R.id.action_knowledgebase -> {
+                af.shizuku.manager.knowledgebase.KnowledgebaseHelper
+                    .show(this, af.shizuku.manager.knowledgebase.KnowledgebaseRegistry.TOPIC_ROOT_COMPAT)
+                return true
+            }
         }
         return super.onOptionsItemSelected(item)
     }
@@ -371,6 +477,7 @@ class RootCompatibilityActivity : AppBarActivity() {
         lifecycleScope.launch {
             val result = RootCompatHelper.selfTest(this@RootCompatibilityActivity)
             if (isFinishing) return@launch
+            val report = selfTestReport(result)
             val heading =
                 if (result.ok) {
                     getString(R.string.su_bridge_self_test_ok)
@@ -379,13 +486,54 @@ class RootCompatibilityActivity : AppBarActivity() {
                 }
             MaterialAlertDialogBuilder(this@RootCompatibilityActivity)
                 .setTitle(getString(R.string.su_bridge_self_test_title))
-                .setMessage("$heading\n\n${result.report}")
+                .setMessage("$heading\n\n$report")
                 .setPositiveButton(android.R.string.ok, null)
                 .setNeutralButton(R.string.su_bridge_self_test_copy) { _, _ ->
                     val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    cm.setPrimaryClip(ClipData.newPlainText("SU Bridge self-test", result.report))
+                    cm.setPrimaryClip(ClipData.newPlainText("SU Bridge self-test", report))
                     Toast.makeText(this@RootCompatibilityActivity, R.string.su_bridge_self_test_copied, Toast.LENGTH_SHORT).show()
                 }.show()
+        }
+    }
+
+    private fun selfTestReport(result: RootCompatHelper.BridgeSelfTest): String {
+        when (result.failure) {
+            RootCompatHelper.BridgeSelfTest.Failure.NOT_CONNECTED ->
+                return getString(R.string.su_bridge_report_not_connected)
+            RootCompatHelper.BridgeSelfTest.Failure.DEPLOY_FAILED -> {
+                val reason = result.deployFailureDetail?.let { getString(R.string.su_bridge_report_deploy_reason, it) + "\n\n" }.orEmpty()
+                val hint =
+                    getString(
+                        if (result.shellMode) R.string.su_bridge_report_deploy_hint_shell else R.string.su_bridge_report_deploy_hint_retry,
+                    )
+                return getString(R.string.su_bridge_report_deploy_failed) + "\n\n" + reason + hint
+            }
+            null -> Unit
+        }
+        val dir = result.tmpDir.orEmpty()
+        val privilege =
+            when (result.uid) {
+                0 -> getString(R.string.su_bridge_report_privilege_root)
+                2000 -> getString(R.string.su_bridge_report_privilege_shell)
+                null -> getString(R.string.su_bridge_report_privilege_unknown)
+                else -> getString(R.string.su_bridge_report_privilege_uid, result.uid)
+            }
+        val appExec =
+            when (val e = result.appExec) {
+                is RootCompatHelper.BridgeSelfTest.AppExec.Ok ->
+                    getString(R.string.su_bridge_report_app_exec_ok, e.uid?.toString() ?: "?")
+                is RootCompatHelper.BridgeSelfTest.AppExec.NoRoundTrip ->
+                    getString(R.string.su_bridge_report_app_exec_no_round_trip, e.output)
+                is RootCompatHelper.BridgeSelfTest.AppExec.Blocked ->
+                    getString(R.string.su_bridge_report_app_exec_blocked, e.message)
+                null -> "?"
+            }
+        return buildString {
+            appendLine(getString(if (result.deployed) R.string.su_bridge_report_deployed else R.string.su_bridge_report_missing, dir))
+            appendLine(getString(R.string.su_bridge_report_privilege, privilege))
+            append(getString(R.string.su_bridge_report_app_exec, appExec)).append("\n\n")
+            append(getString(if (result.uid == 0) R.string.su_bridge_report_root_level else R.string.su_bridge_report_shell_level))
+            append("\n\n").append(getString(R.string.su_bridge_report_authorize_reminder))
         }
     }
 
@@ -479,7 +627,7 @@ class RootCompatibilityActivity : AppBarActivity() {
                     .scaleX(1f)
                     .scaleY(1f)
                     .setDuration(ShizukuSettings.scaledAnimationDuration(500))
-                    .setInterpolator(android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f))
+                    .setInterpolator(af.shizuku.manager.utils.MotionUtils.STANDARD)
                     .start()
             } else {
                 holder.itemView.alpha = restAlpha
@@ -523,8 +671,7 @@ class RootCompatibilityActivity : AppBarActivity() {
                     }
                     else -> holder.binding.requiresRoot.visibility = View.GONE
                 }
-                // "Requires Plus" badge: shown when app has Plus enhancements that benefit it
-                holder.binding.requiresPlus.visibility = if (metadata != null && metadata.potentialEnhancements.isNotEmpty()) View.VISIBLE else View.GONE
+                holder.binding.requiresPlus.visibility = View.GONE
 
                 // "Shizuku-aware" badge: shown for apps that support Shizuku natively
                 holder.binding.shizukuAware.visibility = if (metadata?.supportsShizukuNatively == true) View.VISIBLE else View.GONE
@@ -547,7 +694,17 @@ class RootCompatibilityActivity : AppBarActivity() {
                             val path = resolvedSuPath
                             if (path != null) {
                                 copyToClipboard(path)
-                                launchOrStore(pkg)
+                                val appName =
+                                    holder.binding.title.text
+                                        ?.toString() ?: pkg
+                                com.google.android.material.dialog
+                                    .MaterialAlertDialogBuilder(this@RootCompatibilityActivity)
+                                    .setTitle(getString(R.string.su_bridge_configure_dialog_title, appName))
+                                    .setMessage(getString(R.string.su_bridge_configure_dialog_message, path, appName, navHint))
+                                    .setPositiveButton(R.string.su_bridge_open_app) { _, _ ->
+                                        launchOrStore(pkg)
+                                    }.setNegativeButton(android.R.string.cancel, null)
+                                    .show()
                             } else {
                                 Toast.makeText(this@RootCompatibilityActivity, R.string.su_bridge_no_export, Toast.LENGTH_SHORT).show()
                             }
@@ -568,9 +725,8 @@ class RootCompatibilityActivity : AppBarActivity() {
                     Timber.tag(TAG).e(e, "Failed to check if package $pkg is installed")
                 }
 
-                // Magic Setup is only meaningful when we know how to configure this specific app.
-                // canAutoSetup() is the single source of truth: GLOBAL_SETTINGS_APPS in any mode,
-                // ROOT_PREFS_APPS when running as root (UID 0) or ADB shell (UID 2000).
+                // Magic Setup works on both root and non-root (ADB/temp-root) devices:
+                // Global settings apps configure instantly; shared_prefs apps attempt privileged shell/run-as.
                 val canMagicSetup = RootCompatHelper.canAutoSetup(pkg, isRoot || isAdbMode)
                 holder.binding.suMagicSetup.isVisible = isInstalled && !isShizukuNative
                 if (isInstalled) {
@@ -596,7 +752,16 @@ class RootCompatibilityActivity : AppBarActivity() {
                                         Toast.makeText(this@RootCompatibilityActivity, this@RootCompatibilityActivity.getString(R.string.su_bridge_magic_setup_success, appName), Toast.LENGTH_LONG).show()
                                         launchOrStore(pkg)
                                     } else {
-                                        Toast.makeText(this@RootCompatibilityActivity, R.string.su_bridge_magic_setup_fail, Toast.LENGTH_SHORT).show()
+                                        // Fallback: copy SU path and open the guided manual configuration dialog
+                                        copyToClipboard(path)
+                                        com.google.android.material.dialog
+                                            .MaterialAlertDialogBuilder(this@RootCompatibilityActivity)
+                                            .setTitle(getString(R.string.su_bridge_configure_dialog_title, appName))
+                                            .setMessage(getString(R.string.su_bridge_configure_dialog_message, path, appName, navHint))
+                                            .setPositiveButton(R.string.su_bridge_open_app) { _, _ ->
+                                                launchOrStore(pkg)
+                                            }.setNegativeButton(android.R.string.cancel, null)
+                                            .show()
                                     }
                                 }
                             },
@@ -646,7 +811,7 @@ class RootCompatibilityActivity : AppBarActivity() {
                         val url =
                             when (pkg) {
                                 "dev.ukanth.ufirewall" -> "https://f-droid.org/packages/dev.ukanth.ufirewall/"
-                                "com.machiav3lli.neo_backup" -> "https://f-droid.org/packages/com.machiav3lli.neo_backup/"
+                                "com.machiav3lli.backup" -> "https://f-droid.org/packages/com.machiav3lli.backup/"
                                 "samolego.canta" -> "https://f-droid.org/packages/samolego.canta/"
                                 "com.aistra.hail" -> "https://f-droid.org/packages/com.aistra.hail/"
                                 "thejaustin.afdroid" -> "https://github.com/thejaustin/afdroid/releases"

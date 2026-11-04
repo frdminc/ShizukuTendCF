@@ -4,4 +4,5 @@
     android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="true"
+    android:packageNames="com.android.settings,com.android.tv.settings"
 />

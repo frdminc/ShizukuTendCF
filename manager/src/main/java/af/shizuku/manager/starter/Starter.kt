@@ -1,10 +1,11 @@
 package af.shizuku.manager.starter
 
 import af.shizuku.manager.R
+import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.utils.ShizukuStateMachine
 import android.content.Context
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /**
@@ -24,20 +25,20 @@ object Starter {
         get() = File(getContext().applicationInfo.nativeLibraryDir, "libshizuku.so")
 
     val userCommand: String
-        get() = starterFile.absolutePath
+        get() {
+            val nativeLibDir = getContext().applicationInfo.nativeLibraryDir
+            val tcpFlag = if (ShizukuSettings.getTcpMode()) " --tcp" else ""
+            return "LD_LIBRARY_PATH=$nativeLibDir ${starterFile.absolutePath}$tcpFlag"
+        }
 
     val adbCommand: String
-        get() = "adb shell $userCommand"
+        get() {
+            val baseCmd = "adb shell $userCommand"
+            return if (ShizukuSettings.getTcpMode()) "adb tcpip 5555 && $baseCmd" else baseCmd
+        }
 
     val internalCommand: String
-        get() {
-            // Prepend LD_LIBRARY_PATH so the shell linker can find libc++_shared.so alongside
-            // libshizuku.so and librish.so. On Android 16 (and some OEM builds) libc++_shared.so
-            // is absent from the default shell linker search path; without this, libshizuku.so
-            // fails to load even when the library is bundled inside the APK's native-lib dir.
-            val nativeLibDir = getContext().applicationInfo.nativeLibraryDir
-            return "LD_LIBRARY_PATH=$nativeLibDir $userCommand --apk=${getContext().applicationInfo.sourceDir}"
-        }
+        get() = "$userCommand --apk=${getContext().applicationInfo.sourceDir}"
 
     val serviceStartedMessage: String
         get() = getContext().getString(R.string.starter_service_started)
@@ -56,11 +57,17 @@ object Starter {
         // leaves this screen stuck on "Waiting for service…" even though the service is already
         // reachable. update() pings the binder and, when alive, sets the state to RUNNING (also
         // notifying listeners so the home screen refreshes).
-        withTimeout(20_000) {
-            while (ShizukuStateMachine.update() != ShizukuStateMachine.State.RUNNING) {
-                delay(250)
+        // withTimeoutOrNull: withTimeout's TimeoutCancellationException is a CancellationException,
+        // which callers rethrow as a cancellation, so a start that never connected ended without
+        // a retry and left STARTING in place.
+        val connected =
+            withTimeoutOrNull(20_000) {
+                while (ShizukuStateMachine.update() != ShizukuStateMachine.State.RUNNING) {
+                    delay(250)
+                }
+                true
             }
-        }
+        if (connected == null) throw java.util.concurrent.TimeoutException("The service did not connect within 20 s")
 
         val elapsed = (System.currentTimeMillis() - t0) / 1000.0
         log?.invoke("Connected in ${String.format("%.1f", elapsed)}s")

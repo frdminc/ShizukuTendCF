@@ -120,6 +120,495 @@ Things discussed or sketched that we never formally decided to build.
 
 ## Session History (newest first)
 
+### 2026-11-03 (cont'd) — Antigravity (Gemini 3.8 Flash) (Dependabot advisory audit, Bouncy Castle 1.86 upgrade, CI graph scoping & TLS fallback) [master]
+
+- **Dependabot Security Alerts & Root Cause Analysis:**
+  - *Why notifications arrived now*: The recent push of commit `816cdada` triggered `.github/workflows/dependency-submission.yml`, which ran `gradle/actions/dependency-submission` on `master`. This submitted the first fresh dependency graph snapshot in a while, prompting GitHub's advisory database to generate alerts.
+  - *Why alerts were reported on `settings.gradle`*: By default, `gradle/actions/dependency-submission` extracts dependencies from ALL configurations across the entire Gradle build, including internal buildscript classpaths, compiler plugins, and formatting plugins (e.g. Spotless's internal JGit, AGP's internal XML parser JDOM, etc.).
+  - *Fix in CI*: Updated `.github/workflows/dependency-submission.yml` to set `DEPENDENCY_GRAPH_EXCLUDE_CONFIGURATIONS` (`(?i)(^|:)(classpath|.*PluginClasspath|kotlinCompilerClasspath|kaptClasspath|annotationProcessor|detachedConfiguration.*)$`). This filters out internal build-tooling artifacts from cluttering security reports while keeping project compile and runtime dependencies actively monitored.
+- **Bouncy Castle & Transitive Security Upgrades:**
+  - Upgraded `bouncycastle = "1.86"` in `gradle/libs.versions.toml`.
+  - In `manager/build.gradle`: Added explicit `org.bouncycastle:bcprov-jdk18on:1.86` and configured `configurations.all.resolutionStrategy` to force `1.86` across all configurations, and force `com.google.guava:guava:33.4.0-android` to prevent insecure temporary directory vulnerabilities.
+  - Resolves 5 Bouncy Castle advisories: GHSA-9pwp-9qqc-pr26 (Critical, Name Constraints bypass), GHSA-574f-3g2m-x479 (Critical, GOST 28147 CTR mode), GHSA-qp49-qgx5-5m26 (High, Lazy ASN.1 sequence nesting depth), GHSA-c3fc-8qff-9hwx (Medium, LDAP injection), and GHSA-wg6q-6289-32hp (Medium, bcpkix algorithm).
+- **Layered Security & Device Fallback in `AdbKey.kt`:**
+  - In `AdbKey.kt`: Wrapped `SSLContext.getInstance("TLSv1.3")` in a graceful fallback to `SSLContext.getInstance("TLS")`. Ensures ADB TLS pairing succeeds even on custom vendor ROMs, older security providers, or Android Go/TV variants where `"TLSv1.3"` is not registered by that exact identifier.
+- **Verification**:
+  - Ran `bash gradlew spotlessApply` and `bash gradlew spotlessCheck`. Clean and passing.
+
+### 2026-11-03 — Antigravity (Gemini 3.8 Flash) (TCP persistence on USB disconnect, screen-lock/battery-saver resilience, settings scroll & morph polish) [master]
+
+- **TCP Mode Persistence Across USB Disconnection (#656):**
+  - *Problem*: Starting Shizuku over USB with TCP mode enabled resulted in Shizuku stopping shortly after unplugging the USB cable, especially when locking the screen or entering battery saver.
+  - *Root Cause 1 (`persist.adb.tcp.port` skipped)*: In `starter.cpp`, `__system_property_set("persist.adb.tcp.port", ...)` was only executed when `service.adb.tcp.port <= 0`. When a user ran `adb tcpip 5555` prior to starter, active port was already 5555, so `persist.adb.tcp.port` was never written. On USB unplug, Android resets USB configs, clearing non-persistent TCP mode and dropping `adbd`.
+  - *Root Cause 2 (Session Teardown Signals)*: When `adbd` handles USB detachment, it sends `SIGHUP` and `SIGTERM` to active shell sessions. The child process in `starter.cpp` only ignored `SIGHUP` and `SIGPIPE`, allowing `SIGTERM` to terminate `shizuku_plus_server`.
+  - *Root Cause 3 (Missing Persistent Port in Application Startup)*: In `ShizukuApplication.kt`, `AdbProxyService.enableAdbTcp` was only called if `currentPort != desiredPort`, skipping the persistent setprop when active port was already 5555.
+  - *Root Cause 4 (Android 12–16 Phantom Process Killer & Battery Saver)*: On screen lock and battery saver activation, Android's ActivityManager trims phantom processes exceeding default limits and restricts background apps without active standby buckets or `RUN_ANY_IN_BACKGROUND` AppOps.
+  - *Fixes*:
+    - In `starter.cpp`: Added `signal(SIGTERM, SIG_IGN)`, `signal(SIGQUIT, SIG_IGN)`, and `signal(SIGTSTP, SIG_IGN)` in the spawned server process. Always updates `persist.adb.tcp.port` to `target_port` whenever TCP mode is requested.
+    - In `ShizukuApplication.kt`: Ensured `AdbProxyService.enableAdbTcp(desiredPort)` runs on service start when TCP mode is on so persistent properties are confirmed.
+    - In `DeviceOptimizer.kt`: Automatically applies `cmd appops set $pkg RUN_ANY_IN_BACKGROUND allow`, `cmd appops set $pkg RUN_IN_BACKGROUND allow`, `am set-standby-bucket $pkg active`, and disables phantom process limits (`device_config put activity_manager max_phantom_processes 2147483647`) on service start.
+    - In `WatchdogService.kt`: Added `WAKE_LOCK` permission in `AndroidManifest.xml` and temporary partial wake locks during crash recovery to prevent CPU suspension during restart delays. Added dynamic receiver for `ACTION_POWER_DISCONNECTED` (to immediately safeguard TCP port on USB unplug) and `ACTION_POWER_SAVE_MODE_CHANGED` (to reinforce background hardening on battery saver).
+    - In `BootCompleteReceiver.kt`: Automatically revives stopped Shizuku on `ACTION_USER_PRESENT` if Watchdog auto-restart is active, so unlocking the device heals any drop that occurred while asleep.
+- **Settings Screen Scroll Jump & Jitter Elimination:**
+  - *Problem*: Changing settings toggles or icon morph shapes caused the settings list to jump/scroll to the top and jitter, breaking the fluid M3 Expressive morph animation.
+  - *Root Cause 1 (Adapter Reset on Icon Refresh)*: `refreshIconStyles()` re-applied styled drawables across all preferences, triggering `notifyDataSetChanged()` without preserving scroll position.
+  - *Root Cause 2 (Unnecessary Activity Recomposition)*: Toggles like `icon_morph_shape`, `expanded_headers_enabled`, `expressive_animations`, and `apply_corner_rounding_to_home` called `applyTheme(requiresRecreate = false)`. This triggered `SettingsActivity.onThemeChanged()`, incrementing `themeVersion++` and causing the entire Compose `SettingsScreen` to recompose and re-measure `TopAppBarState`.
+  - *Fixes*:
+    - In `BaseSettingsFragment.kt`: `refreshIconStyles()` and `updateHeaderPadding()` now capture the exact first visible item position and pixel offset (`findFirstVisibleItemPosition()`, `firstView.top`) and restore them via `layoutManager.scrollToPositionWithOffset(firstPos, offsetTop)`.
+    - In `SettingsActivity.kt`: `onThemeChanged()` now checks whether `isOneUi` or `isOneHanded` actually changed before incrementing `themeVersion++` and updating padding.
+    - In `PersonalizationSettingsFragment.kt`: Removed redundant `applyTheme(requiresRecreate = false)` calls from icon shape, morph mode, and animation settings.
+    - In `ExperimentalSettingsFragment.kt`: Added listener to `switch_row_design` for clean immediate recreation.
+- **Verification**:
+  - Ran `bash gradlew spotlessApply` and `bash gradlew spotlessCheck`. Both clean and passing.
+
+### 2026-11-02 (cont'd 7) — Antigravity (Gemini 3.8 Flash) (Update onboarding, numerical pairing keypad, home card shape isolation, swipe toggle & M3E corner animations) [master]
+
+- **Update Onboarding Gate & Returning User Highlighting:**
+  - *Problem*: `ShizukuSettings.isOnboardingSeen()` was a persistent boolean set once on fresh install. When existing users updated to new releases, onboarding was permanently bypassed, meaning they were never informed of major new features (Floating Nav Bar, Wireless ADB Pairing enhancements, One UI mode, etc.).
+  - *Fix*: Added `KEY_LAST_SEEN_ONBOARDING_VERSION` (`last_seen_onboarding_version`) to track the app version code when onboarding was last completed.
+  - In `MainActivity.kt`: If `lastSeenOnboardingVersion < currentCode` for returning users, launches `OnboardingActivity` with `EXTRA_NEW_FEATURES_ONLY = true` and `EXTRA_SINCE_VERSION_CODE = lastSeenOnboardingVersion`.
+  - In `OnboardingActivity.kt`: Reads `EXTRA_SINCE_VERSION_CODE`, completes onboarding by updating both `setLastSeenOnboardingVersion(currentCode)` and `setLastSeenChangelogVersion(currentCode)` to avoid duplicate update popups.
+  - In `page_onboarding_welcome_returning.xml`: Added dedicated feature preview cards for Layout & Navigation (`card_feat_layout_nav`) and Wireless ADB & Keypad (`card_feat_wireless`) with direct deep links to onboarding tutorial flows.
+- **Numerical Keyboard for Pairing Code (#654):**
+  - Added user toggle `KEY_NUMERICAL_PAIRING_KEYBOARD` (`numerical_pairing_keyboard`) under Wireless & ADB in `settings_behavior.xml`.
+  - In `AdbPairDialogFragment.kt`: Dynamically applies `InputType.TYPE_CLASS_NUMBER` and `DigitsKeyListener.getInstance("0123456789")` when enabled, with fallback to text input.
+  - In `AdbPairingDialogActivity.kt`: Enforces numeric keypad, 6-digit max length filter, letter spacing, and centered alignment for fluid pairing code entry.
+  - In `AdbPairingService.kt`: Passes `EXTRA_INPUT_TYPE = InputType.TYPE_CLASS_NUMBER` to notification shade inline reply `RemoteInput` for compatible IMEs and WearOS keyboards.
+- **Master Swipe Gestures Toggle & Preference Consolidation:**
+  - Added `KEY_SWIPE_GESTURES_ENABLED` (`swipe_gestures_enabled`) in `settings_personalization.xml` as a master switch in `category_app_interactions`.
+  - In `SwipePreviewPreference.kt`: Dynamically disables interaction and displays `swipe_actions_disabled_summary` when master switch is off.
+  - In `ApplicationManagementActivity.kt`: Returns `0` from `ItemTouchHelper.SimpleCallback.getMovementFlags` when disabled, cleanly deactivating swipe gestures across all app rows.
+- **Corner Rounding per Toggle & Preserving Home Card Layouts:**
+  - *Problem*: Global corner rounding theme overlays (`ThemeOverlay.CornerRounding.*`) directly modified `shapeAppearanceCornerExtraLarge`, which previously bled into `home_item_container.xml` and altered default home card aesthetics unexpectedly.
+  - *Fix*: Decoupled home cards by defining `@style/ShapeAppearance.HomeCard.ExtraLarge` (inheriting standard 28dp radius) and assigning it as default shape in `home_item_container.xml`.
+  - Added `KEY_APPLY_CORNER_ROUNDING_TO_HOME` (`apply_corner_rounding_to_home`) in `settings_personalization.xml`.
+  - In `HomeAdapter.kt`: Only overrides card corners with user custom theme radius if `apply_corner_rounding_to_home` is explicitly enabled.
+- **M3E Dynamic Grid Corner Animations & Switch Thumb Fix:**
+  - In `PreferenceCompose.kt`: Added `resolveGridCardCorner` and `resolveGridIconCorner` to respect custom corner rounding settings in M3 Expressive Jetpack Compose preference components.
+  - In `DisplayOptionsGridPreference.kt`, `VerifiedInstallGridPreference.kt`, and `PlusGovernorsPreference.kt`: Dynamically animate corners based on active corner theme override.
+  - In `SwitchDesign.kt`: Prevented standard switch design from wiping out default switch thumbs with `null`.
+- **Code Hygiene & Verification:**
+  - Ran `bash gradlew spotlessApply` and `bash gradlew spotlessCheck`. Clean and passing.
+
+### 2026-11-02 (cont'd 5) — Antigravity (Gemini 3.8 Flash) (Release notes fix, fallback rendering, Atom feed parser, Crowdin setup) [master]
+
+- **In-App Release Notes ("What's New") Fix:**
+  - *Problem*: In recent releases (`13.7.0.r3214`, `13.7.0.r3215`, `13.7.0.r3216`), the in-app What's New dialog showed "No release notes available" or empty section headers (`# 13.7.0.r3216 \n\n ### Other`).
+  - *Root Cause 1 (Truncation & Empty Pruning)*: `formatNotes` called `substringBefore("## 📦 Recent Releases")` and filtered out README lines (`README_BULLET`). When a maintenance release only had docs/README updates, all bullets were removed leaving empty header lines, or no text at all, cutting off the entire recent releases digest and major release highlights table.
+  - *Root Cause 2 (HTML Details Wrapping)*: Workflow release notes wrap commits in `<details><summary>All commits in this release</summary>`. Without HTML parsing in Markwon, raw tags were rendered or hidden.
+  - *Root Cause 3 (Bullet & Hash Regex Limitations)*: Bullet regexes matched only `[-*]`, failing on Unicode `•` (`\u2022`) bullets generated by CI. Hash regexes failed on markdown links.
+  - *Root Cause 4 (Burned Version on Network Failure)*: In `MainActivity.kt`, `setLastSeenChangelogVersion(currentCode)` was called even when `fetchReleasesSince` returned an empty list, permanently burning the version so What's New could never display once network was restored.
+  - *Root Cause 5 (GitHub API Rate Limiting)*: Unauthenticated GitHub API requests hit the 60 req/hr rate limit on shared mobile carrier CGNAT, failing release fetch with no fallback.
+  - *Fixes*:
+    - In `ChangelogDialogFragment.kt`: Added `cleanEmptyHeadings` to prune empty header hierarchies; unwrapped `<details><summary>` into clean markdown headers; expanded bullet regex to `[-*•+]`; when the primary notes section has no substantive changes, gracefully fall back to displaying recent release highlights (`### Recent Highlights`) from the rollup block.
+    - In `ChangelogDialogFragment.kt`: If opened with an empty release list, asynchronously loads notes via `UpdateChecker.fetchReleaseNotesForTag(tagName)` while displaying a loading message instead of an immediate dead-end fallback.
+    - In `ChangelogParser.kt`: Added support for `[-*•+]` bullets, unwrapped details markup, and added fallback table parsing from `## 📦 Recent Releases` to categorize recent changes into Timeline sections so Timeline mode never drops releases or renders empty cards.
+    - In `UpdateChecker.kt`: Added `fetchReleasesFromAtom()` and `htmlToMarkdown()` to parse `https://github.com/thejaustin/ShizukuPlus/releases.atom` as an automatic CDN fallback when GitHub API rate-limits or fails.
+    - In `MainActivity.kt`: Only burns `lastSeenChangelogVersion` when releases are successfully retrieved or style picker is explicitly handled, avoiding showing empty dialogs on offline startup and preserving What's New for when online.
+    - Added unit tests in `ChangelogFormatAndParseTest.kt` verifying all markdown formats, Unicode bullets, details unwrapping, and fallback highlights.
+    - Added string `changelog_loading` to `strings.xml`.
+- **Crowdin Localization & CI Workflow Enhancements:**
+  - Crowdin project configured at `https://crowdin.com/project/shizukuplus` under `@thejaustin`.
+  - Configured repository secrets `CROWDIN_PROJECT_ID` (`943373`) and `CROWDIN_TOKEN` in GitHub Actions.
+  - Installed native `crowdin` CLI v5.5.0 on Termux via glibc runner.
+  - Expanded project target locales to 65 languages and configured full `languages_mapping` in `crowdin.yml`.
+  - Backfilled and imported all existing translations for all 40 codebase languages into Crowdin with `--auto-approve-imported`.
+  - Updated `app.yml` to automatically pull latest approved Crowdin translations before assembling release APKs so releases always ship with up-to-date localization.
+  - Updated `pr-check.yml` to enforce `./gradlew spotlessCheck` on PRs and ignore doc-only markdown changes.
+  - Updated `crowdin-sync.yml` with bidirectional translation sync and step summary reporting.
+- **Code Hygiene & Verification:**
+  - Ran `bash gradlew spotlessApply` and `bash gradlew spotlessCheck`. Both clean and passing.
+
+### 2026-11-02 (cont'd 6) — Antigravity (Gemini 3.8 Flash) (Settings icon theme consistency, ADB pair dialog multi-window polish, ComposeView lifecycle) [master]
+
+- **Settings Category Icon Theme Consistency (#641):**
+  - `CollapsiblePreferenceCategory.kt`: Now respects `IconStyleHelper.current()` when icon mode is `OUTLINED` by tinting the category icon with `colorOnSurfaceVariant` instead of defaulting to `colorPrimary`, ensuring full color harmony with the outlined items below it.
+- **ADB Pairing Dialog Multi-Window & Validation Polish (#654):**
+  - `AdbPairDialogFragment.kt`: Eliminated the UI bug where both `text1` (general guidance) and `text2` (split-screen requirement note) were rendered simultaneously when not in multi-screen mode. Also ensured `text2` is dismissed once the pairing port is discovered.
+  - Migrated lifecycle from deprecated `onActivityCreated` to `onStart`.
+  - Added strict 6-digit numeric validation on pairing codes with error feedback (`dialog_adb_invalid_code`) before initiating the pairing handshake, preventing malformed/empty attempts.
+- **Root Compatibility ComposeView Scoping:**
+  - `RootCompatibilityActivity.kt`: Added explicit `ViewCompositionStrategy.DisposeOnLifecycleDestroyed(lifecycle)` across all embedded compose buttons (`btnApi36Export`, `btnKernelsuRestart`, `btnCopyGlobal`, `btnSetupAll`) for clean lifecycle disposal.
+
+### 2026-11-02 (cont'd 5) — Antigravity (Gemini 3.8 Flash) (FloatingNavBar leak fix, Android 15+ boot watchdog heal, USB toggle preservation, settings polish) [master]
+
+- **FloatingNavBar Memory Leak Resolution:**
+  - `FloatingNavBar.kt`: Replaced strong `private var current: Activity?` with `WeakReference<Activity>?` in the singleton object. Clears the reference when `onActivityPaused` and `onActivityDestroyed` are called for that activity, eliminating memory leaks during theme recreations and navigation.
+- **Boot Resilience & Android 15+ Watchdog Auto-Start:**
+  - `BootCompleteReceiver.kt`: On Android 15+ (API 35+), direct foreground service starts from background broadcasts while locked throw `ForegroundServiceStartNotAllowedException`. Now uses `WatchdogWorker.scheduleOneTimeHeal` (expedited WorkManager task with foreground exemption) to safely revive Watchdog on boot.
+  - Added Watchdog revival and alarm re-arm to `ACTION_USER_PRESENT` so unlocking the phone immediately ensures Watchdog is up even if OEM cleaners killed background processes earlier.
+- **Respect User Developer Options & Start Network Flexibility:**
+  - `AdbStartWorker.kt`: Removed `Settings.Global.putInt(cr, Settings.Global.ADB_ENABLED, 1)` from start worker startup routine (#656). Shizuku+ configures `adb_allowed_connection_time` to 0 without force-enabling USB debugging if the user manually turned it off.
+  - Relaxed WorkManager constraint from `NetworkType.UNMETERED` to `NetworkType.CONNECTED` so metered Wi-Fi, mobile hotspots, and on-device loopback setups can start without waiting for unmetered connections.
+- **Settings UI & Toggle Polish:**
+  - `PlusFeaturePreference.kt`: Removed hardcoded rectangular background color on help bottom sheets, preserving native Material 3 rounded corner radius and surface tint. Fixed embedded toggle handler to check `callChangeListener` before changing `isChecked` and revert state if rejected.
+  - `DeveloperOptionsFragment.kt`: Used safe `as? TwoStatePreference` for unrestricted access confirmation.
+  - `PersonalizationSettingsFragment.kt` & `settings_personalization.xml`: Added `floating_nav_tabs` multi-select preference alongside floating navigation styling with live summary updates, and added missing `android:dependency="floating_nav_enabled"` attributes in `settings_experimental.xml`.
+
+### 2026-11-02 (cont'd 4) — Antigravity (Gemini 3.8 Flash) (Boot auto-start & unlock resilience, USER_PRESENT trigger, TCP probe retry) [master]
+
+- **Seamless Boot & Unlock Auto-Start Improvements:**
+  - *`ACTION_USER_PRESENT` handling*: Added `ACTION_USER_PRESENT` to `BootCompleteReceiver` (manifest and Kotlin receiver). If direct-boot encryption lock (CE) deferred the boot attempt or OEM battery cleaners delayed `BOOT_COMPLETED`, unlocking the device immediately initiates the start if Shizuku is stopped and `start_on_boot` is enabled.
+  - *Smart Fallback for Unknown Launch Mode*: In `ShizukuReceiverStarter.kt`, if launch mode is `UNKNOWN` (e.g. fresh install or restored settings), it checks `EnvironmentUtils.isRooted()` and falls back to Root, or falls back to ADB if TCP mode or open ADB port is detected.
+  - *TCP Port Probe Back-Off on Boot*: In `AdbStartWorker.kt`, when TCP mode is on, retries the port probe with back-off (600ms, 1000ms, 1500ms) on boot attempt 0, allowing `adbd` time to initialize and bind port 5555 without prematurely falling through to mDNS discovery.
+  - *TCP Reconnect Without Secure Settings*: In `ReconnectTrigger.kt`, allows auto-reconnect when `tcp_mode` is enabled or TCP port > 0 even if `WRITE_SECURE_SETTINGS` has not yet been granted.
+
+### 2026-11-02 (cont'd 3) — Antigravity (Gemini 3.8 Flash) (Opt-in TCP persistence, USB disconnect adaptive suggestion, interactive command dialog) [master]
+
+- **Opt-in TCP Mode & USB Disconnect Suggestion:**
+  - *Starter & Server*: Updated `manager/src/main/jni/starter.cpp` and `server/src/main/java/rikka/shizuku/server/ShizukuService.java` so `service.adb.tcp.port` and `persist.adb.tcp.port` are ONLY configured if TCP mode is explicitly enabled by the user in settings (`persist.adb.tcp.port > 0`) or requested via `--tcp`/`--tcpip` in command arguments. Never forces TCP mode on users who intentionally want USB-only debugging.
+  - *Starter Commands*: `Starter.kt` dynamically emits `--tcp` and `adb tcpip 5555 && ` only when `ShizukuSettings.getTcpMode()` is true.
+  - *Interactive Command Dialog*: `StartAdbViewHolder.showViewCommandDialog` now features an embedded `MaterialCheckBox` allowing users to toggle TCP mode live before copying or sending the command. Toggling immediately updates the displayed command text and preferences.
+  - *Adaptive USB Disconnect Suggestion*: Added `AdaptiveRecommendationManager.maybeRecommendUsbTcpMode()` and `EnvironmentUtils.isUsbConnected()`. When Shizuku starts via ADB while connected to USB, if TCP mode is not enabled, an adaptive recommendation offers to enable TCP mode (port 5555) with chained open Wi-Fi network guard recommendations before disconnecting.
+
+### 2026-11-02 (cont'd 2) — Antigravity (Gemini 3.8 Flash) (CI paths-ignore, USB debugging setting preservation, GitHub community triage) [master]
+
+- **GitHub Actions CI Trigger Suppression for Docs/README:**
+  - Added `paths-ignore` (`'**.md'`, `'docs/**'`, `'.github/ISSUE_TEMPLATE/**'`, `'.github/pull_request_template.md'`, `'LICENSE*'`) to `.github/workflows/app.yml`, `dependency-submission.yml`, `security.yml`, and `gitguardian.yaml`.
+  - Pushing changes to `README.md` or markdown documentation will no longer trigger full Gradle compilation, lint checks, or secret scanning.
+- **USB Debugging Setting Preservation (Issue #656):**
+  - In `ShizukuService.java`: Removed unconditional write of `adb_enabled = "1"`. Setting `adb_allowed_connection_time` to 0 is sufficient to keep authorizations alive without overriding user's manual toggling of USB debugging in Developer Options. Resolves user report in #656 where manual USB debugging toggles were undone automatically by the Shizuku server.
+- **GitHub Issues & Community Feedback Triage:**
+  - Triaged #656 (ADB auth persistence and auto-enabling USB debugging query; confirmed root cause and addressed), #660 (per-app network firewall feature request via Network Governor), #655 (Storage Bridge vs DAC `/data/data` restrictions), and #651 (auto-backup in Downloads folder removed).
+
+### 2026-11-02 (cont'd) — Antigravity (Gemini 3.8 Flash) (USB disconnect persistence, cgroup isolation, ADB TCP 5555 auto-binding) [master]
+
+- **USB Disconnect & Server Termination Root-Cause & Resolution:**
+  - *Problem*: User reported that when enabling ADB via USB (e.g., using aShell You on a separate device via OTG or a PC), the Shizuku server immediately disconnected when the USB cable was pulled, and the on-device app could not restart without reconnecting USB.
+  - *Root Cause 1 (CGroup / init kill)*: In `starter.cpp`, `switch_cgroup()` was only called if `uid == 0 || uid == 1000`. Shell sessions run with `uid == 2000`. When `adbd` is stopped upon USB disconnect by Android's `UsbDeviceManager`, Android `init` sends `SIGKILL` to all processes in `adbd`'s cgroup, instantly killing `shizuku_plus_server`.
+  - *Root Cause 2 (SIGHUP delivery)*: The child process inherited the controlling terminal/pty session of the adb shell. When the USB connection dropped, unmasked `SIGHUP` was delivered to the server.
+  - *Root Cause 3 (Missing TCP mode fallback)*: `adbd` was only listening on the USB gadget interface. With no persistent TCP port configured, pulling the cable shut down `adbd` completely, leaving loopback port `127.0.0.1:5555` closed and preventing local reconnect/restart.
+  - *Fix in `starter.cpp`*:
+    - In child process fork: added `signal(SIGHUP, SIG_IGN)`, `signal(SIGPIPE, SIG_IGN)`, `setsid()`, and `switch_cgroup()` before `exec` of `app_process`.
+    - In `main()`: enabled `switch_cgroup()` unconditionally (including for `uid == 2000`).
+    - Added automatic detection and setting of `service.adb.tcp.port 5555` and `persist.adb.tcp.port 5555` when started under `uid == 2000`.
+  - *Fix in `ShizukuService.java`*:
+    - Added `ensureAdbTcpPersistence()` on server startup.
+    - Updates settings content provider (`adb_allowed_connection_time 0` and `adb_enabled 1`) so Android does not revoke authorizations on disconnect.
+    - Sets `service.adb.tcp.port` and `persist.adb.tcp.port` to 5555 and ensures `adbd` is listening.
+  - *Fix in `Starter.kt`*:
+    - Updated `adbCommand` to prepend `adb tcpip 5555 && ` so external launchers (PC / OTG host) switch device to persistent TCP mode prior to invoking the starter script.
+  - *Documentation*:
+    - Updated `wireless_debugging_setup.md` in app assets and `ShizukuPlus-Knowledgebase.md` in the wiki repository documenting USB/OTG activation, Default USB Configuration ("No data transfer"), and ADB authorization timeout settings.
+- **Code Hygiene & Verification:**
+  - Applied `spotlessApply` and verified with `spotlessCheck`.
+
+### 2026-11-02 — Antigravity (Gemini 3.8 Flash) (TCP Mode auto-apply on service start, Awesome-Shizuku & installed apps knowledgebase sync) [master]
+
+- **TCP Mode and Local Proxy Auto-Apply on Service Start:**
+  - Resolved issue where options like TCP Mode (port 5555), On-Device ADB TCP (`on_device_adb_tcp`), and the Local ADB Proxy (`adb_proxy_enabled`) had to be manually toggled in Behavior settings after every reboot or restart to take effect.
+  - `AdbStarter.startAdb()` now automatically pushes `setprop service.adb.tcp.port $port` and `setprop persist.adb.tcp.port $port` when TCP mode or on-device ADB TCP is active, ensuring persistent port binding across network drops and reboots.
+  - `AdbProxyService.enableAdbTcp()` checks whether the active port already matches the target port before restarting adbd, avoiding unnecessary connection churn while still ensuring `persist.adb.tcp.port` is updated.
+  - `StarterActivity.startRoot()` ensures TCP mode is applied immediately upon successful root startup if configured.
+  - `ShizukuApplication` state listener detects transitions to `RUNNING` and automatically verifies TCP mode and starts `AdbProxyService` if enabled. `onCreate()` and `BootCompleteReceiver` also ensure `AdbProxyService` lifecycle alignment.
+- **Knowledgebase & App Context DB (Revision 2):**
+  - Updated `database/src/main/assets/app_context_db.json` from revision 1 to revision 2 with 34+ newly cataloged apps, incorporating on-device packages verified via `rish` as well as the upstream `awesome-shizuku` index.
+  - Added verified metadata and Plus feature recommendations (e.g. `storage_proxy`, `shell_interceptor`, `overlay_manager_plus`, `network_governor_plus`) for popular file managers: Material Files (`me.zhanghai.android.files`), Cx File Explorer (`com.ace.ex.file.manager`), FV File Explorer (`com.folderv.file`), MiXplorer (`com.mixplorer`), Solid Explorer, ZArchiver, Butler (`eu.darken.butler`), and app management utilities: App Manager (`io.github.muntashirakon.AppManager`), Canta (`io.github.samolego.canta`), Inure, Install with Options, ShizuStore, LinkSheet, ColorBlendr, SystemUI Tuner, and ShizuWall.
+  - Updated `root_compat_su_bridge.md` in app assets and the wiki `ShizukuPlus-Knowledgebase.md` to document the full range of supported file managers and system tools.
+- **Code Hygiene & Verification:**
+  - `./gradlew spotlessApply` and `./gradlew spotlessCheck` passed with zero errors.
+
+### 2026-10-30 (late night) — Claude (icon shapes, card drag, trusted-network picker, 5-agent review) [master]
+
+- **Icon shapes:** Material's `MaterialShapes` (SoftBurst for "burst"; star rotated point-up), each centered on its area centroid, icon sized per shape from the inradius (`ExpressiveShapes.iconFraction`), one 40dp container for every settings icon style. `ExpressiveShapesTest` checks centroid, symmetry and that the glyph fits. Morphs are cached.
+- **Home drag:** center-crossing `chooseDropTarget`, fixed cards excluded via `canDropOver`, `DiffUtil` dispatch instead of `notifyDataSetChanged`, no transform reset while a card springs (`MotionUtils.isSpringing`), opaque dp-based lift, `HomeEditMode.bindCardGestures` replaces ten copies.
+- **Trusted networks:** `WifiNetworks` reads the current and saved SSIDs via `cmd wifi status` / `cmd wifi list-networks` as shell; `TrustedNetworksSheet` serves both lists (TCP StringSet, firewall CSV — commas blocked there). Runtime matching falls back to the shell off the main thread, cached per network handle.
+- **Review (5 read-only agents: M3E, functional, 3x code quality):** fixed haptic API gating (threshold/toggle constants are API 34), double haptics, AMOLED containers, motion-scheme specs, per-frame allocations, update cleanup deleting a pending APK, `UpdateManager.cancel()` killing the shared scope, force-update (root path never staged files, secrets in a 644 file, uninstall-before-install), backup shell per change (now debounced), Plus sync race (single worker posted after the pref is saved), grant/revoke swallowing `SecurityException`, main-thread shell in accessibility auto-enable, ApkPatcher deleting originals on a failed restore.
+- **Deferred (worth scheduling):** one `ShizukuShell` helper for the ~12 `newProcess` sites; grant/revoke + list state into `AppsViewModel`; per-activity `HomeEditMode`; one network monitor for TcpNetworkGuard/ReconnectTrigger/AutomationService; splitting `ShizukuApplication.onCreate` and extracting the Sentry filter; FQN and `p != null` cleanup in `ShizukuSettings`; AutomationRules overwriting the user's firewall pref.
+- **Gotchas:** a static `Handler(Looper.getMainLooper())` in `ShizukuSettings` breaks every plain JVM test (create it lazily). `SpringAnimation` on a `FloatValueHolder`/custom property defaults to a 1px threshold — set `MIN_VISIBLE_CHANGE_SCALE` for 0..1 values. The disk filled mid-build and left a stale debug Kotlin incremental cache (unresolved same-package symbol); delete `~/shizuku-build/manager/kotlin/compileShizukuplusDebugKotlin`.
+- **Not verified on device** (rish/ADB down all session). The Home empty state replaces the whole list including the status card, so it stays "itemCount == 0".
+
+### 2026-10-30 (night) — Claude (swipe design A + sandbox B, cleanup, storage) [master]
+
+- **Swipe actions (user chose A; B behind dev option `swipe_settings_sandbox`):** `SwipePreviewPreference` (auto-play demo row, or drag sandbox), `SwipeActionRowPreference` x3 (plain rows so icon styles apply), `SwipeActionPickerSheet` (BottomSheetDialogFragment + ComposeView). `SwipeActionStyle` is the single action table for the list and the preview. The old AppInteractions/GesturePreview/SwipeActionsConnected files were deleted.
+- **User says the app-wide "scannable" settings design (board C) still doesn't look good:** not implemented; "Toggle style" option untouched. Waiting on specifics.
+- **ApkPatcher:** temp-debug sessions were in-memory only, so they were lost on a server restart and the originals were stranded (58 MB found in `splus_td`, both apps already restored, deleted). Sessions are now recovered from disk, and the sweep is guarded (`preparing` set + `sweepLock`, deletes only when the app is installed and not debuggable).
+- **Size/storage:**
+  - Removed glance, remoteviews and aboutlibraries.
+  - Removed dead classes and ~35 unused strings.
+  - `UpdateManager.cleanup()` was never called. It now runs at startup and keeps only newer APKs.
+  - Pitfalls during the cleanup sweep:
+    - `page_onboarding_m3e` looked unused (the binding is `PageOnboardingM3eBinding`, and Python's `title()` gives `M3E`) but it is used.
+    - `PlusShell` is loaded by name from `ShizukuShellLoader`, so it must not be deleted.
+- **APK 16.5 MB:** classes.dex is stored uncompressed on purpose (server start), ~8.9 MB, and resources.arsc is ~5 MB, mostly 20 near-complete locales. Both trade-offs are left to the user.
+- **Device:** freed ~8 GB of Gradle caches (build-cache, 9.4.1 transforms, 9.4.1-all dist). `/data/local/tmp` still has ~700 MB of user-staged APKs, untouched.
+- **Gotcha:** `pgrep -f "check-build.sh"` in a wait loop matches its own command line, so it never exits; `pkill -f GradleDaemon` killed its own shell.
+
+### 2026-10-30 (later) — Claude (user reports: AMOLED, icons, toggles, restore by choice, redesign research) [master; r3138 installed]
+
+- **Fixed:**
+  - Icon style showed the previous choice: listeners ran before the value was saved, so the refresh is now posted, and each refresh uses a fresh drawable copy.
+  - AMOLED home tint: `AnimatedGradientBackground(pureBlack)`.
+  - Enabled rows turned black on AMOLED: `activeRowColor`.
+  - Shapes were off-center: `normalized()` centers the bbox. Shapes are now centered on the polygon's own center, with `ExpressiveShapesTest`.
+  - Toggles restyled recycled rows: an owner tag on the row view; the ripple is kept under the state fill.
+- **Restore is user-chosen (user request):**
+  - No auto-restore; the onboarding welcome card offers the backup.
+  - `SettingsBackupManager.applyRestoredLive()` applies night mode, locale, boot receiver, launcher alias, Watchdog and the Plus sync without a restart, then the held-back privileged prompt.
+  - Reinstall copy: `/data/local/tmp/shizukuplus/settings_backup_<pkg>.json`, written as shell through Shizuku. It is never trusted, because any app authorized for Shizuku can write there. API keys and the hidden-packages list are excluded.
+  - Only the force-update handoff from the last 10 min is trusted. The public Downloads copies are gone; legacy copies are cleared once.
+  - Termux (targetSdk 28) can read 644 files in `/data/local/tmp`. **Unverified:** whether the targetSdk 36 app domain can (watch for avc denials on the first real reinstall restore).
+- **Device storage was full** (ENOSPC, 458/459 GB). Freed my scratch APKs and `/data/local/tmp/sptest`. Tell the user.
+- **Design research (user):**
+  - Canvas: https://claude.ai/artifact/FmSsBAj8imHPozhSx2joD9
+    - A: live preview plus two direction rows, with picker sheet A2 (recommended).
+    - B: try-it sandbox.
+    - C: app-wide scannable M3E settings — grouped rows, split toggle, segmented control, slider, multi-toggle grid.
+  - Awaiting the user's pick.
+  - `GesturePreviewPreference` and `SwipeActionsConnectedPreference` (~1,080 lines) are unreferenced dead code.
+  - The user wants the "Toggle style" option replaced by one app-wide design.
+
+### 2026-10-30 — Claude (device testing r3124, follow-ups) [master; f4821b82 pushed, later commits local]
+
+- Installed CI r3124 over r3085 with `pm install -r`, keeping data. No FATAL or ANR.
+- **Found on device:** two `shizuku_plus_server` processes after a starter restart raced the manager's AdbStartWorker. Fixed with a server single-instance lock (verified: a duplicate exits) and a 1.5 s Watchdog grace.
+- **Verified from adb shell (uid 2000):**
+  - `am compat --no-kill FORCE_RESIZE_APP` works on non-debuggable apps. `ALLOW_RESIZEABLE_ACTIVITY` is an invalid change name, so it was dropped.
+  - `cmd package suspend/unsuspend` and `pm disable-user/enable` work.
+  - `pm list` without `--user` errors on Secure Folder (user 150), so `--user` was added.
+- **#648:** `ScopeCommandMatcher` plus tests, so sh -c, full paths and chained commands are caught.
+- **Backup restore (security + data loss):**
+  - Auto-restore read public `/sdcard/Download` with trustPrivileged=true, so any app could plant settings.
+  - The shell-owned `Android/data` copy couldn't be deleted, so the Oct 27 backup was re-imported on **every launch**, reverting settings. The "restored" toast was seen on device.
+  - Now: trusted locations only, at most 24 h old, and a restored fingerprint is kept (`restored_backup_fingerprint`, excluded from backups). Public copies are restored only from the onboarding card, without trust. All copies are deleted after a restore.
+  - On the phone, the stale copies were renamed to `/sdcard/Download/shizukuplus-backup-2026-10-27*.json` (data kept).
+- **Open:**
+  - (a) The app itself writes a fresh `shizuku_plus_auto_backup.json` into `Android/data/.../files/Download` on settings changes. With the new logic, a launch may still re-import it once per change and show the toast. Separate the app's own periodic backup from the force-update handoff file (different name).
+  - (b) The failed r3116 in-app download is byte-identical to the release (sha256 match), so the "problem parsing" error comes from the install step (FileProvider / cache copy), not the download. It needs a logcat of a real attempt.
+  - (c) User report: dark modes / AMOLED don't give a pure black home-screen background. Not started.
+  - (d) The local test server `/data/local/tmp/sptest` is still on the phone; remove it.
+
+### 2026-10-29 (late) — Claude (review of Antigravity Oct 22–29 work, CI fix, fallback hardening) [master, unpushed]
+
+- **CI was red on `87e4de84`** (build, lint, unit-tests): `R.drawable.ic_select_all_24` didn't exist. Added it, plus `ic_ac_unit_24` for Freeze (was reusing the close icon). API Scopes now uses `ic_admin_panel_settings_24` instead of the Toggle Permission shield.
+- **Per-app API scopes (#645) only enforced with Binder Firewall on.** `api/server-shared/Service.java` calls `isBinderCallBlocked()` only when `checkPlusFeatureEnabled("binder_firewall")` is true. Fixed in `ShizukuService.checkPlusFeatureEnabled`, with no submodule change: the gate reports open whenever `per_app_disabled_scopes` is non-empty. `isBinderCallBlocked` still checks the real flag before applying the general firewall rules. The AIDL `isPlusFeatureEnabled` now returns the real flag.
+- **Per-app freeform (#635) flipped a global setting.** `WindowManagerPlusImpl.forceResizable` always wrote `global force_resizable_activities` 1/0 after the `am compat` calls, so a per-app toggle changed resizing for every app. Disabling one app turned off the user's own Developer-options setting. Now: return early when a compat override applies; otherwise write `1` on enable only, never `0`.
+- **Direct-su fallback could hang** (`ShizukuReceiverStarter.rootStart`: unbounded `waitFor()`, undrained pipe; the tile drained nothing and never destroyed the process). New `EnvironmentUtils.runWithSuBinary()` drains output and polls exit with a 15 s bound. `waitFor(timeout)` and `isAlive` are API 26 and minSdk is 24, so it polls `exitValue()`.
+- **Follow-up `--no-kill`:** `am compat` force-stops the target app by default. The manager replays `forceResizable(pkg, true)` on every Plus settings sync, which would have killed every free-form app on any toggle change. All `am compat` calls now pass `--no-kill`, and the toast says the change applies on next launch. The direct-su branch of `ShizukuReceiverStarter.rootStart` now runs on `scope` (IO), because receivers call `start()` on the main thread.
+- **Spurious notification:** the ADB start path without WRITE_SECURE_SETTINGS showed the permission-error notification even when it had enqueued the TCP fallback. Now it shows only when nothing was enqueued.
+- Checked, OK: the keys and XML defaults of all toggles added this week match their getters, including the 8 `lp_*` keys. `dpm_freeze` syncs immediately.
+- **Not fixed, flag only:**
+  - DPM freeze stage 1 (`tryDpmSetApplicationHidden`): its reflection matches 3- or 4-parameter `setApplicationHidden`. Android 11+ AIDL has 5 (`admin, callerPackage, pkg, hidden, parent`). DPMS also requires the caller to own the admin component. From shell or root it most likely always falls through to stage 2, so the "Prefer Device Owner App Hiding" toggle probably has no effect. Needs a device check with Dhizuku or DO.
+  - `ShizukuProcessUtils.runDetached` (#531) has no callers. Its env array may replace the whole environment (no PATH for `setsid`).
+  - The `isAppScopeDisabled` shell checks are substring matches, so some false positives are possible, but only when a scope is off.
+- Verified locally: Plus and Drop-In `compile*DebugKotlin` + server compile, `scripts/dev/lint.sh` clean. No device pass: loopback ADB refused, rish hung.
+- **Round 2 (same session):**
+  - DPM freeze (#632) moved to the manager (`utils/DpmAppHider.kt`, using `setPackagesSuspended`, not `setApplicationHidden`: a hidden package reads as uninstalled to `AuthorizationManager`'s query, which has no MATCH_UNINSTALLED, so it would vanish from the list with no way to unfreeze). DPMS only lets the admin's own app do this, so the server's reflection stage could never succeed; it is removed along with the `dpm_freeze` server flag. The long-press Freeze uses DPM when Shizuku+ is DO/PO and the toggle is on, otherwise the server chain. Freeze is now offered even without the Custom API when DPM is available.
+  - `isAppFrozen` fallback: `pm list packages -d <pkg>` is a substring filter; it now matches whole `package:<name>` lines.
+  - `runDetached` (#531): passes a null env (a non-null array replaced the whole environment, dropping PATH).
+  - Auto-run snippets could run twice per start (two RUNNING handlers on different threads, non-atomic debounce): the debounce is now an `AtomicLong` CAS.
+  - `ShizukuManagerProvider`: the client `METHOD_GET_BINDER` grace wait only runs during the first 5 s of process life (it stalled every client `getBinder` by 1.5 s while the service was stopped). The user-service token path keeps its unconditional wait.
+  - Known, not changed: the `dhizuku_suspended_packages` preference unsuspends every installed package on each change, which also unfreezes apps frozen this way.
+  - StarterActivity "Wireless ADB" fallback button no longer `finish()`es before showing the discovery dialog. `StartWirelessAdbViewHolder.start` skips `show()` when the FM state is saved.
+  - Adaptive recommendations: activity-finishing and BadToken guard; accepting the TCP recommendation chains the open Wi-Fi guard prompt (as the Settings toggle does). Stability tips: "Don't show again" reflects and stores the real choice, and the divider is a MaterialDivider.
+  - Bulk grant/revoke ran Shizuku binder IPC on the main thread: now on IO, with a failure toast. Select all goes through `AppsAdapter.selectAll` so the toolbar count updates.
+  - RootCompatibilityActivity.onResume probes off the main thread. SettingsActivity root-fragment commit has a queued-commit fallback.
+- **In-app updater "problem parsing the package" (user report, device on r3085 CI build):** the r3116 release assets are valid. Both are complete and signed with the same cert as the installed app (sha256 `31:7C:5E:CA…5B:80`), so the file was damaged or lost between download and install. Root cause not confirmed without device logs. Changes:
+  - The download is validated before any installer sees it: exists, at least 1 MB, `PK` magic, `getPackageArchiveInfo` parses, package matches. On failure it re-downloads once over direct HTTP, then shows `update_download_corrupt`. Before this, an unparseable file made `checkSignaturesMatch` "assume match" and went to the system installer.
+  - DownloadManager success uses `COLUMN_LOCAL_URI` (where the file actually landed) instead of the requested path. The filename is ASCII-only (`ShizukuPlus-v…apk`; it was `Shizuku+-v…`).
+  - The 16 MB cache copy and validation moved off the main thread. `launchSystemInstaller` refuses a missing file.
+  - Users on r3085 still run the old updater. The fix only helps from the next build on, so r3085 → next needs a manual install, or Shizuku running so the pm-stdin path is used.
+
+### 2026-10-28 — Antigravity (Screen opening animations, Explode elimination, Activity Log fluid transitions, M3E gestures) [master]
+
+- **App-wide screen transition overhaul & legacy Explode eradication**:
+  - Identified and eliminated `android.transition.Explode()` default window transition across `AppActivity.kt` and `AppBarActivity.kt`. Explode was scattering views in chaotic shards and causing crashes on Android 16 (#483, #529).
+  - Standardized on Google Material 3 Expressive `MaterialSharedAxis.Z` (depth zoom and fade) by default across all app activities, with lateral `MaterialSharedAxis.X` remaining available when experimental screen transitions are toggled.
+  - Replaced broken shared element transitions (`icon_server_status`, `icon_manage_apps`, `icon_backup`, `icon_permission_manager`, `icon_device_control`) that caused Android's `ActivityTransitionCoordinator` to stall for timeout before snapping.
+  - Enhanced `startWithSceneTransition` in `Context.kt` to safely construct clean window scene transitions without phantom view pairs.
+  - Fixed toolbar Up navigation and TopAppBar back navigation across `AppActivity`, `ActivityLogActivity`, and `ApplicationManagementActivity` to call `finishAfterTransition()`, playing the smooth reverse M3 return transition.
+- **Activity Log opening & list motion**:
+  - Overhauled Activity Log opening from Server Status chip, System Hub, and Advanced Settings with fluid `MaterialSharedAxis.Z` depth navigation.
+  - Wired `finishAfterTransition()` to `ActivityLogActivity`'s TopAppBar navigation icon.
+  - Added `Modifier.animateItem()` to timeline records and timeline date headers in `SystemHubScreens.kt`, enabling spring layout animations when toggling filtering pills or changing sorting modes.
+- **Authorized Apps screen entrance & dynamic gesture guide**:
+  - Upgraded `ApplicationManagementActivity` entrance animation with unified `MaterialSharedAxis.Z` and cascading item slide-in (`item_slide_in_bottom.xml`).
+  - Redesigned swipe gesture guide popup (`swipe_hint_overlay.xml`) to dynamically reflect the user's active right and left swipe actions with exact theme container colors, directional preview arrows, choreographed bounce animations, "Customize in Settings" direct navigation, and re-triggerable action in the top app bar menu.
+- **Settings subpage SharedAxis.X transitions & back navigation polish**:
+  - Connected `applySharedAxis` in `SettingsActivity.kt` to `ShizukuSettings.isExpressiveAnimationsEnabled()`, giving nested settings fragment transitions fluid lateral slide/fade on Material 3 SharedAxis.X instead of abrupt cuts.
+  - Aligned back navigation across `PermissionManagerActivity.kt`, `DeviceControlActivity.kt`, and `SystemHubActivity.kt` to invoke `finishAfterTransition()` instead of `finish()`, enabling proper reverse window transitions.
+  - Added `@interpolator/m3e_emphasized_accelerate` and updated all floating navigation bar slide transitions (`floating_nav_enter_forward`, `floating_nav_exit_forward`, etc.) to use Google M3 emphasized deceleration (280ms) and acceleration (240ms) curves.
+  - Verified and confirmed resolution of GitHub issues #639 (Appearance crash on Android 15 One UI) and #623 (Settings search crash with non-vector drawables).
+- **Settings crash resilience & One UI theme fixes (Issues #643, #646)**:
+  - Replaced synchronous `commitNow()` in `SettingsActivity.kt`'s `onContainerCreated` with `commitNowAllowingStateLoss()` and `commitAllowingStateLoss()` guarded by lifecycle/destroyed checks, resolving immediate crash on Android 15 One UI 7 when tapping Settings (#646).
+  - Unrestricted `oneUiThemePreference` in `PersonalizationSettingsFragment.kt` (removed Samsung-only restriction) so all devices can toggle One UI style, and ensured preference changes trigger `applyTheme(requiresRecreate = true)` to immediately render the expanded One UI header and padding (#643).
+- **Home screen card motion & touch physics**:
+  - Upgraded `applySpringTouch` in `MotionUtils.kt` to monitor `MotionEvent.ACTION_MOVE` out-of-bounds events and smoothly release cards back to 1.0f scale.
+  - Upgraded `HomeAdapter.kt` card entry to DPI-scaled 24dp translation, 0.96 scale, and M3 Expressive decelerate easing.
+
+### 2026-10-27 — Antigravity (App interactions consolidation, Settings UX, One UI title centering, GitHub triage) [master]
+
+- **App interactions modernization & consolidation**:
+  - Replaced the 700dp phone canvas and nested cards with a compact, spring-morphing M3 Expressive card (`AppInteractionsPreference.kt`) featuring unified horizontal swipe action selector chips (right/left) and long-press toggle pills in ~140dp.
+  - Consolidated App Interactions directly into the Appearance screen (`settings_personalization.xml`), completely eliminating `AppManagementSettingsFragment` and its separate subpage from `settings_main.xml`.
+  - Cleaned up obsolete `AppManagementSettingsFragment.kt` and `settings_app_management.xml` and removed dead entry from `SettingsSearchEngine`.
+- **Cloud Database Updater relocated**:
+  - Moved `update_app_database` (fetching app descriptions and tips) out of Appearance/Interactions into **About > Updates** (`settings_about.xml` / `AboutSettingsFragment.kt`), keeping Appearance dedicated to visual and interaction styling.
+- **Settings One UI & One-Handed mode title centering**:
+  - Aligned Settings One UI / One-Handed mode title positioning with `HomeScreen.kt` (centered when expanded, smoothly interpolating to start on collapse in `SettingsScreen.kt`).
+  - Addressed text cutoffs across 24 files, removing `TextOverflow.Ellipsis` and rigid maxLines for full text display across modern viewports (including Galaxy S26 Ultra).
+  - Elevated Snackbar above floating navigation bar in `SnackbarHelper.kt`.
+- **Material 3 Expressive boldness, sizing, and standards alignment**:
+  - Aligned `HomeScreen.kt` top app bar typography with official Google M3 Expressive tokens: `HeadlineLarge` (32sp expanded, 36sp One UI) to `TitleLarge` (22sp collapsed), tracking (-0.2sp to 0sp).
+  - Wired `isBoldTypography` dynamically into title weight scaling (interpolating between `FontWeight.ExtraBold`/`Black` and `FontWeight.Bold`/`SemiBold`), giving users impactful editorial hierarchy across both standard and One UI layouts.
+  - Aligned `SettingsScreen.kt` collapsed app bar title size to standard `TitleLarge` (22sp, formerly 20sp) with dynamic `FontWeight.ExtraBold`/`Bold` weights.
+  - Updated `SettingsScreen.kt` search results with `shapes.large` (16dp) card boundaries, bold category titles, and typography boldness scaling.
+  - Aligned System Hub `StatusBadge` and `ActivityRecordItem` badges to official M3E emphasized badge spec (11sp, `FontWeight.Bold`, 0.4sp tracking).
+  - Updated `SystemHubScreen.kt` `TabRow` to emphasize active tabs with `FontWeight.Bold` and `TitleSmall` role.
+  - Snapped settings category card corner styles in `CollapsiblePreferenceCategory.kt` to official Google M3 shape scale tokens: Large (16dp), LargeIncreased (20dp), ExtraLarge (28dp), ExtraLargeIncreased (32dp), eliminating arbitrary off-scale values.
+- **GitHub Issues triage & fixes**:
+  - **#641 (Inconsistent colors)**: Fixed header category icon styling in `CollapsiblePreferenceCategory.kt` to respect `IconStyleHelper.current()`. Now only applies a two-tone pill if `style == Style.TWO_TONE`; for `OUTLINED` or `STANDARD` icon styles, it keeps the clean primary icon without artificial purple/container background.
+  - **#642 (Inconsistent rounding)**: Fixed PLUS badge in `PlusGovernorsPreference.kt` to use a full pill (`RoundedCornerShape(100)`), consistent with `PlusFeaturePreference` and other badges.
+  - **#643 (One UI style crash on Samsung F14)**: Confirmed resolved by r3085 commit `768d27ad` (safe fragment detach/re-attach in `SettingsActivity.kt` on recreate, `view?.post` recreate triggers, and proper padding insets sync).
+  - **#640 (Option bug)**: Confirmed resolved by r3085 commit `768d27ad` (expanded header padding and title overlap sync).
+  - **#639 (Crash immediately)**: Root cause was `AppIconTilePickerPreference` ClassCastException resolved in r3082 (`60780ea0`) and recreate stabilization in r3085.
+  - **#623 (Error while searching settings)**: Confirmed resolved by commit `5bdf6f2a` (`SafePreferenceIcon`). Pruned dead `AppManagementSettingsFragment` entry from `SettingsSearchEngine`.
+
+
+### 2026-10-24 (late) — Claude (stable prep: issues, tests, CI, merge) [master, unpushed, 175 ahead / 0 behind]
+
+- **Issues filed** for the removed per-app enhancements: #631 (concept + "Plus upgrade available" badge reference text, what a revival needs), #632 DPM, #633 NPU, #634 AVF VM, #635 Window Tuner.
+- **Tests**: no workflow ever ran unit tests; server + database silently skipped their JUnit 4 tests (no vintage engine). Fixed + stale suites updated `6f9ccec7`; MockK now runs on-device (ByteBuddy via -javaagent). Local: 131/131 non-Robolectric pass; 4 Robolectric suites are x86/CI-only. New `unit-tests` job; release `needs: [build, lint, unit-tests, smoke-test]`. `ScreenSmokeTest` (androidTest, emulator job) opens every top-level screen + loads every settings-search icon.
+- `1f171b44` scheduleNPULoad() returns success=false/not_supported (was fake success).
+- **Merge** `3a4a1e04` origin/master (README + az #619): az kept local entirely - #619 was conflicts, duplicates, 2 orphans, and Turkish "için" in place of "üçün". 0 behind origin now.
+- **Release plan**: `docs/RELEASE_CHECKLIST.md` (blockers, P0-P2 device items, R8-only items). `scripts/dev/device-smoke.sh` = install -r + am instrument + cold launch + logcat FATAL check (never uses connected*AndroidTest, which uninstalls).
+- **Not done**: /code-review of the ~95 commits since the part-2 ultrareview base (`9f4287b4..HEAD`); device pass (ADB refused all day); release-build check on the phone (needs uninstall -> backup first); CHANGELOG fold + version; push (user's call; push = prerelease, stable = dispatch).
+- #623/#624 are fixed by `9a811eee` (unpushed) - close on release.
+
+### 2026-10-22 — Claude (part-1 review fixes, pairing, security, M3 audit) [master, unpushed]
+
+- **Part-1 ultrareview fixes** `7a1cd1e8`: legacy rish keep-alive never `stopService()`s before `startForeground()` (cold-start crash), retries on activity start, live setting; prefs listeners held strongly; `legacy_rish_keepalive` excluded from sync; uninstall confirm; Server Metrics no longer forces `ai_core_plus`; Settings header re-expands; Personalization no longer seeds `custom_app_name`.
+- **Pairing** `07e930e3` `07667e4d` `9f4287b4`: root cause of the "not adaptive" pairing was `setOnlyAlertOnce(true)` (005707ca) on the "service found" notification — it never heads-up'd over the Settings dialog. Now alerts per new port, reverts to "searching" when the dialog closes, auto-queues `AdbStartWorker` after pairing when WRITE_SECURE_SETTINGS is held, live status card + Start button on the tutorial (`AdbPairingService.state`), opt-in "Fill in the code for me" (pairing a11y service: Settings packages only, exact 6-digit field, mDNS port preferred).
+- **Security** `816795d4` `aad5f9a3` `52318139`: server trusts the other manager flavor / grants WRITE_SECURE_SETTINGS+DUMP only to same-signing-cert packages (`isSignedLikeManager`); no blanket root auto-grant scan, tracked grants revoked when turned off; `registerAIAutomationBridge` manager-only; server defaults su_bridge/root_magisk_mocking OFF until synced, flags synced on every binder receipt; AICore+ healer needs real consent (`aicore_a11y_user_enabled`); crash reports opt-in (prompt once after onboarding + Advanced switch, breadcrumb scrubber, no screenshots); Tasker/Locale start/stop behind `allow_automation_plugin` (on for updates, off for new installs); TCP mode off for new installs (`decideSecurityDefaultsIfNeeded`); imports never switch privileged keys on (`SettingsBackupManager.PRIVILEGED_KEYS`, manual restore asks).
+- **Apps count** `77df3391`: count waits for the binder (state is RUNNING from the persisted state before the binder arrives); fixes "0 authorized apps" flash. Installs that cached a 0 may show it once more.
+- **Device test 2026-10-22 (build `0f46882a`, server restarted via build-install-debug.sh)**: `rish -c id` OK; server resolves manager + same-signed secondary (compat stub is debug-signed `2a04169d` too, so trusted as intended); BinderSender delivers to clients, no "is not manager"/SecurityException; cold start shows "Authorized 85 applications" from the first frame (no 0 flash). **Still untested**: pairing flow (needs the user), auto-grant revoke, Tasker gate, restore dialog, crash-reporting prompt (debug build has no DSN, so it never shows).
+- **Branches**: `review/ur-part2` = master@`9f4287b4` + revert of the 520-string drop (review-noise only), base `review/ur-base2`; does NOT include the security/app-count commits — re-cut before launching the ultrareview.
+- **M3 audit**: full m3.material.io export at `~/m3-corpus/md` (see memory reference-m3-material-corpus); plan in `docs/M3E_DESIGN_PLAN.md`. Hold the ~185-string sentence-case pass until translations are refreshed.
+- **Approved, not started**: replace the AICore+ accessibility service with server-side UiAutomation + direct input injection (remove the service after one release); visible "protect from battery restrictions" switch (server whitelists the manager each start, replacing the magic-number AppOps elevation); keep the pairing a11y helper opt-in.
+- **Part-two ultrareview already ran** (session f0fb31d9, 3rd/last free run, `review/ur-part23` vs `review/ur-base2`); findings NOT yet fixed. `review/ur-part2` (re-cut here) is redundant. Open items:
+  1. Push `api` submodule (`e7d1773`) BEFORE the parent repo (`Service.descriptorOf()` at ShizukuService ~:971/:2111).
+  2. ~~"Trusted networks" row hidden while the firewall is off, but trusted Wi-Fi turns the firewall off (`BehaviorSettingsFragment.kt` ~:337).~~ `aae01184`
+  3. ~~App identity toggle on for everyone (seeded custom_app_name)~~ — fixed by `7a1cd1e8` + one-time cleanup.
+  4. ~~Haptics control treats unset `follow_system_haptics` as on, haptics code as off (`PersonalizationSettingsFragment.kt` ~:270 vs `ShizukuSettings.java` ~:432).~~ `347277d6`
+  5. ~~`corner_rounding_entries` label order mismatches values in az, zh-rCN, ko.~~ `953b37aa`
+  6. ~~Icon morph barely plays: spring visibility threshold too large for 0..1 (`ExpressiveShapes.kt` ~:123); also earlier `springTo()` not cancelled on rapid toggles.~~ `980be4b7` (one reused SpringAnimation per drawable, `MIN_VISIBLE_CHANGE_SCALE`)
+  7. ~~Expanded settings title font cap applies to all themes, not only One UI (`SettingsScreen.kt` ~:277).~~ `6c1a8847`
+  8. ~~Expressive shapes toggle doesn't show/hide morph rows until reopen.~~ `0ee43316`
+  9. ~~Developer options Plus switches sync to the server before persist (needs `view?.post`, like Behavior/Experimental).~~ `569af2e5`
+- **M3 phase 1 progress (same day, later session)**: 1.1 motion tokens `e0269430` (`ThemeOverlay.Motion.Standard` when Expressive animations off; `MotionUtils.EMPHASIZED_*`/`STANDARD*` + `MotionUtils.spring(ctx, attr)` with fallback; literal PathInterpolators routed through it). 1.7 AMOLED `6127358a` (`ColorScheme.controlContainer`/`onControlContainer` in core/ui AppTheme.kt; slider inactive track = secondaryContainer). `scripts/dev/lint.sh` now uses `bash gradlew` (`0df86a7b`); spotless + lint pass.
+  - **1.3 shape scale done (2026-10-23)**: `5db87761` Sharp overlay now applied last (One UI / corner rounding re-rounded it) + covers the new tokens; `17d7bbe7` LI/XLI/XXL in every Shape Style + snapped radii per plan; `0f01a002` Compose `androidShapes(context)` reads all 8 `shapeAppearanceCorner*` attrs from the activity theme (Cut -> CutCornerShape, unresolved/relative -> Compose default; `OneUiShapes` deleted, `SharpShapes` kept for the `isRoundedEdges=false` param); `b166dda8` 9 card literals -> tokens (floating nav bar left: radius set in code), drawable radii left alone (attrs are style refs, not dimens); `e18a26fe` spotless target narrowed to src/*/java so `lint.sh` stops tripping Gradle's implicit-dependency check on copied assets. Known: corner rounding "Maximum" (44) makes XL rounder than XLI (32) - only visible on XLI components. **Screenshot pass: check One UI corners first** (XS 4, M 16, L 28, XL 32 changed visibly).
+  - **1.4 type scale done** `83fcb740`: `ThemeOverlay.Typography.Bold` = the 15 `TextAppearance.Material3.*.Emphasized` styles (+ listItem BodyLarge.Emphasized); Compose `BoldTypography` = `Typography().*Emphasized`; body roles stay baseline (regular) under Bold in XML and Compose (follow-up fix, body Emphasized is medium); One UI titleLarge 26 -> 22sp (was > headlineSmall 24), Compose `oneUiTypography(base)` mirrors the XML 30/22/17 on top of Bold; badges (InlineBadgeSpan, was 9dp) / layout simulator (10sp) / Drop-In pill (9.5sp) -> 11sp. SettingsScreen expanded title keeps its own explicit 34/30sp. Lint + spotless pass.
+  - **CHANGELOG**: `## [Unreleased]` section added above v13.7.0 covering all 106 unpushed commits (user-facing only). Fold it into the release section when cutting stable.
+  - **Device screenshot pass NOT done**: loopback ADB refused (`127.0.0.1:5555` connection refused, wireless debugging off) on 2026-10-23. Check One UI corners + Bold/One UI type first.
+  - **Push prep**: origin/master has 2 commits not in master (`212d3a2a` README, `5c0a0716` az #619) - merge before pushing; api submodule `e7d1773` first. `5c0a0716` will likely conflict in values-az with local `c1e6fe1c`/`23584d67`/`d6a89431`: resolve with the LOCAL side, then confirm no `*_value`/`*_values` arrays came back in any locale and no strings removed in `ef5bfa82` returned (otherwise az settings silently break again).
+  - **Screenshot checklist** (when ADB is back): One UI corners; Rounded edges off + One UI + a corner override; Cut style in Permission Manager (Compose) vs an XML screen; the 9 retokenized cards; Bold-only (onboarding headlineLarge now 32sp, was 30) and One UI + Bold type; feature badges at a large system font. **Added after 2.9/1.2**: About - Dev then Cancel stays Stable; auto-check off disables + clears auto-install; missing install permission blocks auto-install with the dialog; Home card drag lift/drop incl. re-pick mid-settle; edit-mode buttons in/out; double-tap a section header (arrow + children end consistent, guard removed); switch-row icon dim/scale.
+  - **2.9 About (update card) done** `cdaaf8f5`: `UpdateSettingsPreference` + `preference_update_card.xml` deleted; About has 4 standard rows (`check_for_update` tap-to-check w/ status summary, `update_channel` SegmentedControlPreference w/ Dev confirm via change-listener veto, `auto_update_enabled` / `auto_install_enabled` switches on the existing ShizukuSettings keys, auto-install `dependency` + permission veto). "Device info" part NOT done: no screen/key by that name exists - asked the user what they meant (diagnostics dashboard in Advanced?).
+  - **1.2 springs done** `d33bdf1c`: `MotionUtils.springTo(property, target, attr, endAction)` / `cancelSpring` (tag `tag_motion_springs`, stiffness / scale^2 for intensity, scale 0 snaps). Converted: Home drag lift/drop + `CardRadiusProperty` corner morph, HomeEditMode in/out (40ms stagger dropped), Collapsible arrow (`isAnimating` guard removed), GrayableIconSwitch icon; Compose Home header / System Hub chevron+expand / settings search fade -> `MaterialTheme.motionScheme` specs (these no longer follow animation intensity, like other M3 components). Infinite loops (rotation, pulses) left timed. Remaining timed VPAs not re-laddered.
+  - **User decisions (2026-10-23)**: palettes = generate offline and commit the XML. "Device info" = the About screen's structure + the update card, plus a settings-wide UX look (locations, toggles, styles).
+  - **About sections** `f212640b`: App info / Updates / Project info (non-collapsible labels; `settings_about_category_app_info`, `_project`, `settings_check_for_update_title` restored with translations from `ef5bfa82^`); Help + Report a bug moved from Advanced to About (handlers moved too).
+  - **Settings UX audit** `656328f6`: `docs/SETTINGS_UX_AUDIT.md` - corner controls (5 overlapping), naming clashes (Elastic vs Expressive animations, "Expressive Icon Shapes" vs "Expressive icon shape", duplicate "Personalization"), misplaced rows (App interactions under Personalization, Advanced > Diagnostics grab-bag, Bold typography under Color), Title Case (64/190). Proposals only - none applied; waiting on the user's pick.
+  - **1.5 palettes + 1.6 contrast** `419a48f9` `28b3ce8a`: `bash scripts/dev/gen-accent-palettes.sh` (`--compare` prints variants) -> `res/values/themes_accents.xml` (generated, don't hand-edit). Variant ACCENT = CorePalette recipe (primary chroma max(48, seed) capped 64, secondary 16, tertiary hue+60 @24, neutrals 4/8) on TonalSpot tones; reproduces the base Default theme exactly from seed #4355B9. Chosen over TonalSpot (washes out Neon/Crimson), Content/Fidelity (light primaryContainer = full-strength seed), Vibrant (neon greens/cyans). ThemeDelegateImpl: `R.array.theme_overlay_accent_*` [light std/med/high, dark std/med/high], `contrastLevel()` = in-app HC -> 2, else API 34 `UiModeManager.contrast` (>=1/3, >=2/3); level in theme key (rikka recreates on resume when the key changes). `ThemeOverlay.HighContrast` now only with system colours (MDC v34 dynamic roles are `system_*_light/dark`, already contrast-aware). AMOLED outlines split into `ThemeOverlay.Black(.Plus).Outlines`, applied only at contrast 0. Compose: dropped hard-coded AMOLED/HC outlines; reads inverse, surfaceTint, fixed roles. **Not done (1.5 remainder)**: System Hub alpha-faked containers, status/RISKY/One UI harmonized custom roles.
+  - **HC follow-up** `82f302a7`: HC switch now recreates (it had no listener); `ThemeOverlay.HighContrast` split light (#424242/#757575) / `.Dark` (#9E9E9E/#616161) - the old single pair made light mode less contrasty. **Open (pre-existing)**: `custom_accent` and `use_system_color` call `applyTheme(requiresRecreate = false)`, which only bumps Compose's themeVersion - the XML theme changes on the next resume. Probably needs recreate on change (slider: on release); verify on device first.
+  - **GitHub sweep 2026-10-23**: #626 (+ Figim's SU Bridge self-test screenshot on #622) = rish `VerifyError ... c0 not instanceof Throwable` on release builds -> fixed `ef092a45` (manager `-repackageclasses af.shizuku.r8`, shell `rikka.shizuku.shell.r8`; R8 full mode had put both dexes' renamed classes in the default package and ShizukuShellLoader's parent-first loader resolved APK names to the rish dex). Verified via local minify mappings; needs a release build on device (`rish -c id`, SU Bridge self-test). #628 crash picker -> `abd1a27b` (history in device-protected `files/crash_history`, 10 kept). #623/#624/#629 = settings-search painterResource crash, fixed by `5bdf6f2a` (unpushed). #625 = no stack, service drops only. #627 (scripts on watchdog restart) ALREADY WORKS: Scripting snippets with "Auto-run on service start" run on every transition to RUNNING (ShizukuApplication ~:569, from #399 `d5417ebf`), including watchdog restarts while the app process is alive (or on its next start). Just point the reporter there. PR #622: wording already in via `23584d67`; Figim's untranslated items are existing resources (compat_hub_*, SU Bridge self-test, System Hub tabs) except activity-log entry text, which is logged in English.
+  - **Experimental gate** `b7830d1a` (user: "consider some of those new fixes as experimental"): generated accents + contrast levels behind Experimental > Colour > Full colour schemes (`experimental_color_schemes`, default off). Off = released accents (`themes_accents_classic.xml`, `ThemeOverlay.AccentClassic.*`, hand-written, generator doesn't touch it), contrast level 0, outline-only HC for every colour source (light/dark split kept), AMOLED outlines skipped while HC is on. Still shipping ON and untested on device: shape scale (One UI corners), type scale, springs, About rework, crash picker, rish R8 fix.
+  - **M3E phases 2/3 pass (2026-10-23, "finish developments before testing")**: per-row status now lives in `docs/M3E_DESIGN_PLAN.md` (Status column). Done: 2.1 `35657a74`/`12ae448c`, 2.2 `6912ca9d`, 2.3 `65265f47`, 2.4 `9dda9339`, 2.7 `781dc73c`, 2.8 `b46fe091`, 3.2 `05ba2ea9`, 3.5 `0485b321`, 1.5 rest `34869d97`, 1.2 ladder `2eb3675f`, slider a11y `b119b1db`, snackbars `d242803c`, Compose app bars `31061aa7`. Gated: 3.1 Experimental > Material screen transitions (`experimental_screen_transitions`, core/ui reads the pref directly) `62d9881c`. Deferred with reasons in the plan: 2.5 rows, 2.6 pickers, 2.2 side-by-side groups, 3.3 Apps header, 3.4 half-height sheets/toasts/SearchBar, writing pass, phase 4. Tried and reverted: half-height sheets hid the help/changelog action rows.
+  - **Device checklist additions (phase 2/3)**: switch thumb check/X everywhere incl. onboarding + GrantPermissions dialog; Expressive button press morph + Start filled on root/WADB cards; connected groups (onboarding icon style, automation sheet Start/Stop selected state); LoadingIndicator in app picker/profiles/backup; snackbar inverse colours on AMOLED; System Hub containers/badges with an accent + Full colour schemes on/off; TalkBack: slider step names, badge readout, "Help" long-press action; nav bar (experimental) docked default, reselect scroll-to-top, no autohide under TalkBack; predictive back in Apps selection and Permission Manager detail (cancel mid-gesture resets); flexible app bars in Permission Manager/Device control; Material screen transitions on AND off (watch for #483 on Android 16: black screen / crash after theme change).
+  - **Settings audit applied (user picked names + corners + row moves)**: names `6a0e4434`; one Corner rounding control `02ac89c3` (`migrateCornerSettingsIfNeeded()` at start-up and after every import: rounded_edges_enabled=false -> corner_rounding_override "sharp", home/settings_card_corner_style removed; "Sharp" first in corner_rounding_entries for en/az/ko/zh-CN, 7/7 entries/values everywhere); moves `bbfb7e6d` (Scripting -> ADB tools, Bold typography -> Text & layout), `f637bfa5` (Verified installation + Package governor -> Startup & behavior via `VerifiedInstallPrefs`, Package governor sync after persist; Update app database -> App interactions), `c985f085` (Home activity-log switch greys out when logging is off). 2.6 tile pickers `1bce2d01` (`ChoiceTilePreference`, accent swatches read the real overlay primary; accent pick now recreates).
+  - **Device checklist (audit)**: upgrade a build with Rounded edges OFF -> Corner rounding shows Sharp and corners stay sharp; restore an old backup with rounded_edges_enabled=false -> Sharp; pick each corner step incl. System default; Verified installation VirusTotal key flow + Pithus in Startup & behavior; Package governor toggle reaches the server; Update app database from App interactions; accent swatches match the applied accent with Full colour schemes on and off, light and dark.
+  - **Wrap-up 2026-10-23 (user: finish previous plans, deal with ultrareview, clean caches)**:
+    - Ultrareview: part 1 fixes on master (`7a1cd1e8`), part 2 items 2-9 fixed (`aae01184`..`569af2e5`, item 3 via `7a1cd1e8`); item 1 = push api submodule first. Local branches deleted after checking `git log master..<b>`: review/ur-part1 `ef14c154`, review/ur-base2 `ef14c154`, review/ur-part2 `a2264d52` + review/ur-part23 `1e860621` (only the unwanted 520-string revert), review/stable-prep `2fe5e9f6`, fix/antigravity-regressions `c2c8f022`, pr-611 `2bdbfe1b` (squashed as `c5dc8284`), pr-612 `02bb2ba6`, pr-613 `6649061f` (squashed as `2fd5a442`, az superseded by #619/#622), pr-619 `536c94f2`. origin/* untouched. Two August stashes (feat/auto-pairing-ux #443, fix/adb-reboot-errors #454) are NOT on master - kept.
+    - "Battery switch" (approved item): already covered by the visible Device hardening & keepalive switch (DeviceOptimizer whitelists the manager in deviceidle, VendorBatteryRestrictions lifts background limits) - no second switch. The magic-number AppOps part done: `6be47ec2` manager gets only android:get_usage_stats + android:schedule_exact_alarm via strOpToOp; `b1b02832` elevateApp / SU Bridge mapping by name (107/111/119 dropped). Existing grants not revoked. Note: elevateApp still grants WRITE_SECURE_SETTINGS + DUMP to any authorized client that asks for its own package (by design, flagged to the user).
+    - Device "before" state not captured: rish answered `id` once, then timed out (manager process likely frozen in background - the legacy keep-alive scenario). Capture `cmd appops get af.shizuku.plus.api` + `dumpsys deviceidle whitelist` before installing.
+    - Remaining plan items: AICore+ -> UiAutomation (approved; **user 2026-10-24: save for another time** - not for stable), #533 Hex Installer (deferred by design), #199 Shadow Binder / Mavericks / SQLite (need an installed release build).
+  - **2026-10-24 follow-up**: `8bae545a` App interactions Long-press actions section (audit #5); `5d844d5e` no back arrow on Apps / System Hub / Settings root while floating-nav tabs; `558e439c` action confirmations -> snackbars via `BaseSettingsFragment.notifyUser()` (toast fallback when detached; toasts kept before finish() / leaving the app). `528874a1` back arrow / bar clearance key off `FloatingNavBar.isTopLevel()` (bar on AND that tab kept), restore-success back to a toast so the restart-hint snackbar doesn't eat it. `9e97a382` Apps-list confirmations -> snackbars, app database row in its own Data section. `b7d22f8c` + follow-up: app database rework - bundled JSON is the one source, remote overlay by revision + field, daily sync URL fixed (old one 404d, never ran), manual button used to wipe SU-path hints / Shizuku-native flags, `database/apps.json` deleted. Not verifiable end to end until pushed (new URL 404s before that); `RemoteDbSyncWorkerTest` can't run on-device (MockK self-attach fails) - CI only. Per-app enhancement toggles (saved, read by nothing; 4 of 8 features never existed) removed with the Apps-list badge and the hub's "requires Plus" tag - user chose this; descriptions kept; `enh_*` prefs cleared once at startup. Everything left in the M3E plan now needs the device: half-height sheets (sticky footer via BottomSheetCallback), SearchBar for settings search, 2.5 row metrics, 2.8 info icon, Apps header collapse. Writing pass still waits on translations.
+  - **Device checklist additions (app db)**: App interactions > Data section + row summary (app count, last checked); tap -> "Checking GitHub..." then a result snackbar; Root compatibility descriptions/SU-path hints present on a release (R8) build.
+  - **Device checklist additions**: snackbar confirmations in Advanced (backup/restore, reset ADB keys), Root integration (device-owner toggles), Home restore cards; Settings root without back arrow only when the floating nav is on.
+  - **Screenshot checklist additions**: every accent light + dark at standard (all changed: tinted surfaces now); in-app High contrast with an accent, with Default, with system colours; Android 14 Contrast Medium/High (Settings > Accessibility > Colour and motion) then return to the app; AMOLED + High contrast outlines.
+- **User request queued for M3 phase**: About screen - the update-settings card sits awkwardly narrower than the screen; improve the About and Device info sections overall.
+- CHANGELOG entries still owed for all of the above. Nothing pushed.
+
+### 2026-10-20 — Claude (Regression sweep after Antigravity Oct 11–20 sessions) [branch fix/antigravity-regressions]
+
+- **Pairing**: removed `AdbPairingService` auto-launch of `MainActivity` (CLEAR_TOP) on success — it tore down onboarding/tutorial and is BAL-blocked on 10+; success notification's Start action covers it. Default "service found" notification is inline-reply-only again (content intent opened an activity over Settings and could kill the pairing dialog). Restored `AdbMdns` rediscovery retry, scoped to this device's own adbd. Pairing connect timeout back to 3s.
+- **Floating nav / System Hub**: bottom clearance moved from the Column `Modifier.padding` into Metrics/Activity Log scroll content. `FloatingNavBar.reserveSpace` skips Compose roots, so every Compose screen must add its own content padding — never pad the outer container (exposes bare window background = black bar in AMOLED).
+- **Server**: `getAICorePlus()` re-gated on `ai_core_plus` for third-party callers; manager exempt (System Hub metrics). Antigravity had dropped the gate entirely in `dc4f56ec`.
+- **Compat Hub**: progress text localized; uninstall no longer reports "complete" on failure.
+- **Follow-ups (same day)**: What's New sheet — GitHub button icon-only so Close fits; README bullets + README-only releases filtered (both classic `formatNotes` and timeline `ChangelogParser`). Icon Studio rebuilt: `IconStudioRenderer.kt` (state model, JSON persistence in pref `icon_studio_state_v2`, off-main-thread software renderer, superellipse/cookie shapes) + tabbed Compose sheet; picked photos copied/downsampled to `filesDir/icon_studio_source.png`. System Hub labels localized. Floating-nav bottom bounce re-arms only on real scroll-up.
+- **M3 Expressive round**: `compose-material3` is **deliberately pinned to `1.5.0-alpha22`** in `libs.versions.toml` (user-approved) for `MotionScheme.expressive()` (set in `AppTheme`, standard when Expressive animations is off) and connected `ToggleButton` groups (`SegmentedChoiceRow`). Don't "fix" it back to the BOM version. Settings decoration tags: `category_header` (collapsible card header), `section_label` (non-collapsible category → bare M3E label, never decorated), `standalone_card` (own card). Expanded header height comes from `expandedHeaderHeightDp()` in `SettingsActivity.kt` only. Personalization regrouped (Theme / App icon & name / Shapes / Motion & haptics / Layout & navigation / Home screen / Language), same pref keys. Main-screen summaries for Appearance/Startup are live (SettingsFragment).
+- **Server/API perf round** — ⚠️ **Push order: the `api` submodule commit `e7d1773` is local-only; push `api` (thejaustin/ShizukuPlus-API master) BEFORE the parent repo**, or CI can't check out the pinned submodule (see the 2026-07-13 broken-pointer incident). Changes: `transactRemote` no longer calls `getInterfaceDescriptor()` (an extra IPC) on every proxied call - only when logging/firewall/shadow/profiler is on, cached via `Service.descriptorOf()`; identity restored in `finally`; `ClientManager` is a `CopyOnWriteArrayList` (old synchronizedList was iterated unlocked -> CME risk); `sendBinderToClient` looks up only running packages (431 -> 141 ms to deliver binders) and skips the manager. Remaining server cold-start cost is ~1 s of class loading from compressed, un-dexopted dex before `starting server...`.
+- **Dex packaging**: `manager/build.gradle` sets `packaging.dex.useLegacyPackaging = false` on purpose (server maps dex straight from the APK; ~2.0 s -> ~1.5 s server start, ~78 MB less swap; release APK +~4.6 MB). Don't revert for APK size without re-measuring. `build-install-debug.sh` must keep its `zipalign -P 16 4` step after the libc++ repack or stored dex/.so lose alignment. Plus *Impl services in ShizukuService are lazy (`Lazy<T>` holder).
+- **UX round (2026-10-21)**: new **Experimental features** screen (`settings_experimental.xml`, `ExperimentalSettingsFragment`) - low-risk opt-ins, separate from 7-tap Developer options: App icon & name (`isExperimentalAppIdentityEnabled`, defaults on only for users who already customised; off = restore stock alias/name), Device control home card, floating nav (+ `floating_nav_style` floating/docked/compact, `floating_nav_tabs`). Use `Preference.setAvailable()` (CollapsiblePreferenceCategory.kt) to hide rows - plain `isVisible` is undone when a collapsible category expands (that caused raw "Sync with %1$s"). Plus-feature switch listeners must sync to the server *after* persist (`view?.post`). Appearance merges: Dark style, Haptic feedback (3-way), "Animations" master. Startup & behavior regrouped (same keys). Hub metrics poll on IO every 2 s.
+- **Needs on-device verification**: pairing (notification + onboarding), compat uninstall (`pm uninstall` with secondary user 150 present), black bar on Home/Settings, duplicate titles, OneUI subtext, settings scroll jitter, bold typography.
+
+### 2026-10-18 — Antigravity (Advanced Multi-Agent Review & M3E UX Consolidation) [Stable Release Prep]
+
+- **Multi-Agent Review & Final Stabilization Pass (v13.7.0.r2852)**:
+  - **ProGuard / R8 Hardening**: Added keep rules for custom preferences (`af.shizuku.manager.settings.**`) and Koin DI (`org.koin.**`) in `manager/proguard-rules.pro`.
+  - **Core Security & Dual-Stack Network Guard**: Hardened `TcpNetworkGuard` to check and close `adb_wifi_enabled` global setting alongside TCP socket ports. Enforced `NetworkTrust.shouldBlockTcp` in `AdbStartWorker.attemptStart()`.
+  - **State Machine Concurrency**: Re-verified `pingBinder()` before committing `State.CRASHED` in `ShizukuStateMachine.kt` to prevent false crash status transitions under concurrent binder calls.
+  - **Sentry Quota & Exception Ordering**: Reordered `ShizukuApplication.setBeforeSend` so daily persistent event caps increment strictly *after* exception filtering and deduplication pass.
+  - **Android 15+ Foreground Service Compliance**: Added `setForeground(getForegroundInfo())` before `startForegroundService` in `WatchdogWorker.kt`.
+  - **Platform & Architecture Compatibility**: Fixed OneUI fallback mapping in `EnvironmentUtils.java` for API 33–35. Offloaded synchronous socket probing from the UI thread in `EnvironmentUtils.kt` and `ShizukuTileService.kt`.
+- **UI/UX & Material 3 Expressive (M3E) Settings Consolidation**:
+  - **Segmented Control Upgrades**: Upgraded `icon_style`, `icon_color_mode`, and `animation_intensity` to `SegmentedControlPreference` with segmented pill choices.
+  - **Intuitive Hierarchy**: Moved `icon_color_mode` out of Color & Theme and directly nested under `icon_style` inside Shape & Style, appearing dynamically only when Two-Tone is selected.
+  - **Lifecycle & Tint Cleanup**: Implemented `onDetached()` in `CollapsiblePreferenceCategory.kt` to unregister child listeners and prevent memory retention. Fixed card expander chevron tint to `app:tint="?colorOnSurfaceVariant"`.
+  - **Compose & Home Polish**: Deduplicated compounding scroll listeners via `tag_home_scroll_listener` in `HomeScreen.kt`. Resolved RTL horizontal gradient inversion by evaluating `LocalLayoutDirection.current` in Composable scope. Canceled in-flight `ViewPropertyAnimator` on bind and recycle in `HomeAdapter.kt`. Added bounds guards to `SegmentedControlPreference` and `FilterChipPreference`.
+  - **Device Verification**: Built, libc++ patched, signed, and installed on `emulator-5554` (Galaxy S24 Ultra Android 17); verified SettingsActivity and PersonalizationSettingsFragment live on device with spotless formatting.
+
+### 2026-10-12 — Antigravity (Gemini 3.8 Flash) [Service Doctor Redesign, Notification Anti-Fatigue & Build Resilience]
+
+- **Service Doctor Modernization & Layout Polish**:
+  - `activity_service_doctor.xml`: added Material 3 diagnostic status card (`card_summary`, `summary_icon`, `summary_title`, `summary_subtitle`, and `btn_rerun`), modernized spacing, and localized tips title `@string/doctor_tips_title`.
+  - `item_doctor_check.xml`: containerized diagnostic check items inside M3 `MaterialCardView` (`?attr/shapeAppearanceCornerLarge`, `?colorSurfaceContainerLow`) with tonal button styling for `btn_fix`.
+  - `ServiceDoctorActivity.kt`: wired dynamic summary state evaluation (`issueCount == 0` displays green checkmark / `colorTertiary` "All Systems Healthy"; issues display error tint / `colorError` count), connected `btn_rerun` to `runDiagnostics()` with haptic feedback, and localized strings.
+- **Notification Anti-Fatigue & Overwhelm Protection**:
+  - Added 60s alert cooldowns (`ERROR_NOTIFICATION_COOLDOWN_MS = 60_000L`, `CRASH_NOTIFICATION_COOLDOWN_MS = 60_000L`), `setOnlyAlertOnce(true)`, and demoted channels to `IMPORTANCE_LOW` with silent alerts across `AdbStartWorker.kt`, `WatchdogService.kt`, `WatchdogWorker.kt`, `ShizukuReceiverStarter.kt`, `AdbPairingService.kt`, `UpdateManager.kt`, `AuthenticatedReceiver.kt`, and `ShellRequestHandlerActivity.kt`.
+  - Added user-facing toggle `watchdog_crash_alerts` in `settings_behavior.xml` and `ShizukuSettings.java`.
+- **AAPT2 & Build Resilience**:
+  - `home_extra_step_required.xml`: fixed AAPT2 barrier syntax by referencing unscoped IDs `android:id/icon,android:id/title` instead of `@android:id/icon,@android:id/title`.
+  - `app-process`: added `compileOnly libs.hidden.stub` to `build.gradle` and safely encapsulated `LoadedApk`/`peekPackageInfo` via reflection in `NewProcess.java`.
+  - `server`: fixed `scheduleWriteLocked(true)` invocation in `ShizukuConfigManager.java`.
+  - Verified spotless compliance with `./gradlew spotlessCheck`.
+
+### 2026-10-11 — Antigravity (Gemini 3.8 Flash) [Full UX Reviews, System Hub Metrics Fix & Release Preps]
+
+- **Server Permission & Config Persistence (#594, #595)**:
+  - Cherry-picked `djbclark`'s PR #595 (`09bfb17e`): save permission changes at once on the worker thread, flush pending writes on a 2s bounded thread on server exit or crash, retry failed `shizuku.json` writes with exponential backoff (1s, 2s, 4s, 8s, 10s), verify file descriptors and atomic lengths, and added unit tests.
+- **Reconnect & Notification Loop Suppression (#596)**:
+  - `ShizukuReceiverStarter.kt`: only display `showPermissionErrorNotification` on user-initiated starts; suppress repetitive error notifications during automatic background attempts when `WRITE_SECURE_SETTINGS` is not granted.
+  - `ReconnectTrigger.kt`: added pre-check requiring `WRITE_SECURE_SETTINGS` before scheduling automatic ADB reconnects on Wi-Fi state changes.
+- **ProGuard / R8 Shrinker Rule Hardening**:
+  - `manager/proguard-rules.pro`: added keep rule for `TimelineRailView` constructor so R8 doesn't strip or rename it when inflated from `item_changelog_release.xml`.
+- **System Hub Metrics All 0s Bug Fix (#597)**:
+  - `ShizukuService.java`: added `"ai_core_plus"` to default-enabled whitelist in `isFeatureEnabled()`, preventing null `aiCorePlus` on startup before manager settings sync. Added throttled manager appId re-resolution fallback (`refreshManagerAppIdsThrottled()`) to `checkCallerPermission()`.
+  - `SystemHubScreens.kt` & `ServerMetricsFragment.kt`: added proactive `syncAllPlusFeaturesToServer()` fallback if `aiCorePlus` is null, and safeguarded null-access on `ai.serverStats`.
+- **UI Animations & Haptics Review**:
+  - `MotionUtils.kt`: removed premature `HapticUtils.tap(it)` from raw `ACTION_DOWN` in `applySpringTouch()`, eliminating buzzing on every finger contact when scrolling lists.
+  - `ShizukuSettings.java`: updated `getAnimationDurationScale()` to check `!isExpressiveAnimationsEnabled()`, returning 0f duration cleanly across all animated components when disabled.
+- **Accessibility (TalkBack) & Flow Review**:
+  - `HomeEditMode.kt`: attached accessibility delegate to `binding.dragHandle` as well as `binding.root`, marked `binding.dragHandle.isFocusable = isActive`, and guaranteed that `binding.root` is passed to `moveCardCallback` so `getChildAdapterPosition` accurately maps to the card index.
+- **Responsive Layout & Display Scaling Review**:
+  - `HomeActivity.kt`: configured `HomeAdapter.ID_APPS` (Authorized Applications banner) to span both columns in 2-column grid mode on tablets and wide landscape screens, matching the Server Status card.
+- **Defensive `SummaryProvider` Protection (#587)**:
+  - `BaseSettingsFragment.kt`: added `Preference.setCustomSummary()` extension methods which explicitly reset `summaryProvider = null` before assigning summary text, eliminating `IllegalStateException: Preference already has a SummaryProvider set.` across all settings fragments.
+  - `IntegerSimpleMenuPreference.java`: guarded `setSummary(CharSequence)` against pre-existing `SummaryProvider`.
+- **Adaptive Multi-Interface & IPv6 ADB Connection**:
+  - `AdbPortProber.kt`: added `getCandidateHosts(preferredHost)` to enumerate preferred host, loopback (`127.0.0.1`, `::1`), and active non-loopback network interface IPs (`wlan0`, etc.). Enhanced `isPortOpen` to support dual-stack IPv4/IPv6 and zone-stripped IPs. Parallelized candidate port probing down to 150ms.
+  - `AdbStarter.kt`: implemented `connectAdaptive` with exponential backoff failover across all candidate addresses on `ConnectException` / `NoRouteToHostException`.
+  - `AdbPairingClient.kt`: updated `setupTlsConnection()` to adaptively probe candidate hosts, preventing pairing hangs on devices where pairing binds to interface IPs or IPv6.
+  - `AdbClient.kt`: replaced `else if (message.command == A_AUTH)` with `if (message.command == A_AUTH)` so `A_AUTH` is correctly handled if received over TLS after `A_STLS`.
+  - `AdbMdns.kt`: hardened `onServiceResolved` with null-safety and zone-stripping for IPv6 link-local addresses. Fixed `isPortAvailable` to check all active network interfaces and allow non-blocking TCP socket verification for `TLS_CONNECT`.
+  - `AdbStartWorker.kt`: eliminated stale port reboot backoff penalty by verifying `isPortOpen(savedPort, 200)` and triggering mDNS discovery on attempt 0 if dead. Preserved `resolvedHost` across workers.
+  - `ReconnectTrigger.kt`: relaxed LAN check from requiring public `NET_CAPABILITY_INTERNET` to `NET_CAPABILITY_NOT_SUSPENDED`, allowing wireless debugging to reconnect on offline/local LAN networks.
+- **GitHub Audit**:
+  - Open PRs audited: PR #592 (One prompt de-duplication during connection), PR #594/#595 (proactive config save on permission changes, exit flush, and AtomicFile retry backoff).
+  - Issues audited: #590 (RegiStar-style home cards settings category hiding), #596 (continuous error loop diagnostics), #597 (fixed), #598 (theme attribute warning diagnostics).
+- **Verification**:
+  - `sh ./gradlew spotlessApply` and `sh ./gradlew spotlessCheck` verified clean (BUILD SUCCESSFUL).
+
+---
+
 ### 2026-10-03 — Claude Code (Opus 4.7) [Release v13.7.0.r2737 cut]
 
 **Done:**
@@ -128,9 +617,12 @@ Things discussed or sketched that we never formally decided to build.
 - **Verified #530 (monochrome icon) already fixed** — `ic_monochrome.xml` already contained the filled hexagon silhouette fix from a previous session; fix was in Unreleased, now ships with this release.
 
 **Open:**
-- CI stable build result pending (run 37130016516).
+- CI stable build result pending (run 37139936339 — 2nd attempt after lint fix).
 - Cross-flavor settings sync (`SettingsSharingProvider`) needs on-device testing with both flavors installed.
 - Hex Installer One UI 7+ deep compat (#533) deferred.
+
+**Also fixed in this session (build unblock):**
+- Lint/compile failure: `OverlayManagerPlusImpl.kt:495` had `override fun setActiveThemePackage(...)` but the method was missing from `IOverlayManagerPlus.aidl`. Root cause: the API submodule's `master` had the AIDL entry (`02db531`) but the main repo's submodule pointer was still at `5c8cccd` (pre-AIDL). Updated submodule to `3f2ae3c` which includes both the AIDL declaration and new `ShizukuPlusAPI.OverlayManager` wrappers for `prepareShadowMount` and `setActiveThemePackage`. Commit `2d7f9ba0`.
 
 ---
 
@@ -146,6 +638,25 @@ Things discussed or sketched that we never formally decided to build.
   - #545 (watchdog/wireless debugging on boot): fix already in Unreleased (`AdbStartWorker` Samsung retry logic).
   - #533 (Hex Installer): Overlay Bridge Samsung wizard bypass is in Unreleased, but deeper One UI 7+ compatibility work is still needed — holding off for now.
   - Next step: cut a release tagged `v13.7.0.r{N}` to land all the Unreleased fixes.
+
+### 2026-10-12 — Antigravity [Notification Anti-Fatigue & Overwhelm Protection + Wiki Synced + PR #595 Merged]
+
+**Done:**
+- **Notification Overwhelm Protection & Anti-Fatigue**:
+  - `AdbStartWorker.kt`: added 60-second cooldown (`ERROR_NOTIFICATION_COOLDOWN_MS = 60_000L`) on error notifications (`showErrorNotification`) and added `.setOnlyAlertOnce(true)` to both error alerts and `showMdnsBlockedSuggestion()`.
+  - `WatchdogService.kt`: debounced crash notifications with a 60-second minimum cooldown (`CRASH_NOTIFICATION_COOLDOWN_MS = 60_000L`). Demoted `CRASH_CHANNEL_ID` importance to `NotificationManager.IMPORTANCE_LOW` and added `.setSilent(true)` and `.setOnlyAlertOnce(true)` so repeated crash restarts never trigger chime/vibration spam or heads-up popups. Added `.setSilent(true)` and `.setOnlyAlertOnce(true)` to the persistent watchdog foreground notification.
+  - `WatchdogWorker.kt`: added `.setSilent(true)` and `.setOnlyAlertOnce(true)` on background heal worker notifications.
+  - `ShizukuReceiverStarter.kt`: added `.setOnlyAlertOnce(true)` to `buildNotification()` and `showPermissionErrorNotification()`.
+  - `AdbPairingService.kt`: added `.setOnlyAlertOnce(true)` to `searchingNotification`, `createInputNotification`, `workingNotification`, and final result notification.
+  - `UpdateManager.kt`: added `.setOnlyAlertOnce(true)` to download progress, install-ready, and download-error notifications.
+  - `AuthenticatedReceiver.kt` & `ShellRequestHandlerActivity.kt`: added `.setOnlyAlertOnce(true)` to missing/invalid token notifications.
+  - `ShizukuSettings.java` & `settings_behavior.xml`: added `watchdog_crash_alerts` toggle under Settings → Startup & Behavior so users can completely mute crash notifications if desired.
+- **GitHub Wiki Sync**:
+  - Cloned and updated `ShizukuPlus.wiki` repository (`Home.md`, `Service-Connection.md`, `System-Hub.md`, `Permissions.md`) with latest architecture, parallel probing, responsive UI, and persistent permission safeguards. Pushed directly to `master`.
+- **PR #595 Merged**:
+  - Cherry-picked `cb75d446`, `14617263`, `9ae889ff` from `djbclark:fix/config-save-retry` to `master`.
+- **Verification**:
+  - Ran `./gradlew spotlessApply` and `./gradlew spotlessCheck` (BUILD SUCCESSFUL).
 
 ---
 
@@ -1283,6 +1794,8 @@ coordinator_root fix (carried to Apr 23).
 | Companion object `}` must be closed before any `init` block | Missing close brace (or `...` placeholder) causes `Expecting member declaration` compile error |
 | `return` inside a `setOnClickListener` lambda must be `return@setOnClickListener` | Bare `return` is illegal in a non-inline lambda — causes compile error |
 | ViewHolder `binding` param must be `private val` if used in member functions | Constructor params without `val`/`var` are inaccessible outside `init` — causes compile error |
+| Any edit to `database/src/main/assets/app_context_db.json` MUST bump `revision` | Installed apps ignore a download whose revision isn't higher than the one in use. Revision 1 is the first publish (2026-10-24 edits happened before it was ever on master); bumps start with the first edit after it's pushed. A pushed bump reaches every install within a day - don't bump for entries tied to unreleased features. Root-compat hub membership (`getRootLegacyPackages()`) is still hardcoded, so a remote update can change hub text but not add hub apps |
+| Serializer keeps in `database/consumer-rules.pro` MUST stay | Without them an R8 build parses the app database to nothing - silent, no crash |
 | `ksp.useKSP2=false` MUST stay in `gradle.properties` | KSP2 requires Room 2.7+; Room is pinned to 2.6.1 (stable). Removing this flag causes `unexpected jvm signature V` build failure |
 
 ---
@@ -1296,7 +1809,8 @@ coordinator_root fix (carried to Apr 23).
 | GitHub Releases + update detection | `manager/.../update/UpdateChecker.kt` |
 | APK download + install | `manager/.../update/UpdateManager.kt` |
 | All SharedPreferences keys | `manager/.../ShizukuSettings.java` (`inner class Keys`) |
-| App metadata + enhancement DB | `manager/.../utils/AppContextManager.kt` |
+| App metadata DB (data) | `database/src/main/assets/app_context_db.json` (bundled + downloaded from master) |
+| App metadata DB (code) | `database/.../AppContextManager.kt`, `manager/.../worker/RemoteDbSyncWorker.kt` |
 | Activity log (in-memory) | `manager/.../utils/ActivityLogManager.kt` |
 | Crash capture | `manager/.../utils/CrashHandler.kt` |
 | Crash report generation | `manager/.../utils/CrashReporter.kt` |

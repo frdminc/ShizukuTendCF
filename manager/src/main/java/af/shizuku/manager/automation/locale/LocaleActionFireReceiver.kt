@@ -20,6 +20,13 @@ class LocaleActionFireReceiver : BroadcastReceiver() {
         intent: Intent,
     ) {
         val bundle = intent.getBundleExtra(EXTRA_BUNDLE) ?: return
+        // Any app can send this broadcast; only honour it when the user allowed automation apps.
+        if (!af.shizuku.manager.ShizukuSettings
+                .isAutomationPluginAllowed()
+        ) {
+            Timber.tag("LocaleActionFireReceiver").w("Ignored: automation apps are not allowed in settings")
+            return
+        }
 
         when (bundle.getString(BUNDLE_KEY_ACTION)) {
             ACTION_START -> ShizukuReceiverStarter.start(context)

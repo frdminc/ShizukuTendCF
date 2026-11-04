@@ -76,11 +76,24 @@ abstract class AppActivity : MaterialActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (!suppressTransitionOnCreate) {
-            try {
-                window.requestFeature(Window.FEATURE_ACTIVITY_TRANSITIONS)
-                window.enterTransition = android.transition.Explode()
-                window.exitTransition = android.transition.Explode()
-            } catch (_: Exception) {
+            // On Android 14+ (API 34+), Predictive Back gestures clash with Window.FEATURE_ACTIVITY_TRANSITIONS,
+            // producing visual jumps, black surface flashes, and conflicts with OnBackAnimationCallback.
+            // Only apply legacy platform transitions on API < 34.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                try {
+                    window.requestFeature(Window.FEATURE_ACTIVITY_TRANSITIONS)
+                    val axis =
+                        if (materialScreenTransitions()) {
+                            com.google.android.material.transition.platform.MaterialSharedAxis.X
+                        } else {
+                            com.google.android.material.transition.platform.MaterialSharedAxis.Z
+                        }
+                    window.enterTransition = com.google.android.material.transition.platform.MaterialSharedAxis(axis, true)
+                    window.exitTransition = com.google.android.material.transition.platform.MaterialSharedAxis(axis, true)
+                    window.reenterTransition = com.google.android.material.transition.platform.MaterialSharedAxis(axis, false)
+                    window.returnTransition = com.google.android.material.transition.platform.MaterialSharedAxis(axis, false)
+                } catch (_: Exception) {
+                }
             }
         }
         // Suppress the NEW window's enter animation/transition when this is a theme-change
@@ -197,10 +210,18 @@ abstract class AppActivity : MaterialActivity() {
 
     override fun onSupportNavigateUp(): Boolean {
         if (!super.onSupportNavigateUp()) {
-            finish()
+            finishAfterTransition()
         }
         return true
     }
+
+    /** Experimental > "Material screen transitions" (key must match ShizukuSettings.Keys). */
+    protected fun materialScreenTransitions(): Boolean =
+        runCatching {
+            createDeviceProtectedStorageContext()
+                .getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+                .getBoolean("experimental_screen_transitions", false)
+        }.getOrDefault(false)
 
     /**
      * [recreate] tears down and rebuilds the window; combined with the Explode

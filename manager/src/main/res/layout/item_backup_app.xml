@@ -36,8 +36,7 @@
                 android:layout_height="wrap_content"
                 android:textAppearance="?textAppearanceTitleSmall"
                 android:textColor="?colorOnSurface"
-                android:maxLines="1"
-                android:ellipsize="end" />
+                android:maxLines="2" />
 
             <TextView
                 android:id="@+id/package_name"
@@ -46,8 +45,7 @@
                 android:layout_marginTop="1dp"
                 android:textAppearance="?textAppearanceBodySmall"
                 android:textColor="?colorOnSurfaceVariant"
-                android:maxLines="1"
-                android:ellipsize="end" />
+                android:maxLines="2" />
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -82,7 +80,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_freeze"
-            style="@style/Widget.Material3.Button.OutlinedButton"
+            style="?attr/materialButtonOutlinedStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
@@ -91,7 +89,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_restore"
-            style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+            style="?attr/materialButtonOutlinedStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="4dp"
@@ -111,11 +109,10 @@
 
     </LinearLayout>
 
-    <ProgressBar
+    <com.google.android.material.progressindicator.LinearProgressIndicator
         android:id="@+id/busy_indicator"
-        style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="4dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:indeterminate="true"
         android:visibility="gone" />

@@ -19,7 +19,13 @@ import rikka.shizuku.server.util.ShellExecutor
 import java.io.File
 import java.io.InputStream
 
-class BackupRestorePlusImpl : IBackupRestorePlus.Stub() {
+/** @param allowed whether the calling app may use this binder right now (see [RiskyBinderGate]). */
+class BackupRestorePlusImpl(private val allowed: java.util.function.BooleanSupplier) : IBackupRestorePlus.Stub() {
+
+    override fun onTransact(code: Int, data: android.os.Parcel, reply: android.os.Parcel?, flags: Int): Boolean {
+        rikka.shizuku.server.util.RiskyBinderGate.enforce(code, allowed, "BackupRestorePlus")
+        return super.onTransact(code, data, reply, flags)
+    }
 
     companion object {
         private const val TAG = "BackupRestorePlus"
@@ -107,14 +113,17 @@ class BackupRestorePlusImpl : IBackupRestorePlus.Stub() {
         }
         // Fallback: pm list packages — get disabled set once for isFrozen, versionName/allowBackup
         // are unavailable without per-package queries in this path so left as safe defaults.
+        // --user: without it pm walks every user and errors on profiles shell can't access
+        // (Samsung Secure Folder, user 150), and other users' packages would mix in.
+        val user = callingUserId().toString()
         val disabledPkgs = try {
-            ShellExecutor.exec("pm", "list", "packages", "-d").lines()
+            ShellExecutor.exec("pm", "list", "packages", "-d", "--user", user).lines()
                 .map { it.removePrefix("package:").trim() }.toHashSet()
         } catch (_: Exception) { emptySet<String>() }
         val args = if (includeSystem)
-            arrayOf("pm", "list", "packages", "-f", "--show-versioncode")
+            arrayOf("pm", "list", "packages", "-f", "--show-versioncode", "--user", user)
         else
-            arrayOf("pm", "list", "packages", "-f", "--show-versioncode", "-3")
+            arrayOf("pm", "list", "packages", "-f", "--show-versioncode", "-3", "--user", user)
         val output = ShellExecutor.exec(*args)
         val result = mutableListOf<Bundle>()
         for (line in output.lines()) {
@@ -248,6 +257,8 @@ class BackupRestorePlusImpl : IBackupRestorePlus.Stub() {
         includeShared: Boolean
     ): ParcelFileDescriptor? {
         if (packageName.isNullOrBlank()) return null
+        // A "package name" like -all or -shared would be read by bu as an option.
+        if (!InputValidationUtils.isValidPackageName(packageName)) return null
         if (Build.VERSION.SDK_INT >= 32) return null
         val cmd = mutableListOf("bu", "backup")
         if (!includeApk) cmd += "-noapk"

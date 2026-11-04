@@ -21,6 +21,5 @@
     <string name="compat_hub_install_signature_conflict">インストールできません: 互換性のない署名を持つ別のアプリ（公式版 Shizuku など）が moe.shizuku.privileged.api として既にインストールされています。先にアンインストールしてください。</string>
     <string name="compat_hub_install_fail_storage">インストールできません: デバイスの空き容量が不足しています。</string>
     <string name="compat_hub_install_fail_abi">インストールできません: Compat Hub はこのデバイスの CPU アーキテクチャに対応していません。</string>
-    <string name="compat_hub_install_manual_launched">インストーラーを開いています — 画面の指示に従ってインストールを完了してください。</string>
     <string name="compat_hub_install_fail_newprocess">お使いのデバイスでは Shizuku のプロセス生成 API が制限されています。代わりにシステムインストーラーを開きます — プロンプトが表示されたら「インストール」をタップしてください。</string>
 </resources>

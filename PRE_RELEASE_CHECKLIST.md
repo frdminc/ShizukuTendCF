@@ -37,7 +37,7 @@
 
 ### Build Configuration
 - [x] androidx.core 1.15.0 (avoiding manifest merger issues)
-- [x] Compose dependencies removed
+- [x] Jetpack Compose 1.7.x / Material 3 Expressive enabled for HomeScreen, SettingsScreen, and preferences
 - [x] ProGuard mapping upload enabled
 - [x] Native symbols upload enabled
 
@@ -69,7 +69,7 @@
 ```
 
 ### Release Tracking
-- [x] Version format consistent: Shizuku+ 13.6.0.rXXXX
+- [x] Version format consistent: Shizuku+ 13.7.0.rXXXX
 - [x] GitHub release notes include Sentry link
 - [x] Commits linked to each release
 - [x] Source context uploaded for better stack traces

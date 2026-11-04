@@ -7,7 +7,6 @@ import android.util.TypedValue;
 import android.view.View;
 import androidx.annotation.StyleRes;
 import androidx.core.graphics.ColorUtils;
-import com.google.android.material.snackbar.Snackbar;
 import af.shizuku.manager.R;
 import af.shizuku.manager.ShizukuSettings;
 import af.shizuku.manager.utils.EnvironmentUtils;
@@ -29,7 +28,7 @@ public class ThemeHelper {
     }
 
     public static String getTheme(Context context) {
-        if (isBlackNightTheme(context)
+        if ((isBlackNightTheme(context) || ShizukuSettings.isAmoledPlusEnabled())
                 && ResourceUtils.isNightMode(context.getResources().getConfiguration())) {
             return ShizukuSettings.isAmoledPlusEnabled() ? THEME_BLACK_PLUS : THEME_BLACK;
         }
@@ -50,13 +49,7 @@ public class ThemeHelper {
         }
     }
 
-    public static void applySnackbarTheme(Context context, Snackbar snackbar) {
-        snackbar.setBackgroundTint(resolveColor(context, R.attr.colorPrimaryContainer))
-            .setTextColor(resolveColor(context, R.attr.colorOnSurface))
-            .setActionTextColor(resolveColor(context, R.attr.colorPrimary));
-    }
-
-    private static int resolveColor(Context context, int color) {
+    public static int resolveColor(Context context, int color) {
         TypedValue typedValue = new TypedValue();
         context.getTheme().resolveAttribute(color, typedValue, true);
         return typedValue.data;

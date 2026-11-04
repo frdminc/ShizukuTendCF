@@ -1,95 +1,262 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/hint_scrim"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:layout_gravity="bottom"
-    android:layout_margin="16dp"
-    app:cardBackgroundColor="?colorSurfaceContainerHigh"
-    app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerExtraLarge"
-    app:strokeWidth="0dp"
-    app:cardElevation="0dp">
+    android:layout_height="match_parent"
+    android:background="#4D000000"
+    android:clickable="true"
+    android:focusable="true">
 
-    <LinearLayout
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/hint_card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingHorizontal="20dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="12dp">
+        android:layout_gravity="bottom"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="24dp"
+        app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
+        app:cardElevation="10dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="?attr/colorOutlineVariant"
+        app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerExtraLarge">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/swipe_hint_title"
-            android:textAppearance="?textAppearanceTitleMedium"
-            android:layout_marginBottom="12dp" />
-
-        <!-- Right swipe row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="10dp">
+            android:orientation="vertical"
+            android:paddingHorizontal="20dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="16dp">
 
-            <ImageView
-                android:id="@+id/hint_icon_right"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:src="@drawable/ic_outline_play_arrow_24"
-                android:background="@drawable/hint_icon_bg_green"
-                android:tint="?colorOnPrimaryContainer"
-                android:padding="4dp"
-                android:contentDescription="@null" />
+            <!-- Drag handle / top indicator pill -->
+            <View
+                android:layout_width="36dp"
+                android:layout_height="4dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/pill_indicator" />
 
-            <TextView
-                android:layout_width="0dp"
+            <!-- Header Row: Icon, Title, Subtitle, Close Button -->
+            <RelativeLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="12dp"
-                android:text="@string/swipe_hint_right"
-                android:textAppearance="?textAppearanceBodyMedium" />
+                android:layout_marginBottom="14dp">
+
+                <ImageView
+                    android:id="@+id/hint_header_icon"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_alignParentStart="true"
+                    android:layout_centerVertical="true"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_swipe_24"
+                    android:background="@drawable/bg_circle_primary_container"
+                    app:tint="?attr/colorOnPrimaryContainer"
+                    android:contentDescription="@null" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_toEndOf="@id/hint_header_icon"
+                    android:layout_toStartOf="@id/hint_button_close"
+                    android:layout_centerVertical="true"
+                    android:layout_marginStart="14dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/swipe_hint_title"
+                        android:textAppearance="?attr/textAppearanceTitleMedium"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/swipe_hint_subtitle"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/hint_button_close"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_alignParentEnd="true"
+                    android:layout_centerVertical="true"
+                    app:icon="@drawable/ic_close_24"
+                    app:iconTint="?attr/colorOnSurfaceVariant"
+                    android:contentDescription="@string/action_close" />
+
+            </RelativeLayout>
+
+            <!-- Right Swipe Gesture Preview Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_swipe_right"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+                app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerLarge"
+                app:strokeWidth="1dp"
+                app:strokeColor="?attr/colorOutlineVariant"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:padding="12dp">
+
+                    <ImageView
+                        android:id="@+id/hint_icon_right"
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:padding="8dp"
+                        android:contentDescription="@null" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="12dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/hint_badge_right"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/swipe_hint_direction_right"
+                            android:textAppearance="?attr/textAppearanceLabelSmall"
+                            android:textStyle="bold"
+                            android:textColor="?attr/colorPrimary" />
+
+                        <TextView
+                            android:id="@+id/hint_text_right"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textAppearance="?attr/textAppearanceBodyMedium"
+                            android:textStyle="bold"
+                            tools:text="Open app" />
+
+                    </LinearLayout>
+
+                    <!-- Visual arrow indicator -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="→"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="?attr/colorPrimary"
+                        android:layout_marginEnd="6dp" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Left Swipe Gesture Preview Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_swipe_left"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+                app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerLarge"
+                app:strokeWidth="1dp"
+                app:strokeColor="?attr/colorOutlineVariant"
+                app:cardElevation="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:padding="12dp">
+
+                    <ImageView
+                        android:id="@+id/hint_icon_left"
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:padding="8dp"
+                        android:contentDescription="@null" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="12dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/hint_badge_left"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/swipe_hint_direction_left"
+                            android:textAppearance="?attr/textAppearanceLabelSmall"
+                            android:textStyle="bold"
+                            android:textColor="?attr/colorSecondary" />
+
+                        <TextView
+                            android:id="@+id/hint_text_left"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textAppearance="?attr/textAppearanceBodyMedium"
+                            android:textStyle="bold"
+                            tools:text="App info" />
+
+                    </LinearLayout>
+
+                    <!-- Visual arrow indicator -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="←"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="?attr/colorSecondary"
+                        android:layout_marginEnd="6dp" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Button Actions: Settings & Got it -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="end">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/hint_button_settings"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/swipe_hint_customize"
+                    app:icon="@drawable/ic_settings_outline_24"
+                    app:iconSize="18dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/hint_button_got_it"
+                    style="@style/Widget.Material3.Button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/swipe_hint_got_it" />
+
+            </LinearLayout>
 
         </LinearLayout>
 
-        <!-- Left swipe row -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="12dp">
+    </com.google.android.material.card.MaterialCardView>
 
-            <ImageView
-                android:id="@+id/hint_icon_left"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:src="@drawable/ic_outline_info_24"
-                android:background="@drawable/hint_icon_bg_blue"
-                android:tint="?colorOnSecondaryContainer"
-                android:padding="4dp"
-                android:contentDescription="@null" />
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="12dp"
-                android:text="@string/swipe_hint_left"
-                android:textAppearance="?textAppearanceBodyMedium" />
-
-        </LinearLayout>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/swipe_hint_dismiss"
-            android:textAppearance="?textAppearanceLabelSmall"
-            android:textColor="?colorOnSurfaceVariant"
-            android:gravity="end" />
-
-    </LinearLayout>
-
-</com.google.android.material.card.MaterialCardView>
+</FrameLayout>

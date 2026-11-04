@@ -17,4 +17,9 @@
         android:title="@string/su_bridge_cleanup_tmp"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_knowledgebase"
+        android:icon="@drawable/ic_server_24"
+        android:title="@string/knowledgebase_title"
+        app:showAsAction="ifRoom" />
 </menu>

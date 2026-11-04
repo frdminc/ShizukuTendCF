@@ -21,6 +21,5 @@
     <string name="compat_hub_install_signature_conflict">설치할 수 없음: 호환되지 않는 서명을 가진 다른 앱(예: 순정 Shizuku)이 이미 moe.shizuku.privileged.api로 설치되어 있습니다. 먼저 해당 앱을 제거하세요.</string>
     <string name="compat_hub_install_fail_storage">설치할 수 없음: 기기의 여유 저장 공간이 부족합니다.</string>
     <string name="compat_hub_install_fail_abi">설치할 수 없음: Compat Hub가 이 기기의 CPU 아키텍처를 지원하지 않습니다.</string>
-    <string name="compat_hub_install_manual_launched">설치 프로그램을 여는 중 — 화면의 안내에 따라 설치를 완료하세요.</string>
     <string name="compat_hub_install_fail_newprocess">기기에서 Shizuku의 프로세스 생성 API를 제한합니다. 대신 시스템 설치 프로그램을 엽니다 — 메시지가 표시되면 \'설치\'를 누르세요.</string>
 </resources>

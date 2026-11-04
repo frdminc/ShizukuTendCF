@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <com.google.android.material.materialswitch.MaterialSwitch
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@id/switchWidget"
+    style="@style/Widget.App.MaterialSwitch"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:gravity="end|center_vertical"
     android:focusable="false"
     android:clickable="false"
-    android:background="@null"
-    app:thumbIcon="@drawable/m3_switch_thumb_icon"
-    app:thumbIconTint="?attr/colorOnPrimary" />
+    android:background="@null" />

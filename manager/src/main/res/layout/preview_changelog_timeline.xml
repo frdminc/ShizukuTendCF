@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="10dp"
+    android:background="@drawable/bg_pv_panel"
+    android:importantForAccessibility="no">
+
+    <!-- summary pill -->
+    <View android:layout_width="match_parent" android:layout_height="18dp" android:background="@drawable/bg_pv_chip" />
+
+    <!-- release 1: open, node + section card -->
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:layout_marginTop="8dp">
+        <FrameLayout android:layout_width="14dp" android:layout_height="match_parent">
+            <View android:layout_width="2dp" android:layout_height="match_parent" android:layout_gravity="center_horizontal" android:background="@drawable/bg_pv_rail" />
+            <View android:layout_width="9dp" android:layout_height="9dp" android:layout_gravity="center_horizontal|top" android:layout_marginTop="2dp" android:background="@drawable/bg_pv_dot" />
+        </FrameLayout>
+        <LinearLayout
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:layout_marginStart="6dp" android:orientation="vertical">
+            <View android:layout_width="48dp" android:layout_height="7dp" android:background="@drawable/bg_pv_bar_primary" />
+            <LinearLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:layout_marginTop="6dp"
+                android:padding="6dp" android:background="@drawable/bg_pv_card">
+                <LinearLayout
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical">
+                    <View android:layout_width="12dp" android:layout_height="12dp" android:background="@drawable/bg_pv_chip" />
+                    <View android:layout_width="30dp" android:layout_height="5dp" android:layout_marginStart="5dp" android:background="@drawable/bg_pv_bar" />
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="4dp" android:layout_marginTop="6dp" android:background="@drawable/bg_pv_bar" />
+                <View android:layout_width="60dp" android:layout_height="4dp" android:layout_marginTop="4dp" android:background="@drawable/bg_pv_bar" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- release 2: folded -->
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:layout_marginTop="8dp">
+        <FrameLayout android:layout_width="14dp" android:layout_height="16dp">
+            <View android:layout_width="2dp" android:layout_height="match_parent" android:layout_gravity="center_horizontal" android:background="@drawable/bg_pv_rail" />
+            <View android:layout_width="9dp" android:layout_height="9dp" android:layout_gravity="center_horizontal|top" android:layout_marginTop="2dp" android:background="@drawable/bg_pv_bar" />
+        </FrameLayout>
+        <View android:layout_width="40dp" android:layout_height="7dp" android:layout_marginStart="6dp" android:layout_marginTop="2dp" android:background="@drawable/bg_pv_bar" />
+    </LinearLayout>
+</LinearLayout>

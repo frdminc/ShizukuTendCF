@@ -3,23 +3,16 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
-        android:id="@+id/action_sort"
-        android:title="@string/app_management_action_sort"
-        app:showAsAction="never">
-        <menu>
-            <group android:checkableBehavior="single">
-                <item
-                    android:id="@+id/sort_name"
-                    android:title="@string/app_management_sort_a_to_z" />
-                <item
-                    android:id="@+id/sort_last_installed"
-                    android:title="@string/app_management_sort_last_installed" />
-                <item
-                    android:id="@+id/sort_last_updated"
-                    android:title="@string/app_management_sort_last_updated" />
-            </group>
-        </menu>
-    </item>
+        android:id="@+id/action_swipe_hint"
+        android:title="@string/swipe_hint_title"
+        android:icon="@drawable/ic_swipe_24"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_select_multiple"
+        android:title="@string/app_management_context_select_multiple"
+        app:showAsAction="never" />
+
 
     <item
         android:id="@+id/action_hidden_apps"

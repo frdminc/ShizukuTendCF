@@ -91,10 +91,32 @@ class WindowManagerPlusImpl : IWindowManagerPlus.Stub() {
                 }
             }
 
-            // Fallback: write setting via ContentProvider (works on Samsung SELinux builds)
-            val value = if (enabled) "1" else "0"
-            putSetting("global", "force_resizable_activities", value)
-            Log.d(TAG, "Set force_resizable_activities setting to $value")
+            // Per-package Android 12+ CompatChange override (#635)
+            var compatApplied = false
+            if (rikka.shizuku.server.util.InputValidationUtils.isValidPackageName(packageName)) {
+                val action = if (enabled) "enable" else "reset"
+                // --no-kill: am compat force-stops the app by default, and the manager replays
+                // this for every saved package on each Plus settings sync. The override persists
+                // and applies on the app's next launch.
+                // FORCE_RESIZE_APP (174042936) is overridable, so shell may set it for
+                // non-debuggable apps on user builds. (There is no ALLOW_RESIZEABLE_ACTIVITY
+                // change: am compat rejects that name, verified on Android 16.)
+                compatApplied = ShellExecutor.execBool("am", "compat", action, "--no-kill", "FORCE_RESIZE_APP", packageName)
+            }
+            if (compatApplied) {
+                Log.d(TAG, "Applied per-app resize compat override for $packageName: $enabled")
+                return
+            }
+
+            // Last resort when no per-app override works: the device-wide developer option.
+            // Only ever switch it on. Writing 0 from a per-app toggle would also turn it off for
+            // every other app, and for a user who enabled it in Developer options themselves.
+            if (enabled) {
+                putSetting("global", "force_resizable_activities", "1")
+                Log.d(TAG, "Per-app resize override unavailable; set global force_resizable_activities=1")
+            } else {
+                Log.d(TAG, "Per-app resize override unavailable; leaving global force_resizable_activities as is")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set force resizable for $packageName", e)
         }

@@ -9,6 +9,7 @@ import af.shizuku.manager.service.WatchdogService
 import af.shizuku.manager.settings.BehaviorSettingsFragment
 import af.shizuku.manager.utils.ActivityLogSettingsImpl
 import af.shizuku.manager.utils.LiveActivityNotificationManager
+import af.shizuku.manager.utils.ShizukuIssues
 import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.utils.ShizukuStateMachine.State
 import af.shizuku.manager.worker.AdbStartWorker
@@ -70,6 +71,8 @@ class WatchdogFollowUpScenariosTest {
             .putBoolean("tcp_mode", false)
             .remove("mode")
             .commit()
+        // The registry is a process-wide object: an earlier test's crash must not count here.
+        ShizukuIssues.clear(app, WatchdogService.KEY_CRASHED)
         drainWatchdogStarts()
     }
 
@@ -127,6 +130,10 @@ class WatchdogFollowUpScenariosTest {
 
     private fun getActiveNotification(id: Int): Notification? =
         notificationManager().activeNotifications.firstOrNull { it.id == id }?.notification
+
+    // The crash heads-up (once notification 1002) is a problem in the registry now: shown inside
+    // the Watchdog's notification, and as the shared one when the level allows.
+    private fun crashIssue(): ShizukuIssues.Issue? = ShizukuIssues.top()?.takeIf { it.key == WatchdogService.KEY_CRASHED }
 
     private fun createBehaviorFragment(): Pair<FragmentActivity, BehaviorSettingsFragment> {
         val controller = Robolectric.buildActivity(FragmentActivity::class.java)
@@ -524,7 +531,7 @@ class WatchdogFollowUpScenariosTest {
             elapse(grace)
 
             // Crash heads-up (1002) should NOT be posted
-            assertNull("crash heads-up 1002 suppressed on first successful restart", getActiveNotification(1002))
+            assertNull("crash heads-up 1002 suppressed on first successful restart", crashIssue())
 
             // Recovery is logged to ActivityLogManager
             val logs = ActivityLogManager.logs.value
@@ -557,7 +564,7 @@ class WatchdogFollowUpScenariosTest {
             elapse(WatchdogService.RECOVERY_WAIT_MS + 1_000)
 
             // Crash heads-up (1002) MUST be posted
-            assertNotNull("crash heads-up 1002 posted when server does not come back", getActiveNotification(1002))
+            assertNotNull("crash heads-up 1002 posted when server does not come back", crashIssue())
         }
 
     @Test
@@ -576,7 +583,7 @@ class WatchdogFollowUpScenariosTest {
             elapse(grace + 1_000) // triggers restart #1
             val restart1WallMs = System.currentTimeMillis()
             elapse(WatchdogService.RECOVERY_WAIT_MS + 1_000) // recovery times out, posts 1002
-            notificationManager().cancel(1002) // clear for next test assertion
+            ShizukuIssues.clear(app, WatchdogService.KEY_CRASHED) // clear for next test assertion
             world.settle()
 
             // The dialog restart #1 raised is answered (Allow), so its unanswered marker no
@@ -598,7 +605,7 @@ class WatchdogFollowUpScenariosTest {
             elapse(grace + 1_000)
 
             // On repeated restart, crash heads-up (1002) is posted immediately upon restart
-            assertNotNull("crash heads-up 1002 posted for repeated restart", getActiveNotification(1002))
+            assertNotNull("crash heads-up 1002 posted for repeated restart", crashIssue())
         }
 
     @Test
@@ -643,7 +650,7 @@ class WatchdogFollowUpScenariosTest {
             elapse(grace + 1_000)
 
             // The second crash posts the heads-up immediately (it is not a first restart).
-            assertNotNull("crash heads-up 1002 posted for the second crash", getActiveNotification(1002))
+            assertNotNull("crash heads-up 1002 posted for the second crash", crashIssue())
 
             // Recovery: a later restart brings the server back.
             newServerBinderArrives()
@@ -682,6 +689,6 @@ class WatchdogFollowUpScenariosTest {
             elapse(grace * 4)
 
             assertEquals("no starts queued while auth unanswered", 0, startsQueued())
-            assertNull("crash heads-up 1002 not posted for withheld restart", getActiveNotification(1002))
+            assertNull("crash heads-up 1002 not posted for withheld restart", crashIssue())
         }
 }

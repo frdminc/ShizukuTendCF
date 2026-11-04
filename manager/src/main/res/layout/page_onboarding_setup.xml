@@ -10,7 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingHorizontal="20dp"
+        android:paddingHorizontal="24dp"
         android:paddingTop="40dp"
         android:paddingBottom="8dp">
 
@@ -111,21 +111,22 @@
                     android:layout_marginBottom="20dp" />
 
                 <LinearLayout
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal">
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_wadb_guide"
-                        
+                        android:id="@+id/btn_wadb_start"
+                        style="@style/Widget.Material3Expressive.Button"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginEnd="8dp"
-                        android:text="@string/home_wireless_adb_view_guide_button" />
+                        android:text="@string/home_root_button_start" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_wadb_pair"
-                        
+                        style="?attr/materialButtonTonalStyle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginEnd="8dp"
@@ -133,10 +134,11 @@
                         android:visibility="gone" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_wadb_start"
+                        android:id="@+id/btn_wadb_guide"
+                        style="?attr/borderlessButtonStyle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/home_root_button_start" />
+                        android:text="@string/home_wireless_adb_view_guide_button" />
 
                 </LinearLayout>
 
@@ -196,6 +198,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_root_start"
+                    style="@style/Widget.Material3Expressive.Button"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/home_root_button_start" />
@@ -255,6 +258,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_adb_command"
+                    style="@style/Widget.Material3Expressive.Button"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/home_adb_button_view_command" />

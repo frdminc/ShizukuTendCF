@@ -11,7 +11,6 @@ plugins {
     id "io.sentry.android.gradle"
     id "org.jetbrains.kotlin.plugin.serialization" version "2.2.20"
     id "com.diffplug.spotless"
-    id "com.mikepenz.aboutlibraries.plugin"
 }
 
 android {
@@ -82,6 +81,13 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+        // Store dex uncompressed (and page-aligned) so ART can map it straight from the APK.
+        // The server runs from this APK via app_process and gets no app dexopt of its own:
+        // with deflated dex it had to inflate every classes*.dex into anonymous memory on each
+        // start (~1 s of class loading and tens of MB that end up in swap). Costs some APK size.
+        dex {
+            useLegacyPackaging = false
+        }
         resources {
             excludes += ["**"]
         }
@@ -102,16 +108,16 @@ android {
 
 spotless {
     kotlin {
-        target "**/*.kt"
+        // Source dirs only: a project-wide tree also covers src/main/assets, which
+        // copyCompatApkDebug writes, and Gradle fails spotless + lint in one run.
+        target fileTree("src/main/java") { include "**/*.kt" },
+                fileTree("src/test/java") { include "**/*.kt" },
+                fileTree("src/androidTest/java") { include "**/*.kt" }
         ktlint("1.3.1")
         trimTrailingWhitespace()
         indentWithSpaces()
         endWithNewline()
     }
-}
-
-aboutLibraries {
-    registerAndroidTasks = true
 }
 
 autoResConfig {
@@ -253,9 +259,7 @@ dependencies {
     implementation libs.androidx.transition
     implementation libs.androidx.dynamicanimation
     implementation libs.androidx.interpolator
-    implementation libs.androidx.glance.appwidget
     implementation libs.androidx.biometric
-    implementation libs.androidx.core.remoteviews
 
     implementation libs.timber
     implementation libs.coil
@@ -270,8 +274,9 @@ dependencies {
     implementation libs.material
 
     implementation libs.libsu.core
+    implementation libs.blurview
+    implementation libs.graphics.shapes
     
-    implementation libs.aboutlibraries.core
     implementation libs.rikkax.appcompat
     implementation libs.rikkax.compatibility
     implementation libs.rikkax.core
@@ -291,6 +296,7 @@ dependencies {
     implementation libs.hiddenapibypass
 
     implementation libs.bouncycastle.bcpkix
+    implementation "org.bouncycastle:bcprov-jdk18on:1.86"
 
     implementation libs.appiconloader
 
@@ -307,6 +313,7 @@ dependencies {
     testImplementation libs.mavericks.testing
     testImplementation libs.androidx.test.core
     testImplementation "junit:junit:4.13.2"
+    // Runs the JUnit 4 (Robolectric) tests under useJUnitPlatform(); without it Gradle skips them.
     testRuntimeOnly libs.junit.vintage.engine
     androidTestImplementation "androidx.test.ext:junit:1.2.1"
     androidTestImplementation "androidx.test:runner:1.6.2"
@@ -315,11 +322,28 @@ dependencies {
 
 android {
     testOptions {
-        // Robolectric needs the merged resources: without them every getString() in the start
-        // path (ManagerActivityLog, the start notification) throws Resources.NotFoundException.
+        unitTests.all { t ->
+            t.useJUnitPlatform()
+            // MockK needs ByteBuddy's agent. Load it up front instead of self-attaching, which
+            // JDK 21 discourages and which fails outright on some JVMs (e.g. Termux on-device).
+            t.doFirst {
+                def bbAgent = t.classpath.find { it.name.startsWith("byte-buddy-agent") }
+                if (bbAgent != null) t.jvmArgs "-javaagent:${bbAgent}"
+            }
+        }
+        // Robolectric tests load the app's resources and manifest.
         unitTests.includeAndroidResources = true
-        unitTests.all {
-            useJUnitPlatform()
+    }
+}
+
+// refine registers its visitor with InstrumentationScope.ALL, which re-serializes every jar on
+// the unit-test runtime classpath while keeping META-INF signatures, so signed jars (conscrypt,
+// BouncyCastle) fail Robolectric with "SHA-256 digest error". Excluded entries are copied
+// byte-identically. Unit-test variants only, so the app's own build is unchanged.
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        ["org/conscrypt/**", "org/bouncycastle/**"].each { pattern ->
+            variant.unitTest?.instrumentation?.excludes?.addAll(pattern)
         }
     }
 }
@@ -363,6 +387,14 @@ sentry {
     // Disable Sentry's compose bytecode instrumentation to avoid R8 missing-class errors.
     tracingInstrumentation {
         enabled = false
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        force "org.bouncycastle:bcprov-jdk18on:1.86"
+        force "org.bouncycastle:bcpkix-jdk18on:1.86"
+        force "com.google.guava:guava:33.4.8-android"
     }
 }
 

@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - master
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/pull_request_template.md'
+      - 'LICENSE*'
   workflow_dispatch:
     inputs:
       debug:
@@ -22,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           submodules: 'recursive'
           fetch-depth: 0
@@ -41,34 +47,70 @@ jobs:
       ANDROID_HOME: "/usr/local/lib/android/sdk"
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           submodules: 'recursive'
           fetch-depth: 0
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
 
       - name: Accept SDK Licenses
         run: yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
 
-      - name: Run Lint
-        run: ./gradlew :manager:lint
-
       - name: Check Formatting (Spotless)
         run: ./gradlew :manager:spotlessCheck
 
-      - name: Run Unit Tests
+      - name: Run Lint
+        run: ./gradlew :manager:lint
+
+  unit-tests:
+    needs: [pre-push-guard]
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: "/usr/local/lib/android/sdk"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
+      - name: Accept SDK Licenses
+        run: yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+
+      # JVM unit tests for every module that has them (MockK, kotest, Robolectric). Robolectric's
+      # native runtime only runs on x86, so these four Robolectric suites are CI-only.
+      - name: Run unit tests
         run: ./gradlew --continue :manager:testShizukuplusDebugUnitTest :server:testDebugUnitTest :database:testDebugUnitTest
 
       - name: Check Unit Test Counts
         run: python3 scripts/dev/check-test-counts.py
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: unit-test-reports
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/
+          retention-days: 7
 
   build:
     needs: [pre-push-guard]
@@ -76,7 +118,10 @@ jobs:
 
     env:
       ANDROID_HOME: "/usr/local/lib/android/sdk"
-      KEYSTORE: ${{ secrets.KEYSTORE }}
+      # Only whether a keystore exists is job-wide; the keystore itself is given to the one step
+      # that writes it, so other steps and third-party actions never see it.
+      HAS_KEYSTORE: ${{ secrets.KEYSTORE != '' }}
+      HAS_CROWDIN: ${{ secrets.CROWDIN_TOKEN != '' && secrets.CROWDIN_PROJECT_ID != '' }}
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       IS_DEBUG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug == 'true' }}
@@ -95,13 +140,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           submodules: 'recursive'
           fetch-depth: 0
 
       - name: Cache Android SDK
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ${{ env.ANDROID_HOME }}/build-tools
@@ -114,13 +159,14 @@ jobs:
 
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Validate Signing Config
         env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
           KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
@@ -137,23 +183,29 @@ jobs:
           fi
 
       - name: Create signing.properties
-        if: ${{ env.IS_DEBUG == 'false' }}
+        if: ${{ env.IS_DEBUG == 'false' && env.HAS_KEYSTORE == 'true' }}
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
-          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
+          KEYSTORE: ${{ secrets.KEYSTORE }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KS_ALIAS_PASS: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
         run: |
-          # Secrets reach the script through env, never interpolated into the command text.
+          # Values come from env, never pasted into the script, so a quote or $ in one can't break
+          # out of the command.
           {
-            printf 'KEYSTORE_PASSWORD=%s\n' "$KEYSTORE_PASSWORD"
-            printf 'KEYSTORE_ALIAS=%s\n' "$KEYSTORE_ALIAS"
-            printf 'KEYSTORE_ALIAS_PASSWORD=%s\n' "$KEYSTORE_ALIAS_PASSWORD"
+            printf 'KEYSTORE_PASSWORD=%s\n' "$KS_PASS"
+            printf 'KEYSTORE_ALIAS=%s\n' "$KS_ALIAS"
+            printf 'KEYSTORE_ALIAS_PASSWORD=%s\n' "$KS_ALIAS_PASS"
             printf 'KEYSTORE_FILE=%s\n' "$GITHUB_WORKSPACE/key.jks"
           } > signing.properties
           printf "%s" "$KEYSTORE" | base64 --decode > key.jks
 
+      # Refuse a gradle-wrapper.jar that doesn't match an official Gradle release.
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         with:
           build-scan-publish: true
           build-scan-terms-of-use-url: "https://gradle.com/terms-of-service"
@@ -165,12 +217,26 @@ jobs:
           chmod +x pre-push-guard/scripts/pre_push_check.sh
           bash pre-push-guard/scripts/pre_push_check.sh
 
+      - name: Fetch latest approved translations from Crowdin
+        if: ${{ env.HAS_CROWDIN == 'true' }}
+        continue-on-error: true
+        uses: crowdin/github-action@8f01d54f70f1713ee3f09d82c2bbb2daeac28689 # v2
+        with:
+          upload_sources: false
+          download_translations: true
+          create_pull_request: false
+          skip_untranslated_strings: false
+          config: crowdin.yml
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_TOKEN }}
+
       - name: Build with Gradle
         id: buildWithGradle
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
-          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
+          SIGN_KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          SIGN_KEY_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          SIGN_KEY_PASS: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
           [ -n "$SENTRY_DSN" ] && echo "SENTRY_DSN=${SENTRY_DSN}" >> gradle.properties || true
@@ -224,8 +290,11 @@ jobs:
             echo "filePath=${RENAMED}" >> $GITHUB_OUTPUT
           else
             CMD="./gradlew :manager:assembleShizukuplusRelease :manager:assembleDropinRelease $ARGS"
-            # manager/build.gradle only registers the Sentry upload tasks when a
-            # token is set, and Gradle fails on -x for a task that does not exist.
+            # Without SENTRY_AUTH_TOKEN, manager/build.gradle turns off proguard-mapping, native-symbol
+            # and source-context upload, so the Sentry plugin never registers those tasks, and
+            # Gradle fails task selection on -x for a task that does not exist (the fork's CI has no
+            # token, so this is the path that runs here). Upstream skips the proguard-mapping tasks
+            # unconditionally; that is only safe where the token is always set.
             SENTRY_SKIP=""
             if [ -n "$SENTRY_AUTH_TOKEN" ]; then
               SENTRY_SKIP="-x uploadSentryProguardMappingsShizukuplusRelease \
@@ -243,10 +312,11 @@ jobs:
                 echo "WARNING: APK appears unsigned: $FILE"
                 if [ -f "key.jks" ]; then
                   BUILD_TOOLS_VERSION=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)
+                  # Passwords come from step env (below), never pasted into the script text.
                   $ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner sign --ks key.jks \
-                    --ks-pass env:KEYSTORE_PASSWORD \
-                    --ks-key-alias "$KEYSTORE_ALIAS" \
-                    --key-pass env:KEYSTORE_ALIAS_PASSWORD \
+                    --ks-pass env:SIGN_KS_PASS \
+                    --ks-key-alias "$SIGN_KEY_ALIAS" \
+                    --key-pass env:SIGN_KEY_PASS \
                     "$FILE"
                 else
                   echo "::error::Release APK $FILE is unsigned and key.jks is missing"
@@ -314,27 +384,27 @@ jobs:
           ./gradlew :manager:uploadSentryProguardMappingsShizukuplusRelease :manager:uploadSentryNativeSymbolsForShizukuplusRelease
 
       - name: Upload ShizukuTendCF Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.buildWithGradle.outputs.artifactName }}
           path: ${{ steps.buildWithGradle.outputs.filePath }}
 
       - name: Upload Drop-in Artifact
         if: ${{ steps.buildWithGradle.outputs.dropinPath != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ShizukuTendCF-dropin.apk
           path: ${{ steps.buildWithGradle.outputs.dropinPath }}
 
       - name: Upload Compat Stub Artifact
         if: ${{ steps.buildWithGradle.outputs.compatPath != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ShizukuTendCF-compat.apk
           path: ${{ steps.buildWithGradle.outputs.compatPath }}
 
       - name: Upload Version File
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: version-file
           path: version.txt
@@ -346,19 +416,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           submodules: 'recursive'
           fetch-depth: 0
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
 
       - name: Enable KVM hardware acceleration
         run: |
@@ -380,7 +450,7 @@ jobs:
             -dname "CN=Smoke Test, O=CI, C=US" 2>/dev/null
 
       - name: Run JNI smoke tests on emulator
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: 30
           arch: x86_64
@@ -394,18 +464,21 @@ jobs:
             # (candidates: connectedDropinDebugAndroidTest, connectedShizukuplusDebugAndroidTest) -
             # target the Shizukuplus flavor, the standard build this workflow otherwise treats as
             # primary (see the Plus-vs-Drop-In asset selection in the release job below).
-            ./gradlew :manager:connectedShizukuplusDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=af.shizuku.manager.JniSmokeTest --stacktrace 2>&1 | tee smoke-test.log
-            grep -E "PASSED|FAILED|ERROR" smoke-test.log || true
+            # emulator-runner runs each line in its own shell, so the exit status is kept on this one
+            # line (a "| tee" would report tee's status and let failing tests pass the gate).
+            ./gradlew :manager:connectedShizukuplusDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=af.shizuku.manager.JniSmokeTest,af.shizuku.manager.ScreenSmokeTest --stacktrace > smoke-test.log 2>&1; status=$?; cat smoke-test.log; exit $status
 
       - name: Upload smoke test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: smoke-test-results
           path: manager/build/outputs/androidTest-results/
 
   release:
-    needs: [build, lint]
+    # smoke-test only runs on workflow_dispatch (the stable path); on pushes it is skipped, which
+    # the !failure() condition below tolerates.
+    needs: [build, lint, unit-tests, smoke-test]
     # Skip releases for commits that are purely chore/docs/ci/style/refactor — those don't
     # change user-visible behaviour and shouldn't clutter the releases page. Use [force release]
     # in the commit message to override this check when needed. workflow_dispatch always proceeds.
@@ -439,12 +512,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
       - name: Download Version File
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: version-file
 
@@ -477,20 +550,20 @@ jobs:
           git tag "$TAG_NAME" "${{ github.sha }}" 2>/dev/null || true
 
       - name: Download ShizukuTendCF Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ needs.build.outputs.artifactName }}
           path: files/main
 
       - name: Download Drop-in Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         continue-on-error: true
         with:
           name: ShizukuTendCF-dropin.apk
           path: files/dropin
 
       - name: Download Compat Stub Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         continue-on-error: true
         with:
           name: ShizukuTendCF-compat.apk
@@ -506,13 +579,13 @@ jobs:
           # Matches both the new r{N} format and legacy v{semver}.r{N} tags for continuity.
           PREV_TAG=$(git tag --list --sort=-creatordate | grep -E '^(r[0-9]+|[0-9]+\.[0-9]+\.[0-9]+\.r[0-9]+|v[0-9]+\.[0-9]+\.[0-9]+\.r[0-9]+)$' | grep -v "^${TAG_NAME}$" | head -1)
 
-          # Most recent MAJOR release to spotlight in every release's notes. Bump these two lines
-          # when a new headline release ships (keep MAJOR_DESC to one short clause). For the CURRENT
-          # build the headline major == the era major, so a single callout is correct here. When you
-          # bump this, also re-run scripts/backfill_majors.py (add the new major to its MAJORS list)
-          # so older release pages show BOTH this headline and the major of their own era.
-          MAJOR_RELEASE=""
-          MAJOR_DESC=""
+          # Most recent MAJOR release (this one included), decided by scripts/ci/major_release.sh:
+          # a release that adds several user-facing CHANGELOG.md entries alongside feature work,
+          # or that a commit marks with a "Release-Type: major" trailer. Highlights are the
+          # CHANGELOG entries it added. It used to be hard-coded and went stale for months.
+          MAJOR_OUT=$(bash scripts/ci/major_release.sh || true)
+          MAJOR_RELEASE=$(printf '%s\n' "$MAJOR_OUT" | sed -n 1p)
+          MAJOR_DESC=$(printf '%s\n' "$MAJOR_OUT" | sed -n 2p)
 
           # Most recent CRITICAL FIX to spotlight — a distinct, lower tier from MAJOR_RELEASE
           # above: not new capability, but a regression severe enough that users on the
@@ -540,37 +613,48 @@ jobs:
             fi
             echo
 
-            # Strip conventional-commit type prefixes (feat(ui):, fix:, chore(i18n):, etc.) from
-            # bullet subjects so the rendered release notes are human-readable, not dev-jargon.
-            # The sed expression removes the type+scope prefix and capitalises the first letter.
-            ALL_COMMITS=$(git log "$RANGE" --no-merges --pretty=format:"- %s (%h)" | \
-              sed -E 's/^(- )(feat|fix|chore|refactor|perf|test|docs|build|ci|style|revert)(\([^)]+\))?: (.)(.*)$/\1\u\4\5/' || true)
+            # Collect raw commits (with conventional-commit prefix) for classification,
+            # then strip the prefix for display. Classifying on stripped commits broke
+            # Added/Fixed sections because ^- feat / ^- fix never matched post-strip (#577).
+            RAW_COMMITS=$(git log "$RANGE" --no-merges --pretty=format:"- %s (%h)" || true)
+            strip_prefix() {
+              sed -E 's/^(- )(feat|fix|chore|refactor|perf|test|docs|build|ci|style|revert)(\([^)]+\))?: (.)(.*)$/\1\u\4\5/'
+            }
 
-            SECURITY=$(printf '%s\n' "$ALL_COMMITS" | grep -iE "^- (fix\(security\)|security)" || true)
-            BREAKING=$(printf '%s\n' "$ALL_COMMITS" | grep -iE "BREAKING" || true)
+            SECURITY=$(printf '%s\n' "$RAW_COMMITS" | grep -iE "^- (fix\(security\)|security)" | strip_prefix || true)
+            BREAKING=$(printf '%s\n' "$RAW_COMMITS" | grep -iE "BREAKING" | strip_prefix || true)
+            # Classify using raw commits (before prefix strip). Exclusion list also uses raw
+            # strings so grep -vFf matching is consistent across all three sections.
             # grep -vFf on an EMPTY pattern file matches every line (an empty string is a substring
-            # of everything), so -v then excludes ALL of them - when a release has no security/
-            # breaking commits (the common case), Added/Fixed/Other all silently came out empty.
-            # This has been the actual generated body for every release since the Keep a Changelog
-            # restyle: confirmed by re-running this exact logic locally against r2339-r2343's real
-            # commits and against GitHub's actual published release bodies for those tags. Only run
-            # the exclusion pass when there's something real to exclude.
-            EXCLUDE=$(printf '%s\n%s' "$SECURITY" "$BREAKING" | grep -v '^$' || true)
-            if [ -n "$EXCLUDE" ]; then
-              ADDED=$(printf '%s\n' "$ALL_COMMITS" | grep -E "^- feat" | grep -vFf <(printf '%s\n' "$EXCLUDE") || true)
-              FIXED=$(printf '%s\n' "$ALL_COMMITS" | grep -E "^- fix" | grep -vFf <(printf '%s\n' "$EXCLUDE") || true)
-              OTHER=$(printf '%s\n' "$ALL_COMMITS" | grep -vE "^- (feat|fix)" | grep -vFf <(printf '%s\n' "$EXCLUDE") || true)
+            # of everything), so -v then excludes ALL of them — only run the exclusion pass when
+            # there's something real to exclude.
+            RAW_EXCLUDE=$(printf '%s\n' "$RAW_COMMITS" | grep -iE "^- (fix\(security\)|security)|BREAKING" | grep -v '^$' || true)
+            if [ -n "$RAW_EXCLUDE" ]; then
+              ADDED=$(printf '%s\n' "$RAW_COMMITS" | grep -E "^- feat" | grep -vFf <(printf '%s\n' "$RAW_EXCLUDE") | strip_prefix || true)
+              FIXED=$(printf '%s\n' "$RAW_COMMITS" | grep -E "^- fix" | grep -vFf <(printf '%s\n' "$RAW_EXCLUDE") | strip_prefix || true)
+              OTHER=$(printf '%s\n' "$RAW_COMMITS" | grep -vE "^- (feat|fix)" | grep -vFf <(printf '%s\n' "$RAW_EXCLUDE") | strip_prefix || true)
             else
-              ADDED=$(printf '%s\n' "$ALL_COMMITS" | grep -E "^- feat" || true)
-              FIXED=$(printf '%s\n' "$ALL_COMMITS" | grep -E "^- fix" || true)
-              OTHER=$(printf '%s\n' "$ALL_COMMITS" | grep -vE "^- (feat|fix)" || true)
+              ADDED=$(printf '%s\n' "$RAW_COMMITS" | grep -E "^- feat" | strip_prefix || true)
+              FIXED=$(printf '%s\n' "$RAW_COMMITS" | grep -E "^- fix" | strip_prefix || true)
+              OTHER=$(printf '%s\n' "$RAW_COMMITS" | grep -vE "^- (feat|fix)" | strip_prefix || true)
             fi
 
+            # Lead with what changed for users: the CHANGELOG entries this release added. The
+            # commit list stays for the curious, folded away, or in front when there are no entries.
+            WHATS_NEW=$(python3 -I scripts/ci/whats_new.py "$PREV_TAG" HEAD 2>/dev/null || true)
+            if [ -n "$WHATS_NEW" ]; then
+              echo "## What's new"
+              echo
+              echo "$WHATS_NEW"
+              echo "<details><summary>All commits in this release</summary>"
+              echo
+            fi
             if [ -n "$SECURITY" ]; then echo "### Security"; echo "$SECURITY"; echo; fi
             if [ -n "$BREAKING" ]; then echo "### Breaking"; echo "$BREAKING"; echo; fi
             if [ -n "$ADDED" ]; then echo "### Added"; echo "$ADDED"; echo; fi
             if [ -n "$FIXED" ]; then echo "### Fixed"; echo "$FIXED"; echo; fi
             if [ -n "$OTHER" ]; then echo "### Other"; echo "$OTHER"; echo; fi
+            if [ -n "$WHATS_NEW" ]; then echo "</details>"; echo; fi
 
             # Surface how many distinct GitHub issues this release touches. Promoting a
             # release to MAJOR_RELEASE (see scripts/backfill_majors.py) stays a deliberate,
@@ -590,8 +674,13 @@ jobs:
             echo "## 📦 Recent Releases"
             echo
             if [ -n "$MAJOR_RELEASE" ]; then
-              echo "> 🚀 **Most recent major release — [${MAJOR_RELEASE}](https://github.com/${{ github.repository }}/releases/tag/${MAJOR_RELEASE})**"
-              echo "> ${MAJOR_DESC}"
+              if [ "$MAJOR_RELEASE" = "$TAG_NAME" ]; then
+                echo "> 🚀 **This is a major release.**"
+              else
+                echo "> 🚀 **Most recent major release — [${MAJOR_RELEASE}](https://github.com/${{ github.repository }}/releases/tag/${MAJOR_RELEASE})**"
+              fi
+              if [ -n "$MAJOR_DESC" ]; then echo "> ${MAJOR_DESC}"; fi
+              echo "> [Full changelog](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md)"
               echo
             fi
             if [ -n "$CRITICAL_RELEASE" ]; then
@@ -601,8 +690,15 @@ jobs:
             fi
             echo "| Release | Highlight |"
             echo "|:--|:--|"
-            for t in $(git tag --list --sort=-creatordate | grep -E '^(r[0-9]+|[0-9]+\.[0-9]+\.[0-9]+\.r[0-9]+|v[0-9]+\.[0-9]+\.[0-9]+\.r[0-9]+)$' | head -10); do
-              SUBJ=$(git log -1 --pretty=%s "$t" 2>/dev/null | sed 's/|/\\|/g')
+            # Highlight: the release's first CHANGELOG entry, else its last commit subject. This
+            # release's tag isn't created yet, so HEAD stands in for it.
+            RELEASE_TAGS=$(git tag --list --sort=-creatordate | grep -E '^(r[0-9]+|[0-9]+\.[0-9]+\.[0-9]+\.r[0-9]+|v[0-9]+\.[0-9]+\.[0-9]+\.r[0-9]+)$' | head -11)
+            for t in $(printf '%s\n' "$RELEASE_TAGS" | head -10); do
+              PREV_OF_T=$(printf '%s\n' "$RELEASE_TAGS" | grep -A1 -xF "$t" | sed -n 2p)
+              REF_T="$t"; git rev-parse -q --verify "refs/tags/$t" >/dev/null || REF_T=HEAD
+              SUBJ=$( { [ -n "$PREV_OF_T" ] && python3 -I scripts/ci/whats_new.py "$PREV_OF_T" "$REF_T" --title 2>/dev/null; } || true)
+              [ -z "$SUBJ" ] && SUBJ=$(git log -1 --pretty=%s "$REF_T" 2>/dev/null)
+              SUBJ=$(printf '%s' "$SUBJ" | sed 's/|/\\|/g')
               MARK=""
               if [ "$t" = "$MAJOR_RELEASE" ]; then MARK=" 🚀 **major**"; fi
               if [ "$t" = "$CRITICAL_RELEASE" ]; then MARK="${MARK} ⚠️ **critical fix**"; fi
@@ -619,6 +715,24 @@ jobs:
               echo "[All changes since last major release](https://github.com/${{ github.repository }}/compare/${MAJOR_RELEASE}...${TAG_NAME})"
             fi
           } > release_notes.md
+
+          # GitHub rejects release bodies over 125,000 characters (HTTP 422 "body is too
+          # long"), which a long gap between releases can reach. Cap by bytes (never fewer
+          # than characters) and only cut between lines, which keeps multi-byte UTF-8 intact
+          # and avoids half a table row. The compare links at the end are lost, so point at
+          # the full commit list instead.
+          MAX_NOTES_BYTES=120000
+          if [ "$(wc -c < release_notes.md)" -gt "$MAX_NOTES_BYTES" ]; then
+            LC_ALL=C awk -v max="$MAX_NOTES_BYTES" '{ n += length($0) + 1; if (n > max) exit; print }' \
+              release_notes.md > release_notes.trunc
+            {
+              echo
+              echo "---"
+              echo "_Release notes truncated to fit GitHub's release body limit._"
+              echo "[Full commit list](https://github.com/${{ github.repository }}/commits/${TAG_NAME})"
+            } >> release_notes.trunc
+            mv release_notes.trunc release_notes.md
+          fi
           echo "NOTES_FILE=release_notes.md" >> $GITHUB_ENV
 
       - name: Create Release

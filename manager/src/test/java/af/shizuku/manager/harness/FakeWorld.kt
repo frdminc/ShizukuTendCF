@@ -23,6 +23,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkInfo
 import android.os.Binder
 import android.os.Looper
+import android.os.UserManager
 import android.provider.Settings
 import androidx.work.Configuration
 import androidx.work.Data
@@ -200,6 +201,8 @@ class FakeWorld(
         HeadlessLogger.init(app)
 
         shadowOf(app).grantPermissions(Manifest.permission.WRITE_SECURE_SETTINGS)
+        // The user is unlocked (USER_PRESENT's receiver asks UserManager before a start).
+        app.getSystemService(UserManager::class.java)?.let { shadowOf(it).setUserUnlocked(true) }
         // A trusted Wi-Fi is connected and wireless debugging is off.
         shadowOf(cm).clearAllNetworks()
         addWifi(trusted = true)

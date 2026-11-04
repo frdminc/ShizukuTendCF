@@ -19,6 +19,11 @@ object ScriptSnippetManager {
     @Volatile
     private var dao: ScriptSnippetDao? = null
 
+    // The app-level RUNNING collector and the state machine's RUNNING handler both call
+    // runAutoRunSnippets for the same transition, on different IO threads: claim the slot atomically.
+    private val lastAutoRunAtMs = java.util.concurrent.atomic.AtomicLong(0L)
+    private const val AUTO_RUN_DEBOUNCE_MS = 3_000L
+
     fun initialize(context: Context) {
         if (dao != null) return
         dao = ScriptSnippetDatabase.getInstance(context.applicationContext).scriptSnippetDao()
@@ -48,14 +53,29 @@ object ScriptSnippetManager {
         }
     }
 
-    suspend fun runAutoRunSnippets() = withContext(Dispatchers.IO) {
-        val d = requireNotNull(dao) { "ScriptSnippetManager not initialized" }
+    suspend fun runAutoRunSnippets(trigger: String = "service start") = withContext(Dispatchers.IO) {
+        val d = dao ?: return@withContext
+        val now = System.currentTimeMillis()
+        val last = lastAutoRunAtMs.get()
+        if (now - last in 0L until AUTO_RUN_DEBOUNCE_MS) return@withContext
+        if (!lastAutoRunAtMs.compareAndSet(last, now)) return@withContext
         val snippets = d.getAutoRun()
+        if (snippets.isEmpty()) return@withContext
         for (snippet in snippets) {
             try {
-                run(snippet.script)
+                val result = run(snippet.script)
+                ActivityLogManager.log(
+                    "Shizuku",
+                    "af.shizuku.plus.api",
+                    "Scripting: auto-ran '${snippet.title}' on $trigger (exit ${result.exitCode})"
+                )
             } catch (e: Exception) {
                 Timber.e(e, "Auto-run snippet '${snippet.title}' failed")
+                ActivityLogManager.log(
+                    "Shizuku",
+                    "af.shizuku.plus.api",
+                    "Scripting: auto-run '${snippet.title}' failed on $trigger (${e.message ?: e.javaClass.simpleName})"
+                )
             }
         }
     }

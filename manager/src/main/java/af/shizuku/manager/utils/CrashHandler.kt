@@ -7,12 +7,51 @@ import java.io.StringWriter
 import java.text.SimpleDateFormat
 import java.util.*
 
+/** A crash kept in the history, for picking which ones go into a manual report. */
+data class LoggedCrash(
+    val file: File,
+    val timestamp: Long,
+    val exception: String,
+)
+
 class CrashHandler(
     private val context: Context,
     private val defaultHandler: Thread.UncaughtExceptionHandler?,
 ) : Thread.UncaughtExceptionHandler {
     companion object {
         private const val CRASH_FILE_NAME = "last_crash.txt"
+        private const val HISTORY_DIR = "crash_history"
+        private const val HISTORY_MAX = 10
+
+        private fun historyDir(context: Context): File {
+            val base =
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    context.createDeviceProtectedStorageContext()
+                } else {
+                    context.applicationContext
+                }
+            return File(base.filesDir, HISTORY_DIR)
+        }
+
+        /** The last [HISTORY_MAX] crashes, newest first. last_crash.txt alone only held the latest. */
+        fun getCrashHistory(context: Context): List<LoggedCrash> {
+            val files = historyDir(context).listFiles { f -> f.name.startsWith("crash_") && f.name.endsWith(".txt") } ?: return emptyList()
+            return files
+                .mapNotNull { file ->
+                    val time =
+                        file.name
+                            .removePrefix("crash_")
+                            .removeSuffix(".txt")
+                            .toLongOrNull() ?: return@mapNotNull null
+                    val exception =
+                        try {
+                            file.useLines { lines -> lines.firstOrNull { it.startsWith("Exception: ") }?.removePrefix("Exception: ") }
+                        } catch (_: Exception) {
+                            null
+                        }
+                    LoggedCrash(file, time, exception?.substringAfterLast('.') ?: "?")
+                }.sortedByDescending { it.timestamp }
+        }
 
         fun getCrashFile(
             context: Context,
@@ -118,6 +157,16 @@ class CrashHandler(
             file.writeText(report.toString())
         } catch (e: Exception) {
             android.util.Log.w("CrashHandler", "Error writing crash file: ${e.message}")
+        }
+
+        try {
+            val dir = historyDir(context)
+            if (dir.isDirectory || dir.mkdirs()) {
+                File(dir, "crash_${System.currentTimeMillis()}.txt").writeText(report.toString())
+                getCrashHistory(context).drop(HISTORY_MAX).forEach { it.file.delete() }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("CrashHandler", "Error writing crash history: ${e.message}")
         }
     }
 }

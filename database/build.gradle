@@ -52,6 +52,8 @@ dependencies {
 
     testImplementation libs.kotestJunit5
     testImplementation libs.robolectric
+    // Runs the JUnit 4 tests (ActivityLogDaoTest) under useJUnitPlatform(); without it they're skipped.
+    testRuntimeOnly libs.junit.vintage.engine
     testImplementation libs.kotlinx.coroutines.test
     testImplementation libs.androidx.test.core
     testImplementation libs.room.testing

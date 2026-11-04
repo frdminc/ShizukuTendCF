@@ -17,9 +17,10 @@ class HomeViewModelTest {
 
     @Before
     fun setUp() {
-        // HomeViewModel reads ShizukuApplication.appContext in its constructor. The property is a
-        // private-set lateinit var whose backing field lives on ShizukuApplication as a private
-        // static field, so initialize it via reflection with a relaxed mock Context.
+        // HomeViewModel reads ShizukuApplication.appContext in its constructor, which only
+        // Application.onCreate sets. The property is a private-set lateinit var whose backing field
+        // lives on ShizukuApplication as a private static field, so initialize it via reflection
+        // with a relaxed mock Context.
         val field = ShizukuApplication::class.java.getDeclaredField("appContext")
         field.isAccessible = true
         field.set(null, mockk<Context>(relaxed = true))

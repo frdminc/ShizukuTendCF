@@ -375,6 +375,8 @@ public class ShizukuConfigManager extends ConfigManager {
      * (start-up's bulk changes, and fill-ins that are worked out again at the next start). A
      * prompt write brings a delayed one forward; either one already posted covers a delayed
      * request. Each write saves the whole config, so one write covers every change before it.
+     * The pending state is kept in a field rather than read from Handler.hasCallbacks, which
+     * needs API 29, so it behaves the same on every API level.
      */
     private void scheduleWriteLocked(boolean prompt) {
         if (pendingWrite == WRITE_PROMPT || (pendingWrite == WRITE_DELAYED && !prompt)) {
@@ -860,6 +862,50 @@ public class ShizukuConfigManager extends ConfigManager {
                 }
             }
             return result;
+        }
+    }
+
+    public boolean isPermGrantMigrationDone() {
+        synchronized (this) {
+            return config.permGrantMigrationDone;
+        }
+    }
+
+    public Set<String> getAutoGrantedPermissions() {
+        synchronized (this) {
+            if (config.autoGrantedPermissions == null) config.autoGrantedPermissions = new ArrayList<>();
+            return new HashSet<>(config.autoGrantedPermissions);
+        }
+    }
+
+    public void addAutoGrantedPermissions(java.util.Collection<String> keys) {
+        if (keys.isEmpty()) return;
+        synchronized (this) {
+            if (config.autoGrantedPermissions == null) config.autoGrantedPermissions = new ArrayList<>();
+            Set<String> merged = new LinkedHashSet<>(config.autoGrantedPermissions);
+            merged.addAll(keys);
+            config.autoGrantedPermissions = new ArrayList<>(merged);
+            scheduleWriteLocked(true);
+        }
+    }
+
+    public void clearAutoGrantedPermissions() {
+        synchronized (this) {
+            if (config.autoGrantedPermissions == null || config.autoGrantedPermissions.isEmpty()) return;
+            config.autoGrantedPermissions = new ArrayList<>();
+            scheduleWriteLocked(true);
+        }
+    }
+
+    public void markPermGrantMigrationDone() {
+        synchronized (this) {
+            if (config.permGrantMigrationDone) {
+                return;
+            }
+            config.permGrantMigrationDone = true;
+            // Written at once: if it were lost, the next start would run the one-time migration
+            // again and re-grant a permission the user has since revoked (#568).
+            scheduleWriteLocked(true);
         }
     }
 

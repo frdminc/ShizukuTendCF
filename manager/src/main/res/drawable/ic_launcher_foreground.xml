@@ -4,9 +4,9 @@
     <!-- The cat+hexagon art below (ic_launcher_foreground_base / ic_launcher_background) is
          upstream RikkaApps/Shizuku's original artwork, unmodified - the only intentional
          difference from upstream's icon is this plus badge. Centered on the hexagon's top-right
-         vertex at (66.69, 36.84) in 108-unit space, which is exactly the vertex coordinates from
-         ic_monochrome.xml (266.75/4, 147.36/4) - inside the 66dp/33dp-radius adaptive-icon safe
-         zone (~21dp from canvas center (54,54)). -->
+         vertex at (64.06, 36.2) in 108-unit space, measured from the upstream background bitmap
+         (regular flat-top hexagon, centre 215.5,215.5, radius 81.5 in 432 space) - ~20dp from
+         canvas centre (54,54) plus a 7dp arm, inside the 33dp-radius adaptive-icon safe zone. -->
     <item>
         <vector
             android:width="108dp"
@@ -15,7 +15,7 @@
             android:viewportHeight="108">
             <path
                 android:fillColor="#B3FFFFFF"
-                android:pathData="M 64.91,29.72 h 3.56 v 5.34 h 5.34 v 3.56 h -5.34 v 5.34 h -3.56 v -5.34 h -5.34 v -3.56 h 5.34 z" />
+                android:pathData="M 62.28,29.08 h 3.56 v 5.34 h 5.34 v 3.56 h -5.34 v 5.34 h -3.56 v -5.34 h -5.34 v -3.56 h 5.34 z" />
         </vector>
     </item>
 </layer-list>

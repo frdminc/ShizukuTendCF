@@ -21,6 +21,7 @@ import android.widget.Toast
 import androidx.preference.Preference
 import androidx.preference.PreferenceViewHolder
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.launch
 
 class DiagnosticsDashboardPreference
     @JvmOverloads
@@ -93,6 +94,64 @@ class DiagnosticsDashboardPreference
                 )
             }
 
+            // Diagnostic 5: Watchdog disabled
+            if (!ShizukuSettings.getWatchdog()) {
+                activeWarnings.add(
+                    WarningItem(
+                        id = "watchdog_disabled",
+                        message = context.getString(R.string.diagnostics_warning_watchdog_disabled),
+                    ),
+                )
+            }
+
+            // Diagnostic 6: Auto-reconnect disabled
+            if (!ShizukuSettings.isAutoReconnectMdnsEnabled()) {
+                activeWarnings.add(
+                    WarningItem(
+                        id = "auto_reconnect_disabled",
+                        message = context.getString(R.string.diagnostics_warning_auto_reconnect_disabled),
+                    ),
+                )
+            }
+
+            // Diagnostic 7: Start on Boot disabled
+            if (!ShizukuSettings.getStartOnBoot(context)) {
+                activeWarnings.add(
+                    WarningItem(
+                        id = "start_on_boot_disabled",
+                        message = context.getString(R.string.diagnostics_warning_start_on_boot_disabled),
+                    ),
+                )
+            }
+
+            // Diagnostic 8: TCP Mode disabled while using Wireless ADB
+            if (ShizukuSettings.getLastLaunchMode() != ShizukuSettings.LaunchMethod.ROOT &&
+                (
+                    af.shizuku.manager.utils.EnvironmentUtils
+                        .isTlsSupported() ||
+                        af.shizuku.manager.utils.EnvironmentUtils
+                            .isTelevision()
+                ) &&
+                !ShizukuSettings.getTcpMode()
+            ) {
+                activeWarnings.add(
+                    WarningItem(
+                        id = "tcp_mode_disabled",
+                        message = context.getString(R.string.diagnostics_warning_tcp_mode_disabled),
+                    ),
+                )
+            }
+
+            // Diagnostic 9: Device Hardening disabled
+            if (!ShizukuSettings.isDeviceHardeningEnabled()) {
+                activeWarnings.add(
+                    WarningItem(
+                        id = "device_hardening_disabled",
+                        message = context.getString(R.string.diagnostics_warning_device_hardening_disabled),
+                    ),
+                )
+            }
+
             val visibleWarnings = activeWarnings.filter { it.id !in dismissed }
 
             if (visibleWarnings.isEmpty()) {
@@ -130,27 +189,12 @@ class DiagnosticsDashboardPreference
                             }
                         }
                         "shadow_binder_no_apps" -> {
-                            val activity = context as? androidx.fragment.app.FragmentActivity
-                            val frag =
-                                activity
-                                    ?.supportFragmentManager
-                                    ?.findFragmentById(R.id.fragment_container)
-                            val opened =
-                                if (frag is ShizukuPlusSettingsFragment) {
-                                    frag.findPreference<Preference>("shadow_binder_hidden_packages")?.let {
-                                        frag.onPreferenceTreeClick(it)
-                                    } != null
-                                } else {
-                                    false
-                                }
-                            if (!opened) {
-                                Toast
-                                    .makeText(
-                                        context,
-                                        R.string.diagnostics_shadow_binder_navigate_hint,
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                            }
+                            // The app list lives on the Root integration screen; open it there.
+                            context.startActivity(
+                                Intent(context, SettingsActivity::class.java)
+                                    .putExtra("highlight_key", "shadow_binder_hidden_packages")
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
                         }
                         "dhizuku_not_owner" -> {
                             // applicationId differs from namespace (af.shizuku.manager), so the full class name
@@ -174,6 +218,39 @@ class DiagnosticsDashboardPreference
                                 notifyChanged()
                             } catch (_: Exception) {
                                 Toast.makeText(context, R.string.diagnostics_automation_start_failed, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        "watchdog_disabled" -> {
+                            ShizukuSettings.setWatchdog(context, true)
+                            Toast.makeText(context, R.string.diagnostics_watchdog_enabled_toast, Toast.LENGTH_SHORT).show()
+                            notifyChanged()
+                        }
+                        "auto_reconnect_disabled" -> {
+                            ShizukuSettings.setAutoReconnectMdnsEnabled(true)
+                            Toast.makeText(context, R.string.diagnostics_auto_reconnect_enabled_toast, Toast.LENGTH_SHORT).show()
+                            notifyChanged()
+                        }
+                        "start_on_boot_disabled" -> {
+                            ShizukuSettings.setStartOnBoot(context, true)
+                            Toast.makeText(context, R.string.diagnostics_start_on_boot_enabled_toast, Toast.LENGTH_SHORT).show()
+                            notifyChanged()
+                        }
+                        "tcp_mode_disabled" -> {
+                            ShizukuSettings.setTcpMode(true)
+                            ShizukuSettings.setForceStartWadbEnabled(true)
+                            Toast.makeText(context, R.string.diagnostics_tcp_mode_enabled_toast, Toast.LENGTH_SHORT).show()
+                            notifyChanged()
+                        }
+                        "device_hardening_disabled" -> {
+                            // Same as turning it on in Behavior: the setting alone doesn't harden anything.
+                            ShizukuSettings.setDeviceHardeningEnabled(true)
+                            notifyChanged()
+                            val appContext = context.applicationContext
+                            kotlinx.coroutines.MainScope().launch {
+                                val applied =
+                                    af.shizuku.manager.utils.DeviceOptimizer
+                                        .applyFixes(appContext)
+                                if (applied) Toast.makeText(appContext, R.string.device_hardening_applied, Toast.LENGTH_SHORT).show()
                             }
                         }
                     }

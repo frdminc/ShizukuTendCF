@@ -1,12 +1,10 @@
 package af.shizuku.manager.shell
 
 import af.shizuku.core.ui.AppBarActivity
-import af.shizuku.manager.Helps
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.databinding.TerminalTutorialActivityBinding
 import af.shizuku.manager.ktx.toHtml
-import af.shizuku.manager.utils.CustomTabsHelper
 import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
@@ -192,7 +190,12 @@ class ShellTutorialActivity : AppBarActivity() {
                         .show()
                 }
             }
-            button2.setOnClickListener { v: View -> CustomTabsHelper.launchUrlOrCopy(v.context, Helps.RISH.get()) }
+            button2.setOnClickListener { v: View ->
+                af.shizuku.manager.knowledgebase.KnowledgebaseHelper.show(
+                    v.context,
+                    af.shizuku.manager.knowledgebase.KnowledgebaseRegistry.TOPIC_TERMINAL_RISH,
+                )
+            }
         }
     }
 
@@ -224,5 +227,38 @@ class ShellTutorialActivity : AppBarActivity() {
         val rishCmd = getString(R.string.terminal_tutorial_run_command, rishPath)
         val plusCmd = getString(R.string.terminal_tutorial_run_plus_command) + " (sh $plusPath)"
         binding.command3.text = "$rishCmd\n\n$plusCmd"
+    }
+
+    override fun onPostCreate(savedInstanceState: Bundle?) {
+        super.onPostCreate(savedInstanceState)
+        val targetTitle = getString(R.string.home_terminal_title)
+        supportActionBar?.title = ""
+        toolbar?.title = ""
+        binding.scrollView.setOnScrollChangeListener(
+            androidx.core.widget.NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, _ ->
+                val trigger = binding.header.root.bottom - (toolbar?.height ?: 0)
+                if (scrollY >= trigger) {
+                    if (supportActionBar?.title.isNullOrEmpty()) {
+                        supportActionBar?.title = targetTitle
+                        toolbar?.title = targetTitle
+                    }
+                } else {
+                    if (!supportActionBar?.title.isNullOrEmpty()) {
+                        supportActionBar?.title = ""
+                        toolbar?.title = ""
+                    }
+                }
+                val alpha =
+                    (
+                        1f - (
+                            scrollY.toFloat() / (
+                                binding.header.root.height
+                                    .coerceAtLeast(1) * 0.8f
+                            )
+                        )
+                    ).coerceIn(0f, 1f)
+                binding.header.root.alpha = alpha
+            },
+        )
     }
 }

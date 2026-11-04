@@ -18,6 +18,7 @@ import androidx.activity.viewModels
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.topjohnwu.superuser.CallbackList
@@ -41,6 +42,7 @@ private class NotRootedException : Exception()
 
 class StarterActivity : AppBarActivity() {
     private val viewModel: ViewModel by viewModels()
+    private lateinit var binding: StarterActivityBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,7 +50,7 @@ class StarterActivity : AppBarActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setHomeAsUpIndicator(R.drawable.ic_close_24)
 
-        val binding = StarterActivityBinding.inflate(layoutInflater, rootView, true)
+        binding = StarterActivityBinding.inflate(layoutInflater, rootView, true)
 
         val isRoot = intent.getBooleanExtra(EXTRA_IS_ROOT, false)
         // ADB start connects to the wireless-debugging service over the local network / loopback,
@@ -92,14 +94,56 @@ class StarterActivity : AppBarActivity() {
                     is TimeoutException -> message = R.string.adb_error_timeout
                 }
                 val dialogMessage = if (message != 0) message else R.string.adb_error_generic
-                MaterialAlertDialogBuilder(this)
-                    .setMessage(dialogMessage)
-                    .setPositiveButton(android.R.string.ok) { _, _ -> finish() }
-                    .setNegativeButton(R.string.starter_retry) { _, _ ->
-                        binding.progressIndicator.visibility = View.VISIBLE
-                        binding.cancelButton.visibility = View.VISIBLE
-                        viewModel.retry()
-                    }.show()
+                val builder =
+                    MaterialAlertDialogBuilder(this)
+                        .setMessage(dialogMessage)
+                        .setPositiveButton(android.R.string.ok) { _, _ -> finish() }
+                        .setNegativeButton(R.string.starter_retry) { _, _ ->
+                            binding.progressIndicator.visibility = View.VISIBLE
+                            binding.cancelButton.visibility = View.VISIBLE
+                            viewModel.retry()
+                        }
+                when (result.error) {
+                    is SSLProtocolException -> {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R &&
+                            af.shizuku.manager.adb.AdbPairingClient
+                                .isNativeAvailable()
+                        ) {
+                            builder.setNeutralButton(R.string.adb_pairing) { _, _ ->
+                                startActivity(android.content.Intent(this, af.shizuku.manager.adb.AdbPairingTutorialActivity::class.java))
+                                finish()
+                            }
+                        }
+                    }
+                    is NotRootedException -> {
+                        if (af.shizuku.manager.ShizukuSettings
+                                .isRootToAdbFallbackEnabled() &&
+                            (
+                                af.shizuku.manager.utils.EnvironmentUtils
+                                    .isTlsSupported() ||
+                                    af.shizuku.manager.utils.EnvironmentUtils
+                                        .getAdbTcpPort() > 0
+                            )
+                        ) {
+                            builder.setNeutralButton(R.string.home_wireless_adb_title) { _, _ ->
+                                // Not finish() first: with no known port, start() shows the
+                                // discovery dialog on this activity's fragment manager.
+                                af.shizuku.manager.home.StartWirelessAdbViewHolder.start(
+                                    this,
+                                    lifecycleScope,
+                                )
+                            }
+                        }
+                    }
+                    is ConnectException, is SocketTimeoutException -> {
+                        builder.setNeutralButton(R.string.settings_developer_options) { _, _ ->
+                            af.shizuku.manager.utils.SettingsPage.Developer.Options
+                                .launch(this)
+                            finish()
+                        }
+                    }
+                }
+                builder.show()
             }
             binding.text1.text = output
             binding.scrollView.post { binding.scrollView.scrollTo(0, Int.MAX_VALUE) }
@@ -169,6 +213,40 @@ class StarterActivity : AppBarActivity() {
         }
     }
 
+    override fun onPostCreate(savedInstanceState: Bundle?) {
+        super.onPostCreate(savedInstanceState)
+        val isRoot = intent.getBooleanExtra(EXTRA_IS_ROOT, false)
+        val targetTitle = getString(if (isRoot) R.string.home_root_title else R.string.home_adb_title)
+        supportActionBar?.title = ""
+        toolbar?.title = ""
+        binding.scrollView.setOnScrollChangeListener(
+            androidx.core.widget.NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, _ ->
+                val trigger = binding.header.root.bottom - (toolbar?.height ?: 0)
+                if (scrollY >= trigger) {
+                    if (supportActionBar?.title.isNullOrEmpty()) {
+                        supportActionBar?.title = targetTitle
+                        toolbar?.title = targetTitle
+                    }
+                } else {
+                    if (!supportActionBar?.title.isNullOrEmpty()) {
+                        supportActionBar?.title = ""
+                        toolbar?.title = ""
+                    }
+                }
+                val alpha =
+                    (
+                        1f - (
+                            scrollY.toFloat() / (
+                                binding.header.root.height
+                                    .coerceAtLeast(1) * 0.8f
+                            )
+                        )
+                    ).coerceIn(0f, 1f)
+                binding.header.root.alpha = alpha
+            },
+        )
+    }
+
     companion object {
         const val EXTRA_IS_SYSTEM = "$EXTRA.IS_SYSTEM"
         const val EXTRA_IS_ROOT = "$EXTRA.IS_ROOT"
@@ -179,7 +257,8 @@ class StarterActivity : AppBarActivity() {
          * launches, and the discovery dialog that tap opens (AdbDialogFragment.forUserGesture).
          * Such a start is itself the explicit gesture the unanswered-prompt guard asks for, so it
          * does not ask again. Never set it on a path another app can reach: the exported
-         * start_service_via_wadb route, or a discovery dialog that route or a shortcut opened.
+         * start_service_via_wadb route, or a discovery dialog that route, a shortcut or onboarding
+         * opened.
          */
         const val EXTRA_USER_GESTURE = "$EXTRA.USER_GESTURE"
     }
@@ -250,7 +329,8 @@ class ViewModel(
         }
         if (started) return
         // Not every route here is a fresh start gesture in the manager: MainActivity is exported
-        // and turns its start_service_via_wadb extra into a launch of this screen. So once a
+        // and turns its start_service_via_wadb extra into a launch of this screen, and a shortcut
+        // or onboarding also open it. So once a
         // dialog has gone unanswered, an ADB start waits for the user to confirm here first —
         // the one-dialog-per-explicit-start rule background triggers already follow — unless
         // the launch was itself a tap in the manager (EXTRA_USER_GESTURE). It is a question, not
@@ -272,13 +352,7 @@ class ViewModel(
                     startSys()
                 } else {
                     try {
-                        AdbStarter.startAdb(
-                            appContext,
-                            port,
-                            { log(it) },
-                            userGesture = userGesture,
-                            confirmedPin = confirmedPin,
-                        )
+                        startAdbWithFallback(port, userGesture)
                     } catch (e: af.shizuku.manager.adb.AdbServerPinException) {
                         if (userGesture && e.seenPin != null && confirmedPin == null) {
                             // The user made this start by hand: ask before replacing the pin. A
@@ -324,6 +398,32 @@ class ViewModel(
         sb.clear()
         _output.postValue(Resource.success(sb))
         start(lastRoot, lastSystem, lastPort, lastUserGesture)
+    }
+
+    /**
+     * The ADB start on [port]; when nothing answers there, once more on the port the loopback
+     * probe finds (the saved port is stale after a reboot or a pairing). The same gesture and
+     * confirmed key apply to that second port: no key was offered on the first.
+     */
+    private suspend fun startAdbWithFallback(
+        port: Int,
+        userGesture: Boolean,
+    ) {
+        try {
+            AdbStarter.startAdb(appContext, port, { log(it) }, userGesture = userGesture, confirmedPin = confirmedPin)
+        } catch (e: Exception) {
+            if (e !is ConnectException && e !is SocketTimeoutException) throw e
+            log("\nPort $port did not respond. Probing fallback loopback ports...\n")
+            val fallbackPort =
+                withContext(Dispatchers.IO) {
+                    af.shizuku.manager.adb.AdbPortProber
+                        .findActiveLoopbackPort(appContext)
+                }
+            if (fallbackPort !in 1..65535 || fallbackPort == port) throw e
+            log("Found active ADB port $fallbackPort — reconnecting...\n")
+            lastPort = fallbackPort
+            AdbStarter.startAdb(appContext, fallbackPort, { log(it) }, userGesture = userGesture, confirmedPin = confirmedPin)
+        }
     }
 
     private suspend fun startSys() {
@@ -391,6 +491,40 @@ class ViewModel(
 
                 if (!Shell.getShell().isRoot) {
                     Shell.getCachedShell()?.close()
+                    val fallbackSu =
+                        af.shizuku.manager.utils.EnvironmentUtils
+                            .findSuBinary()
+                    if (fallbackSu != null) {
+                        log("Standard root shell unavailable; trying direct su binary ($fallbackSu)...\n")
+                        try {
+                            ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
+                            val proc =
+                                ProcessBuilder(fallbackSu, "-c", Starter.internalCommand)
+                                    .redirectErrorStream(true)
+                                    .start()
+                            proc.inputStream.bufferedReader().useLines { lines ->
+                                lines.forEach { log(it) }
+                            }
+                            if (proc.waitFor() == 0) {
+                                ShizukuStateMachine.update()
+                                ManagerActivityLog.log(appContext, "Service started via root ($fallbackSu)")
+                                if (ShizukuSettings.isOnDeviceAdbTcpEnabled() ||
+                                    (
+                                        ShizukuSettings.getTcpMode() &&
+                                            !af.shizuku.manager.utils.NetworkTrust
+                                                .shouldBlockTcp(appContext)
+                                    )
+                                ) {
+                                    val tcpPort = ShizukuSettings.getTcpPort().takeIf { it in 1..65535 } ?: 5555
+                                    af.shizuku.manager.service.AdbProxyService
+                                        .enableAdbTcp(tcpPort)
+                                }
+                                return@withContext
+                            }
+                        } catch (e: Exception) {
+                            log("Direct su binary fallback failed: ${e.message}\n")
+                        }
+                    }
                     throw NotRootedException()
                 }
             }
@@ -410,6 +544,17 @@ class ViewModel(
                             if (it.isSuccess) {
                                 ShizukuStateMachine.update()
                                 ManagerActivityLog.log(appContext, "Service started via root")
+                                if (ShizukuSettings.isOnDeviceAdbTcpEnabled() ||
+                                    (
+                                        ShizukuSettings.getTcpMode() &&
+                                            !af.shizuku.manager.utils.NetworkTrust
+                                                .shouldBlockTcp(appContext)
+                                    )
+                                ) {
+                                    val tcpPort = ShizukuSettings.getTcpPort().takeIf { it in 1..65535 } ?: 5555
+                                    af.shizuku.manager.service.AdbProxyService
+                                        .enableAdbTcp(tcpPort)
+                                }
                                 cont.resume(Unit)
                             } else {
                                 cont.resumeWithException(Exception("Failed to start with root"))

@@ -1,10 +1,16 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package af.shizuku.manager.permissionmanager
 
 import af.shizuku.manager.R
+import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.widget.AppSwitch
+import af.shizuku.manager.widget.GuardHeightOffset
+import af.shizuku.manager.widget.nonNegative
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.PermissionInfo
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,11 +23,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
@@ -85,9 +93,17 @@ fun PermissionManagerScreen(onBackClick: () -> Unit) {
     var appPerms by remember { mutableStateOf<List<PermItem>>(emptyList()) }
     var isLoadingPerms by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = selectedApp != null) {
-        selectedApp = null
-        appPerms = emptyList()
+    // Predictive back out of an app's permissions: the pane shrinks and fades with the gesture
+    // (same feel as Home's edit mode) and snaps back if the gesture is cancelled.
+    var backProgress by remember { mutableStateOf(0f) }
+    PredictiveBackHandler(enabled = selectedApp != null) { events ->
+        try {
+            events.collect { backProgress = it.progress }
+            selectedApp = null
+            appPerms = emptyList()
+        } finally {
+            backProgress = 0f
+        }
     }
 
     // Load app list on open
@@ -122,12 +138,17 @@ fun PermissionManagerScreen(onBackClick: () -> Unit) {
             }
         }
 
+    // M3 app-bar contract: a flexible medium bar that compresses on scroll, title wraps.
+    val appBarScroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    appBarScroll.GuardHeightOffset()
     Scaffold(
+        modifier = Modifier.nestedScroll(appBarScroll.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+            androidx.compose.material3.MediumFlexibleTopAppBar(
                 title = {
                     if (selectedApp != null) {
-                        Text(selectedApp!!.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(selectedApp!!.label, maxLines = 3)
                     } else {
                         Text(stringResource(R.string.home_permission_manager_title))
                     }
@@ -147,40 +168,52 @@ fun PermissionManagerScreen(onBackClick: () -> Unit) {
                         )
                     }
                 },
+                scrollBehavior = appBarScroll,
             )
         },
-    ) { paddingValues ->
+    ) { rawPadding ->
+        val paddingValues = rawPadding.nonNegative()
         if (selectedApp != null) {
             // ── Permission detail view ────────────────────────────────────────
-            PermissionDetailPane(
-                app = selectedApp!!,
-                perms = appPerms,
-                isLoading = isLoadingPerms,
-                paddingValues = paddingValues,
-                onToggle = { perm, grant ->
-                    val app = selectedApp
-                    if (app != null) {
-                        scope.launch(Dispatchers.IO) {
-                            val ok =
-                                if (grant) {
-                                    ShizukuPlusAPI.PackageGovernor.grantPermission(app.packageName, perm.name)
+            Box(
+                modifier =
+                    Modifier.graphicsLayer {
+                        val scale = 1f - 0.08f * backProgress * backProgress
+                        scaleX = scale
+                        scaleY = scale
+                        alpha = 1f - 0.15f * backProgress
+                    },
+            ) {
+                PermissionDetailPane(
+                    app = selectedApp!!,
+                    perms = appPerms,
+                    isLoading = isLoadingPerms,
+                    paddingValues = paddingValues,
+                    onToggle = { perm, grant ->
+                        val app = selectedApp
+                        if (app != null) {
+                            scope.launch(Dispatchers.IO) {
+                                val ok =
+                                    if (grant) {
+                                        ShizukuPlusAPI.PackageGovernor.grantPermission(app.packageName, perm.name)
+                                    } else {
+                                        ShizukuPlusAPI.PackageGovernor.revokePermission(app.packageName, perm.name)
+                                    }
+                                if (ok) {
+                                    withContext(Dispatchers.Main) {
+                                        appPerms =
+                                            appPerms.map {
+                                                if (it.name == perm.name) it.copy(isGranted = grant) else it
+                                            }
+                                    }
                                 } else {
-                                    ShizukuPlusAPI.PackageGovernor.revokePermission(app.packageName, perm.name)
+                                    Timber.w("PermissionManager: toggle failed for ${perm.name}")
                                 }
-                            if (ok) {
-                                withContext(Dispatchers.Main) {
-                                    appPerms =
-                                        appPerms.map {
-                                            if (it.name == perm.name) it.copy(isGranted = grant) else it
-                                        }
-                                }
-                            } else {
-                                Timber.w("PermissionManager: toggle failed for ${perm.name}")
                             }
                         }
-                    }
-                },
-            )
+                    },
+                )
+            }
         } else {
             // ── App list view ─────────────────────────────────────────────────
             AppListPane(
@@ -236,7 +269,7 @@ private fun AppListPane(
 
         if (isLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                androidx.compose.material3.LoadingIndicator()
             }
         } else if (apps.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -247,7 +280,15 @@ private fun AppListPane(
                 )
             }
         } else {
+            val isOneHanded = ShizukuSettings.isOneHandedModeEnabled()
+            val isOneUi = ShizukuSettings.isOneUiThemeEnabled()
+            val screenHeightDp = LocalConfiguration.current.screenHeightDp
+            val oneHandedTop = if (isOneHanded || isOneUi) (screenHeightDp * 0.16f).dp else 0.dp
+
             LazyColumn(modifier = Modifier.fillMaxSize()) {
+                if (oneHandedTop > 0.dp) {
+                    item { Spacer(Modifier.height(oneHandedTop)) }
+                }
                 items(apps, key = { it.packageName }) { app ->
                     AppRow(app = app, onClick = { onAppClick(app) })
                     HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
@@ -287,7 +328,7 @@ private fun AppRow(
             )
         } else {
             Icon(
-                painter = painterResource(R.drawable.ic_default_app_icon),
+                painter = painterResource(R.drawable.ic_nav_apps_24),
                 contentDescription = null,
                 modifier = Modifier.size(40.dp),
                 tint = MaterialTheme.colorScheme.outline,
@@ -298,15 +339,13 @@ private fun AppRow(
             Text(
                 text = app.label,
                 style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = 2,
             )
             Text(
                 text = app.packageName,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = 2,
             )
         }
         Icon(
@@ -336,7 +375,7 @@ private fun PermissionDetailPane(
                 .padding(paddingValues),
             contentAlignment = Alignment.Center,
         ) {
-            CircularProgressIndicator()
+            androidx.compose.material3.LoadingIndicator()
         }
         return
     }
@@ -357,18 +396,29 @@ private fun PermissionDetailPane(
         return
     }
 
+    val isOneHanded = ShizukuSettings.isOneHandedModeEnabled()
+    val isOneUi = ShizukuSettings.isOneUiThemeEnabled()
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val oneHandedTop = if (isOneHanded || isOneUi) (screenHeightDp * 0.16f).dp else 0.dp
+
     LazyColumn(
         modifier =
             Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
     ) {
+        if (oneHandedTop > 0.dp) {
+            item { Spacer(Modifier.height(oneHandedTop)) }
+        }
         if (privileged.isNotEmpty()) {
             item {
                 PermSectionHeader(stringResource(R.string.permission_manager_section_privileged))
             }
             item {
                 Card(
+                    border =
+                        af.shizuku.manager.utils
+                            .cardBorder(),
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -430,18 +480,16 @@ private fun PermToggleRow(
             Text(
                 text = perm.shortName,
                 style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = 2,
             )
             Text(
                 text = perm.name,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = 3,
             )
         }
-        Switch(checked = perm.isGranted, onCheckedChange = null)
+        AppSwitch(checked = perm.isGranted, onCheckedChange = null)
     }
 }
 

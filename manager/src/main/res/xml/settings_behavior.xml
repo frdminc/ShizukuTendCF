@@ -8,6 +8,7 @@
         android:icon="@drawable/ic_power_settings_new_24"
         android:defaultValue="true">
 
+
         <af.shizuku.manager.settings.GrayableIconSwitchPreference
             android:key="start_on_boot"
             android:title="@string/settings_start_on_boot"
@@ -24,14 +25,36 @@
             android:persistent="false"
             android:summary="@string/settings_watchdog_summary"
             android:title="@string/settings_watchdog"
-            android:icon="@drawable/ic_visibility_24" />
+            android:icon="@drawable/ic_monitor_heart_24" />
 
         <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="watchdog_auto_restart"
+            android:dependency="watchdog"
+            android:defaultValue="true"
+            android:summary="@string/settings_watchdog_auto_restart_summary"
+            android:title="@string/settings_watchdog_auto_restart"
+            android:icon="@drawable/ic_refresh_24" />
+
+        <Preference
+            android:key="startup_scripts"
+            android:title="@string/settings_startup_scripts_title"
+            android:summary="@string/settings_startup_scripts_summary"
+            android:icon="@drawable/ic_code_24" />
+
+        <af.shizuku.manager.settings.PlusFeaturePreference
             android:key="auto_reconnect_mdns"
             android:title="@string/settings_auto_reconnect_mdns"
             android:summary="@string/settings_auto_reconnect_mdns_summary"
             android:defaultValue="false"
-            android:icon="@drawable/ic_server_restart" />
+            android:icon="@drawable/ic_server_restart"
+            app:badgeType="adb" />
+
+        <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="allow_automation_plugin"
+            android:title="@string/settings_allow_automation_plugin_title"
+            android:summary="@string/settings_allow_automation_plugin_summary"
+            android:icon="@drawable/ic_bolt_24"
+            android:defaultValue="false" />
 
         <af.shizuku.manager.settings.GrayableIconSwitchPreference
             android:key="device_hardening_enabled"
@@ -40,38 +63,54 @@
             android:defaultValue="true"
             android:icon="@drawable/ic_shield_24" />
 
+        <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="root_to_adb_fallback_enabled"
+            android:title="@string/settings_root_to_adb_fallback_title"
+            android:summary="@string/settings_root_to_adb_fallback_summary"
+            android:defaultValue="true"
+            android:icon="@drawable/ic_wadb_24" />
+
     </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
 
     <af.shizuku.manager.settings.CollapsiblePreferenceCategory
-        android:key="category_network_activity"
-        android:title="@string/settings_behavior_category_network_activity"
-        android:icon="@drawable/ic_lan_24"
+        android:key="category_adb_connection"
+        android:title="@string/settings_behavior_category_wireless_adb"
+        android:icon="@drawable/ic_adb_24"
         android:defaultValue="true">
 
+
+        <af.shizuku.manager.settings.WirelessAdbPreference
+            android:key="wireless_adb_card"
+            android:title="@string/settings_wireless_adb_title"
+            android:icon="@drawable/ic_wadb_24" />
+
         <af.shizuku.manager.settings.GrayableIconSwitchPreference
-            android:key="tcp_mode"
-            android:title="@string/settings_tcp_mode"
-            android:icon="@drawable/ic_adb_24"
+            android:key="numerical_pairing_keyboard"
+            android:title="@string/settings_numerical_pairing_keyboard"
+            android:summary="@string/settings_numerical_pairing_keyboard_summary"
+            android:icon="@drawable/ic_numeric_1_circle_outline_24"
             android:defaultValue="true" />
 
-        <EditTextPreference
-            android:key="tcp_port"
-            android:title="@string/settings_tcp_port"
-            android:icon="@drawable/ic_lan_24"
-            android:inputType="number"
-            app:useSimpleSummaryProvider="true" />
-
-        <Preference
-            android:key="tcp_port_randomize"
-            android:title="@string/settings_tcp_randomize_port"
-            android:summary="@string/settings_tcp_randomize_port_summary"
-            android:icon="@drawable/ic_refresh_24" />
+        <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="on_device_adb_tcp"
+            android:title="@string/settings_on_device_adb_tcp"
+            android:summary="@string/settings_on_device_adb_tcp_summary"
+            android:icon="@drawable/ic_adb_24"
+            android:defaultValue="false" />
 
         <af.shizuku.manager.settings.GrayableIconSwitchPreference
-            android:key="tcp_auto_close_port"
-            android:title="@string/settings_tcp_auto_close_port"
-            android:summary="@string/settings_tcp_auto_close_port_summary"
-            android:icon="@drawable/ic_shield_24" />
+            android:key="force_start_wadb"
+            android:title="@string/settings_force_start_wadb"
+            android:summary="@string/settings_force_start_wadb_summary"
+            android:icon="@drawable/ic_server_restart"
+            android:defaultValue="false" />
+
+        <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="adb_proxy_enabled"
+            android:title="@string/settings_adb_proxy"
+            android:summary="@string/settings_adb_proxy_summary"
+            android:icon="@drawable/ic_wadb_24"
+            android:defaultValue="false" />
 
         <af.shizuku.manager.settings.GrayableIconSwitchPreference
             android:key="auto_disable_usb_debugging"
@@ -79,12 +118,130 @@
             android:summary="@string/settings_auto_disable_usb_debugging_summary"
             android:icon="@drawable/ic_warning_24" />
 
+    </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
+
+    <af.shizuku.manager.settings.CollapsiblePreferenceCategory
+        android:key="category_network_activity"
+        android:title="@string/settings_behavior_category_network_security"
+        android:icon="@drawable/ic_shield_24"
+        android:defaultValue="false">
+
+
+        <af.shizuku.manager.settings.PlusFeaturePreference
+            android:key="binder_firewall_enabled"
+            android:title="@string/settings_binder_firewall"
+            android:summary="@string/settings_binder_firewall_summary"
+            android:icon="@drawable/ic_shield_24"
+            android:defaultValue="false"
+            app:badgeType="plus" />
+
+        <af.shizuku.manager.settings.TrustedNetworksRowPreference
+            android:key="automation_trusted_networks"
+            android:title="@string/settings_automation_trusted_networks"
+            android:icon="@drawable/ic_wifi_24" />
+
+        <af.shizuku.manager.settings.PlusFeaturePreference
+            android:key="network_governor_plus_enabled"
+            android:title="@string/settings_network_governor_plus_title"
+            android:summary="@string/settings_network_governor_plus_summary"
+            android:icon="@drawable/ic_lan_24"
+            android:defaultValue="true"
+            app:infoTitle="@string/help_network_governor_plus_title"
+            app:infoDetail="@string/help_network_governor_plus_detail"
+            app:badgeType="plus" />
+
+    </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
+
+    <af.shizuku.manager.settings.CollapsiblePreferenceCategory
+        android:key="category_verified_install"
+        android:title="@string/settings_app_management_category_verified_install"
+        android:icon="@drawable/ic_shield_24"
+        android:defaultValue="false">
+
+        <af.shizuku.manager.settings.VerifiedInstallGridPreference
+            android:key="verified_install_grid" />
+
+        <af.shizuku.manager.settings.PlusFeaturePreference
+            android:key="package_governor_plus_enabled"
+            android:title="@string/settings_package_governor_plus_title"
+            android:summary="@string/settings_package_governor_plus_summary"
+            android:icon="@drawable/ic_install_24"
+            android:defaultValue="true"
+            app:infoTitle="@string/help_package_governor_plus_title"
+            app:infoDetail="@string/help_package_governor_plus_detail"
+            app:badgeType="plus" />
+
+    </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
+
+
+    <af.shizuku.manager.settings.CollapsiblePreferenceCategory
+        android:key="category_behavior_notifications"
+        android:title="@string/settings_behavior_category_notifications"
+        android:icon="@drawable/ic_outline_notifications_active_24"
+        android:defaultValue="false">
+
+
+        <!-- No defaultValue: BehaviorSettingsFragment sets it from getHelperNotificationLevel(), which
+             carries over the old "Crash notifications" switch. -->
+        <rikka.preference.SimpleMenuPreference
+            android:key="helper_notifications"
+            android:title="@string/settings_helper_notifications"
+            android:entries="@array/helper_notifications"
+            android:entryValues="@array/helper_notifications_values"
+            android:icon="@drawable/ic_outline_notifications_active_24" />
+
+        <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="problems_on_home"
+            android:title="@string/settings_problems_on_home"
+            android:summary="@string/settings_problems_on_home_summary"
+            android:icon="@drawable/ic_nav_home_24"
+            android:defaultValue="true" />
+
+        <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="toasts_over_other_apps"
+            android:title="@string/settings_toasts_over_other_apps"
+            android:summary="@string/settings_toasts_over_other_apps_summary"
+            android:icon="@drawable/ic_outline_info_24"
+            android:defaultValue="false" />
+
         <af.shizuku.manager.settings.GrayableIconSwitchPreference
             android:key="live_activity_enabled"
             android:title="@string/settings_live_activity"
             android:summary="@string/settings_live_activity_summary"
             android:icon="@drawable/ic_bolt_24"
             android:defaultValue="true" />
+
+        <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="usb_phone_switch_notify"
+            android:title="@string/settings_usb_phone_switch_notify"
+            android:summary="@string/settings_usb_phone_switch_notify_summary"
+            android:icon="@drawable/ic_adb_24"
+            android:defaultValue="false" />
+
+    </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
+
+    <af.shizuku.manager.settings.CollapsiblePreferenceCategory
+        android:key="category_behavior_compat"
+        android:title="@string/settings_behavior_category_compat"
+        android:icon="@drawable/ic_devices_24"
+        android:defaultValue="false">
+
+
+        <af.shizuku.manager.settings.GrayableIconSwitchPreference
+            android:key="legacy_rish_keepalive"
+            android:title="@string/settings_legacy_rish_keepalive"
+            android:summary="@string/settings_legacy_rish_keepalive_summary"
+            android:icon="@drawable/ic_visibility_24" />
+
+        <af.shizuku.manager.settings.PlusFeaturePreference
+            android:key="continuity_bridge_enabled"
+            android:title="@string/settings_continuity_bridge_title"
+            android:summary="@string/settings_continuity_bridge_summary"
+            android:icon="@drawable/ic_devices_24"
+            android:defaultValue="true"
+            app:infoTitle="@string/help_continuity_bridge_title"
+            app:infoDetail="@string/help_continuity_bridge_detail"
+            app:badgeType="plus" />
 
     </af.shizuku.manager.settings.CollapsiblePreferenceCategory>
 

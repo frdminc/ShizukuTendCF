@@ -54,6 +54,9 @@ class Scenario(
         world.settle()
     }
 
+    /** An unlock, as the boot receiver hears it (USER_PRESENT): a start nobody asked for just now. */
+    fun userPresent() = bootAction(Intent.ACTION_USER_PRESENT)
+
     fun bootRetryTick(): ListenableWorker.Result = world.bootRetryTick()
 
     // User and automation starts.

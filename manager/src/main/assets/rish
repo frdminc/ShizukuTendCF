@@ -7,27 +7,34 @@ if [ ! -f "$DEX" ]; then
   exit 1
 fi
 
-if [ $(getprop ro.build.version.sdk) -ge 34 ]; then
-  if [ -w $DEX ]; then
-    echo "On Android 14+, app_process cannot load writable dex."
-    echo "Attempting to remove the write permission..."
-    chmod 400 $DEX
+if [ $(getprop ro.build.version.sdk 2>/dev/null || echo 0) -ge 34 ]; then
+  if [ -w "$DEX" ]; then
+    chmod 444 "$DEX" 2>/dev/null || chmod a-w "$DEX" 2>/dev/null
   fi
-  if [ -w $DEX ]; then
-    echo "Cannot remove the write permission of $DEX."
-    echo "You can copy to file to terminal app's private directory (/data/data/<package>, so that remove write permission is possible"
-    exit 1
+  if [ -w "$DEX" ]; then
+    # File is on a filesystem where chmod a-w is ineffective (e.g. FUSE/sdcard).
+    # Transparently cache a read-only copy in TMPDIR or /data/local/tmp.
+    _CACHED_DEX="${TMPDIR:-/data/local/tmp}/.rish_shizuku_$(id -u 2>/dev/null || echo 0).dex"
+    if [ ! -f "$_CACHED_DEX" ] || [ "$DEX" -nt "$_CACHED_DEX" ]; then
+      cp -f "$DEX" "$_CACHED_DEX" 2>/dev/null
+      chmod 400 "$_CACHED_DEX" 2>/dev/null || chmod 444 "$_CACHED_DEX" 2>/dev/null || chmod a-w "$_CACHED_DEX" 2>/dev/null
+    fi
+    if [ -f "$_CACHED_DEX" ] && [ ! -w "$_CACHED_DEX" ]; then
+      DEX="$_CACHED_DEX"
+    else
+      echo "Cannot remove write permission of $DEX."
+      echo "Copy the file to the terminal app's private directory (/data/data/<package>) so write permissions can be removed."
+      exit 1
+    fi
   fi
 fi
 
-# The Shizuku+ server authenticates this shell as RISH_APPLICATION_ID and REQUIRES that package to
-# belong to the calling app's UID (attachApplication throws SecurityException otherwise). So when it
-# isn't already set, discover the app that invoked us by walking up the process tree and using the
-# first ancestor whose name looks like a package id (e.g. org.swiftapps.swiftbackup, com.termux).
-# This is what makes the su/rish bridge work for third-party apps like Swift Backup and Termux
-# instead of only for Shizuku+.
+# Sanitize dynamic loader to prevent cross-UID crashes in ADB mode
+unset LD_PRELOAD
+
+# Determine calling application ID
 if [ -z "$RISH_APPLICATION_ID" ]; then
-  if [ -n "$TERMUX_VERSION" ] || [ -d "/data/data/com.termux/files" ]; then
+  if [ -n "$TERMUX_VERSION" ] || [ -n "$TERMUX_APP_PID" ]; then
     export RISH_APPLICATION_ID="com.termux"
   fi
 fi
@@ -37,11 +44,6 @@ if [ -z "$RISH_APPLICATION_ID" ]; then
   _i=0
   while [ -n "$_pid" ] && [ "$_pid" != "0" ] && [ "$_i" -lt 8 ]; do
     _name=$(cat "/proc/$_pid/cmdline" 2>/dev/null | tr '\0' '\n' | head -n 1 | sed 's/:.*//')
-    # A package id is dotted and has NO slash. Match on one-or-more dots (com.termux is only two
-    # segments!), but first skip anything containing a slash - those are paths/binaries such as
-    # /data/data/com.termux/files/usr/bin/bash, never the package we want. The old glob required
-    # three segments (*.*.*), so two-segment packages like com.termux were never resolved and rish
-    # attached with no app id, which the server rejects (silent timeout - #368/#372).
     case "$_name" in
       */*) : ;;
       *.*) export RISH_APPLICATION_ID="$_name"; break ;;
@@ -59,4 +61,4 @@ fi
 # system libunwindstack.so, and fails to link. app_process only needs the system libraries.
 unset LD_LIBRARY_PATH
 
-/system/bin/app_process -Djava.class.path="$DEX" /system/bin --nice-name=rish rikka.shizuku.shell.ShizukuShellLoader "$@"
+exec /system/bin/app_process -Djava.class.path="$DEX" /system/bin --nice-name=rish rikka.shizuku.shell.ShizukuShellLoader "$@"

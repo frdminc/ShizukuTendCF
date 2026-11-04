@@ -2,6 +2,7 @@ package af.shizuku.manager.adb
 
 import af.shizuku.manager.ShizukuSettings
 import android.content.Context
+import android.net.ConnectivityManager
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
@@ -21,6 +22,7 @@ class AdbMdns(
     private val serviceType: String,
     private val observer: Observer<Int>,
 ) {
+    private val context: Context = context.applicationContext
     private var registered = false
     private var running = false
     private var serviceName: String? = null
@@ -41,6 +43,8 @@ class AdbMdns(
     private var restartJob: Job? = null
     private var restartScheduled = false
     private var attempts = 0
+    private val resolveQueue = java.util.ArrayDeque<NsdServiceInfo>()
+    private var isResolving = false
 
     fun start() {
         if (running) return
@@ -55,6 +59,10 @@ class AdbMdns(
         running = false
         restartJob?.cancel()
         mdnsScope.cancel()
+        synchronized(resolveQueue) {
+            resolveQueue.clear()
+            isResolving = false
+        }
         if (registered) {
             try {
                 nsdManager.stopServiceDiscovery(listener)
@@ -73,36 +81,130 @@ class AdbMdns(
         registered = false
     }
 
+    private fun resolveNext() {
+        synchronized(resolveQueue) {
+            if (!running || isResolving || resolveQueue.isEmpty()) return
+            val next = resolveQueue.poll() ?: return
+            isResolving = true
+            try {
+                nsdManager.resolveService(next, ResolveListener(this))
+            } catch (e: Exception) {
+                Timber.tag(TAG).w(e, "resolveService failed to launch for ${next.serviceName}")
+                isResolving = false
+                resolveNext()
+            }
+        }
+    }
+
+    internal fun onResolveFinished() {
+        synchronized(resolveQueue) {
+            isResolving = false
+            resolveNext()
+        }
+    }
+
+    internal fun requeueResolve(info: NsdServiceInfo) {
+        mdnsScope.launch {
+            delay(150L)
+            if (running) {
+                synchronized(resolveQueue) {
+                    resolveQueue.add(info)
+                    resolveNext()
+                }
+            }
+        }
+    }
+
     private fun onServiceFound(info: NsdServiceInfo) {
-        nsdManager.resolveService(info, ResolveListener(this))
+        synchronized(resolveQueue) {
+            resolveQueue.add(info)
+            resolveNext()
+        }
     }
 
     private fun onServiceLost(info: NsdServiceInfo) {
         if (info.serviceName == serviceName) observer.onChanged(-1)
     }
 
+    private fun isDeviceAddress(
+        hosts: List<InetAddress>,
+        cleanHostAddress: String?,
+    ): Boolean {
+        // 1. Try ConnectivityManager LinkProperties (works in background on Android 15/16/One UI 7)
+        val cmMatched =
+            runCatching {
+                val cm = context.getSystemService(ConnectivityManager::class.java)
+                val activeNetwork = cm?.activeNetwork
+                val linkProps = activeNetwork?.let { cm.getLinkProperties(it) }
+                linkProps?.linkAddresses?.any { linkAddr ->
+                    val addr = linkAddr.address
+                    val cleanAddr = addr.hostAddress?.substringBefore('%')
+                    hosts.any { it == addr } || (cleanHostAddress != null && cleanHostAddress == cleanAddr)
+                } == true
+            }.getOrDefault(false)
+
+        if (cmMatched) return true
+
+        // 2. Try NetworkInterface.getNetworkInterfaces()
+        val netInterfaceMatched =
+            runCatching {
+                NetworkInterface
+                    .getNetworkInterfaces()
+                    ?.asSequence()
+                    ?.any { networkInterface ->
+                        networkInterface.inetAddresses
+                            .asSequence()
+                            .any { addr ->
+                                hosts.any { it == addr } || (cleanHostAddress != null && cleanHostAddress == addr.hostAddress?.substringBefore('%'))
+                            }
+                    } == true
+            }.getOrDefault(false)
+
+        if (netInterfaceMatched) return true
+
+        // 3. For pairing service, if background netlink is restricted on One UI 7, allow if the address is a site-local or link-local IP
+        // when pairing was actively requested on this device
+        if (serviceType == TLS_PAIRING && hosts.any { it.isSiteLocalAddress || it.isLinkLocalAddress }) {
+            return true
+        }
+
+        return false
+    }
+
     private fun onServiceResolved(resolvedService: NsdServiceInfo) {
-        val hostAddress = resolvedService.host.hostAddress
-        val isLocal = hostAddress == "127.0.0.1" || hostAddress == "::1" || resolvedService.host.isLoopbackAddress
+        val allHosts: List<InetAddress> =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                resolvedService.hostAddresses.ifEmpty { listOfNotNull(resolvedService.host) }
+            } else {
+                listOfNotNull(resolvedService.host)
+            }
+        val rawHost = allHosts.firstOrNull() ?: resolvedService.host
+        val hostAddress = rawHost?.hostAddress
+        val cleanHostAddress = hostAddress?.substringBefore('%')
+        val isLocal =
+            cleanHostAddress == "127.0.0.1" ||
+                cleanHostAddress == "::1" ||
+                rawHost?.isLoopbackAddress == true ||
+                allHosts.any { it.isLoopbackAddress || it.hostAddress?.substringBefore('%') == "127.0.0.1" }
+
+        val isKnownInterface = isLocal || isDeviceAddress(allHosts, cleanHostAddress)
 
         if (running &&
-            (
-                isLocal ||
-                    NetworkInterface
-                        .getNetworkInterfaces()
-                        .asSequence()
-                        .any { networkInterface ->
-                            networkInterface.inetAddresses
-                                .asSequence()
-                                .any { hostAddress == it.hostAddress }
-                        }
-            ) &&
-            isPortAvailable(resolvedService.host, resolvedService.port)
+            isKnownInterface &&
+            (serviceType == TLS_PAIRING || isPortAvailable(rawHost, resolvedService.port))
         ) {
             serviceName = resolvedService.serviceName
-            resolvedHost = if (isLocal || hostAddress == null) "127.0.0.1" else hostAddress
+            resolvedHost = if (isLocal || cleanHostAddress == null) "127.0.0.1" else cleanHostAddress
             observer.onChanged(resolvedService.port)
-        } else if (running && ShizukuSettings.isAutoReconnectMdnsEnabled() && attempts < 5 && !restartScheduled) {
+        } else if (running &&
+            isKnownInterface &&
+            ShizukuSettings.isAutoReconnectMdnsEnabled() &&
+            attempts < 5 &&
+            !restartScheduled
+        ) {
+            // Our own adbd advertised the service but the port isn't bound yet (it often lags the
+            // mDNS announcement). Restart discovery with a short backoff so it gets re-resolved.
+            // Services from other hosts on the LAN never get here, so they can't trigger restarts.
             attempts++
             restartScheduled = true
             val delayMs = attempts * 1000L
@@ -135,10 +237,18 @@ class AdbMdns(
         host: InetAddress?,
         port: Int,
     ): Boolean {
-        // Step 1: If binding to 127.0.0.1 throws IOException (EADDRINUSE), adbd is bound on loopback or 0.0.0.0
+        // Step 1: If binding to 127.0.0.1 or ::1 throws IOException (EADDRINUSE), adbd is bound on loopback or 0.0.0.0 / ::
         try {
             ServerSocket().use {
                 it.bind(InetSocketAddress("127.0.0.1", port), 1)
+            }
+        } catch (_: IOException) {
+            return true
+        }
+
+        try {
+            ServerSocket().use {
+                it.bind(InetSocketAddress("::1", port), 1)
             }
         } catch (_: IOException) {
             return true
@@ -156,8 +266,36 @@ class AdbMdns(
             }
         }
 
-        // Deliberately no active connect() probe: opening a raw TCP connection to adbd's TLS
-        // pairing port without completing the handshake can be treated as a failed pairing attempt.
+        // Step 3: Check all active network interfaces
+        val boundOnAnyInterface =
+            runCatching {
+                val ifaces = NetworkInterface.getNetworkInterfaces() ?: return@runCatching false
+                for (iface in ifaces) {
+                    if (!iface.isUp || iface.isLoopback) continue
+                    for (addr in iface.inetAddresses) {
+                        if (addr == host) continue
+                        try {
+                            ServerSocket().use {
+                                it.bind(InetSocketAddress(addr, port), 1)
+                            }
+                        } catch (_: IOException) {
+                            return@runCatching true
+                        }
+                    }
+                }
+                false
+            }.getOrDefault(false)
+
+        if (boundOnAnyInterface) return true
+
+        // For adb connect (not pairing), a non-blocking TCP socket probe is also safe
+        if (serviceType == TLS_CONNECT) {
+            val targetHost = host?.hostAddress?.substringBefore('%') ?: "127.0.0.1"
+            if (AdbPortProber.isPortOpen(port, 150, targetHost)) {
+                return true
+            }
+        }
+
         return false
     }
 
@@ -209,9 +347,16 @@ class AdbMdns(
         override fun onResolveFailed(
             nsdServiceInfo: NsdServiceInfo,
             i: Int,
-        ) {}
+        ) {
+            Timber.tag(TAG).w("onResolveFailed: ${nsdServiceInfo.serviceName}, code $i")
+            adbMdns.onResolveFinished()
+            if (i == NsdManager.FAILURE_ALREADY_ACTIVE) {
+                adbMdns.requeueResolve(nsdServiceInfo)
+            }
+        }
 
         override fun onServiceResolved(nsdServiceInfo: NsdServiceInfo) {
+            adbMdns.onResolveFinished()
             adbMdns.onServiceResolved(nsdServiceInfo)
         }
     }

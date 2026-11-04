@@ -6,11 +6,13 @@ import af.shizuku.manager.databinding.HomeServerStatusBinding
 import af.shizuku.manager.ktx.startWithSceneTransition
 import af.shizuku.manager.model.ServiceStatus
 import af.shizuku.manager.utils.MotionUtils.applySpringTouch
+import af.shizuku.manager.utils.springTo
 import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import rikka.core.content.asActivity
 import rikka.html.text.HtmlCompat
 import rikka.html.text.toHtml
@@ -23,6 +25,9 @@ class ServerStatusViewHolder(
     private val binding: HomeServerStatusBinding,
     root: View,
 ) : BaseViewHolder<ServiceStatus>(root) {
+    /** Last running state the icon morph was drawn for (null = first bind, no animation). */
+    private var lastMorphOk: Boolean? = null
+
     private val cardView: com.google.android.material.card.MaterialCardView = itemView as com.google.android.material.card.MaterialCardView
 
     companion object {
@@ -45,8 +50,6 @@ class ServerStatusViewHolder(
     private inline val iconView get() = binding.icon
     private inline val logChip get() = binding.btnActivityLog
     private inline val diagnosticsChip get() = binding.btnDiagnostics
-    private inline val statusIndicator get() = binding.statusIndicator
-    private inline val sentryButton get() = binding.btnSentryOffline
 
     override fun onBind() {
         val context = itemView.context
@@ -55,64 +58,6 @@ class ServerStatusViewHolder(
         val state =
             af.shizuku.manager.utils.ShizukuStateMachine
                 .get()
-
-        // Live Status Indicator — ok/error use M3 theme tokens so the dot respects dynamic color
-        // and custom accents; starting stays amber (no standard M3 "warning" token, and amber is
-        // universally understood as "in progress" regardless of active theme).
-        statusIndicator.backgroundTintList =
-            android.content.res.ColorStateList.valueOf(
-                when {
-                    ok ->
-                        com.google.android.material.color.MaterialColors.getColor(
-                            context,
-                            androidx.appcompat.R.attr.colorPrimary,
-                            ContextCompat.getColor(context, R.color.status_ok),
-                        )
-                    state == af.shizuku.manager.utils.ShizukuStateMachine.State.STARTING ->
-                        ContextCompat.getColor(context, R.color.status_starting)
-                    else ->
-                        com.google.android.material.color.MaterialColors.getColor(
-                            context,
-                            androidx.appcompat.R.attr.colorError,
-                            ContextCompat.getColor(context, R.color.status_error),
-                        )
-                },
-            )
-
-        // Pulse animation for Starting/Running state
-        if (state == af.shizuku.manager.utils.ShizukuStateMachine.State.STARTING || ok) {
-            val pulse =
-                android.view.animation.AlphaAnimation(0.4f, 1.0f).apply {
-                    duration = if (ok) 1500 else 600
-                    repeatMode = android.view.animation.Animation.REVERSE
-                    repeatCount = android.view.animation.Animation.INFINITE
-                    interpolator = android.view.animation.AccelerateDecelerateInterpolator()
-                }
-            statusIndicator.startAnimation(pulse)
-        } else {
-            statusIndicator.clearAnimation()
-        }
-
-        // Show Sentry offline button only if limit is reached
-        sentryButton.visibility =
-            if (af.shizuku.manager.ShizukuSettings
-                    .isSentryLimitReached()
-            ) {
-                View.VISIBLE
-            } else {
-                View.GONE
-            }
-        sentryButton.setOnClickListener {
-            com.google.android.material.dialog
-                .MaterialAlertDialogBuilder(context)
-                .setTitle(R.string.sentry_offline_notice_title)
-                .setMessage(R.string.sentry_offline_notice_learn_more)
-                .setPositiveButton(android.R.string.ok, null)
-                .setNeutralButton(R.string.update_view_on_github) { _, _ ->
-                    af.shizuku.manager.utils.CustomTabsHelper
-                        .launchUrlOrCopy(context, "https://github.com/frdminc/ShizukuTendCF/issues")
-                }.show()
-        }
 
         // S-Pen / DeX Mouse Hover Effect (Expressive Polish)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -162,15 +107,40 @@ class ServerStatusViewHolder(
             val activity = context.asActivity<android.app.Activity>() ?: return@setOnClickListener
             activity.startWithSceneTransition(
                 android.content.Intent(activity, af.shizuku.manager.activitylog.ActivityLogActivity::class.java),
-                iconView,
-                "icon_server_status",
             )
         }
 
-        diagnosticsChip.visibility = if (ok) View.VISIBLE else View.GONE
-        diagnosticsChip.setOnClickListener {
-            val activity = context.asActivity<android.app.Activity>() ?: return@setOnClickListener
-            activity.startActivity(android.content.Intent(activity, SystemHubActivity::class.java))
+        // The long-press and tooltip only belong to the "not running" chip; clear them first so
+        // they don't stick around once the service is back.
+        diagnosticsChip.setOnLongClickListener(null)
+        diagnosticsChip.isLongClickable = false
+        ViewCompat.setTooltipText(diagnosticsChip, null)
+        if (ok) {
+            diagnosticsChip.visibility = View.VISIBLE
+            diagnosticsChip.text = context.getString(R.string.settings_diagnostics_category)
+            diagnosticsChip.setChipIconResource(R.drawable.ic_server_ok_24)
+            diagnosticsChip.setOnClickListener {
+                val activity = context.asActivity<android.app.Activity>() ?: return@setOnClickListener
+                activity.startWithSceneTransition(android.content.Intent(activity, SystemHubActivity::class.java))
+            }
+        } else if (af.shizuku.manager.ShizukuSettings
+                .isDiagnosticsEnabled()
+        ) {
+            diagnosticsChip.visibility = View.VISIBLE
+            diagnosticsChip.text = context.getString(R.string.home_status_diagnostics_tips)
+            diagnosticsChip.setChipIconResource(R.drawable.ic_settings_suggest_24)
+            ViewCompat.setTooltipText(diagnosticsChip, context.getString(R.string.home_service_doctor_title))
+            diagnosticsChip.setOnClickListener {
+                af.shizuku.manager.utils.DeactivationAdvisor.showStabilityTipsDialog(context) {
+                    onBind()
+                }
+            }
+            diagnosticsChip.setOnLongClickListener {
+                context.startActivity(android.content.Intent(context, af.shizuku.manager.settings.ServiceDoctorActivity::class.java))
+                true
+            }
+        } else {
+            diagnosticsChip.visibility = View.GONE
         }
 
         val okColorAttr = if (ok) com.google.android.material.R.attr.colorPrimaryContainer else com.google.android.material.R.attr.colorErrorContainer
@@ -215,7 +185,7 @@ class ServerStatusViewHolder(
         }
 
         // Outline: hidden when user disables it. Style toggles between Material (theme roles) and
-        // Status (semantic green/amber/red). Starting state always uses amber regardless of style.
+        // Status (semantic green/red).
         if (af.shizuku.manager.ShizukuSettings
                 .isShowStatusCardOutlineEnabled()
         ) {
@@ -228,23 +198,23 @@ class ServerStatusViewHolder(
                 when {
                     ok ->
                         if (useStatusColors) {
-                            ContextCompat.getColor(context, R.color.status_ok)
+                            com.google.android.material.color.MaterialColors
+                                .harmonizeWithPrimary(context, ContextCompat.getColor(context, R.color.status_ok))
                         } else {
                             com.google.android.material.color.MaterialColors.getColor(
                                 context,
-                                androidx.appcompat.R.attr.colorPrimary,
+                                R.attr.colorPrimary,
                                 ContextCompat.getColor(context, R.color.status_ok),
                             )
                         }
-                    state == af.shizuku.manager.utils.ShizukuStateMachine.State.STARTING ->
-                        ContextCompat.getColor(context, R.color.status_starting)
                     else ->
                         if (useStatusColors) {
-                            ContextCompat.getColor(context, R.color.status_error)
+                            com.google.android.material.color.MaterialColors
+                                .harmonizeWithPrimary(context, ContextCompat.getColor(context, R.color.status_error))
                         } else {
                             com.google.android.material.color.MaterialColors.getColor(
                                 context,
-                                androidx.appcompat.R.attr.colorError,
+                                R.attr.colorError,
                                 ContextCompat.getColor(context, R.color.status_error),
                             )
                         }
@@ -280,9 +250,6 @@ class ServerStatusViewHolder(
                             android.graphics.Color.WHITE,
                         )
                 }
-                state == af.shizuku.manager.utils.ShizukuStateMachine.State.STARTING -> {
-                    ContextCompat.getColor(context, R.color.status_starting) to android.graphics.Color.WHITE
-                }
                 else -> {
                     com.google.android.material.color.MaterialColors.getColor(
                         context,
@@ -298,6 +265,19 @@ class ServerStatusViewHolder(
             }
         af.shizuku.manager.utils.IconStyleHelper
             .applyToStatusCardIcon(iconView, pillColor = iconPillColor, tintColor = iconOnPillColor)
+        // With an expressive icon shape picked, running = that shape, stopped = plain circle, and
+        // the icon springs between them when the state changes (M3E MaterialShapes morph, #430).
+        (iconView.background as? af.shizuku.manager.utils.MorphShapeDrawable)?.let { morph ->
+            val target = if (ok) 1f else 0f
+            val previous = lastMorphOk
+            lastMorphOk = ok
+            if (previous == null || previous == ok) {
+                morph.progress = target
+            } else {
+                morph.progress = 1f - target
+                morph.springTo(target)
+            }
+        }
 
         val isRoot = status.uid == 0
         val apiVersion = status.apiVersion
@@ -355,8 +335,21 @@ class ServerStatusViewHolder(
             } else {
                 context.getString(R.string.home_status_service_not_running_summary, context.getString(R.string.app_name))
             }
+        // What the helper notifications would say, here too, for whoever has them off.
+        val issue =
+            af.shizuku.manager.utils.ShizukuIssues
+                .top()
+                ?.takeIf {
+                    af.shizuku.manager.ShizukuSettings
+                        .isProblemsOnHomeEnabled()
+                }
+        val problem =
+            issue?.let {
+                "<br><br><b>${TextUtils.htmlEncode(it.title)}</b><br>" +
+                    TextUtils.htmlEncode(it.text.substringBefore("\n\n"))
+            } ?: ""
         textView.text = title.toHtml(HtmlCompat.FROM_HTML_OPTION_TRIM_WHITESPACE)
-        summaryView.text = summary.toHtml(HtmlCompat.FROM_HTML_OPTION_TRIM_WHITESPACE)
+        summaryView.text = (summary + problem).toHtml(HtmlCompat.FROM_HTML_OPTION_TRIM_WHITESPACE)
         summaryView.visibility = if (TextUtils.isEmpty(summaryView.text)) View.GONE else View.VISIBLE
     }
 }

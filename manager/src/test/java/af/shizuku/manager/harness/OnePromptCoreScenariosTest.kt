@@ -145,7 +145,7 @@ class OnePromptCoreScenariosTest {
         assertEquals("key offers", 1, adbd.offers)
     }
 
-    // SD-1, expected to fail until clearUnanswered() is durable (it apply()s; the set commit()s).
+    // SD-1: clearUnanswered() is as durable as the set (both commit()).
     @Test
     fun `accepted-then-killed-before-flush`() {
         val start = connect()
@@ -157,7 +157,7 @@ class OnePromptCoreScenariosTest {
         assertFalse("marker after the key was accepted, once the process died before the flush", AdbAuthWait.isUnanswered())
     }
 
-    // SD-2, expected to fail until isUnanswered() fails closed like unansweredStamp() does.
+    // SD-2: isUnanswered() fails closed like unansweredStamp() does.
     @Test
     fun `prefs-unreadable-fail-closed`() {
         prefs.failOnRead = true

@@ -4,10 +4,9 @@
 
 -allowaccessmodification
 
-# Every class R8 renames goes into the loader's own package, not the default package. The app's
-# R8 pass names its classes a, b, ... a0 in the default package too, and before #28 the loader
-# handed its class loader to the app's code as the parent, so a shared name resolved to the
-# loader's class there and ART rejected the app's (VerifyError). The loader no longer does that,
-# and no longer bundles rikka.hidden.compat (whose keep rules lived here for #537/#544, VerifyErrors
-# that may have been the same clash); this keeps the two dex files' names apart all the same.
--repackageclasses rikka.shizuku.shell
+# Every class R8 renames goes into a subpackage of the loader's own package, never the default
+# package. The manager APK's Shell runs in a class loader whose parent once held this dex, so
+# default-package names here shadowed the manager's renamed classes (VerifyError, #626 / #28). The
+# loader no longer takes that parent, and manager/rish-dex-check.gradle fails a release assemble
+# when the two dex files still share a class name; this keeps their names apart all the same.
+-repackageclasses rikka.shizuku.shell.r8

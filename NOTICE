@@ -250,6 +250,14 @@ This product is developed by Justin Austin (thejaustin) in collaboration with:
 For detailed per-commit and release breakdowns, see AI_ATTRIBUTIONS.md.
 
 ================================================================================
+DESIGN INSPIRATION (no code reused)
+================================================================================
+
+The optional "Timeline" changelog style is inspired by the changelog design of
+Morphe Manager — https://github.com/MorpheApp/morphe-manager (GPL-3.0). It is an
+independent implementation; no Morphe source code, strings or assets are included.
+
+================================================================================
 APACHE LICENSE, VERSION 2.0
 ================================================================================
 

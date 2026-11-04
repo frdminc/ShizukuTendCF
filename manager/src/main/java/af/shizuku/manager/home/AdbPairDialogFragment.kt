@@ -23,6 +23,7 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
@@ -61,13 +62,25 @@ class AdbPairDialogFragment : DialogFragment() {
 
     private fun onDialogShow(dialog: AlertDialog) {
         val codeEditText = binding.pairingCode.editText
+        val isNumerical = ShizukuSettings.isNumericalPairingKeyboardEnabled()
+        if (isNumerical) {
+            codeEditText?.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            codeEditText?.keyListener =
+                android.text.method.DigitsKeyListener
+                    .getInstance("0123456789")
+        } else {
+            codeEditText?.inputType = android.text.InputType.TYPE_CLASS_TEXT
+            codeEditText?.keyListener =
+                android.text.method.TextKeyListener
+                    .getInstance()
+        }
         codeEditText?.doAfterTextChanged {
             binding.pairingCode.error = null
         }
 
         binding.pairingCode.error = null
 
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isVisible = false
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isVisible = true
 
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
             SettingsHelper.launchOrHighlightWirelessDebugging(it.context)
@@ -88,7 +101,11 @@ class AdbPairDialogFragment : DialogFragment() {
                 return@setOnClickListener
             }
 
-            val password = codeEditText?.text.toString() ?: ""
+            val password = codeEditText?.text?.toString()?.trim() ?: ""
+            if (password.length != 6 || !password.all { it.isDigit() }) {
+                binding.pairingCode.error = context.getString(R.string.dialog_adb_invalid_code)
+                return@setOnClickListener
+            }
 
             viewModel.run(port, password)
         }
@@ -97,8 +114,19 @@ class AdbPairDialogFragment : DialogFragment() {
             val portEditText = binding.port.editText
             if (portValue == -1) {
                 dialog.setTitle(R.string.dialog_adb_pairing_discovery)
-                binding.text1.isVisible = true
-                binding.pairingCode.isVisible = false
+                val inMultiScreen =
+                    activity?.isInMultiWindowMode == true ||
+                        (
+                            activity
+                                ?.window
+                                ?.decorView
+                                ?.display
+                                ?.displayId ?: -1
+                        ) > 0
+                binding.text1.isVisible = inMultiScreen
+                binding.text2.isVisible = !inMultiScreen
+                binding.pairingCode.isVisible = true
+                binding.port.isVisible = true
                 binding.progress.isVisible = true
                 binding.status.isVisible = true
                 if (!af.shizuku.manager.utils.NetworkStateHelper
@@ -116,13 +144,17 @@ class AdbPairDialogFragment : DialogFragment() {
                 } else {
                     binding.status.text = getString(R.string.adb_pairing_searching)
                 }
-                portEditText?.setText(portValue.toString())
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).isVisible = false
+                if (portEditText?.text?.toString() == "-1" || portEditText?.text?.isEmpty() == true) {
+                    portEditText?.setText("")
+                }
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).isVisible = true
                 dialog.getButton(AlertDialog.BUTTON_NEUTRAL).isVisible = true
             } else {
                 dialog.setTitle(R.string.dialog_adb_pairing_title)
                 binding.text1.isVisible = false
+                binding.text2.isVisible = false
                 binding.pairingCode.isVisible = true
+                binding.port.isVisible = true
                 binding.progress.isVisible = false
                 binding.status.isVisible = false
                 portEditText?.setText(portValue.toString())
@@ -132,8 +164,8 @@ class AdbPairDialogFragment : DialogFragment() {
         }
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        super.onActivityCreated(savedInstanceState)
+    override fun onStart() {
+        super.onStart()
 
         val context = requireContext()
         val inMultiScreenOrDisplay = (
@@ -174,7 +206,14 @@ class AdbPairDialogFragment : DialogFragment() {
                 is PairingState.Idle -> {
                     // Fresh session — nothing to show yet.
                 }
-                is PairingState.Success -> dismissAllowingStateLoss()
+                is PairingState.Success -> {
+                    Toast.makeText(context, R.string.notification_adb_pairing_succeed_title, Toast.LENGTH_SHORT).show()
+                    dismissAllowingStateLoss()
+                    val act = activity
+                    if (act is androidx.fragment.app.FragmentActivity) {
+                        StartWirelessAdbViewHolder.start(act, act.lifecycleScope)
+                    }
+                }
                 is PairingState.Failure -> {
                     binding.progress.isVisible = false
                     binding.status.isVisible = true
@@ -247,7 +286,7 @@ class ViewModel(
     ) {
         _isPairing.value = true
         viewModelScope.launch(Dispatchers.IO) {
-            val host = adbMdns.resolvedHost
+            val host = adbMdns.resolvedHost ?: "127.0.0.1"
 
             val key =
                 try {
@@ -270,6 +309,8 @@ class ViewModel(
                     _isPairing.postValue(false)
                     if (it) {
                         _result.postValue(PairingState.Success)
+                    } else {
+                        _result.postValue(PairingState.Failure(Exception("Pairing failed")))
                     }
                 }
         }

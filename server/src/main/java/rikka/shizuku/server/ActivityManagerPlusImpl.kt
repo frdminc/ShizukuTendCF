@@ -117,32 +117,55 @@ class ActivityManagerPlusImpl : IActivityManagerPlus.Stub() {
 
     override fun freezeApp(packageName: String?): Boolean {
         if (packageName == null) return false
-        // COMPONENT_ENABLED_STATE_DISABLED_USER = 3 — user-level disable, reversible
+        // DevicePolicyManager hiding (#632) is done by the manager when it is device/profile owner:
+        // DPMS only accepts it from the admin's own app, never from this shell/root process.
+        // Stage 1: COMPONENT_ENABLED_STATE_DISABLED_USER = 3 — user-level disable, reversible
         if (setApplicationEnabledSetting(packageName, 3)) return true
         if (!InputValidationUtils.isValidPackageName(packageName)) return false
-        return ShellExecutor.execBool("pm", "disable-user", "--user", "0", packageName)
+        // Stage 2: pm disable-user fallback
+        if (ShellExecutor.execBool("pm", "disable-user", "--user", callingUserId().toString(), packageName)) {
+            return true
+        }
+        // Stage 3: cmd package suspend fallback for protected system packages
+        return ShellExecutor.execBool("cmd", "package", "suspend", "--user", callingUserId().toString(), packageName)
     }
 
     override fun unfreezeApp(packageName: String?): Boolean {
         if (packageName == null) return false
+        var restored = false
         // COMPONENT_ENABLED_STATE_DEFAULT = 0 — restore manifest-declared state
-        if (setApplicationEnabledSetting(packageName, 0)) return true
-        if (!InputValidationUtils.isValidPackageName(packageName)) return false
-        return ShellExecutor.execBool("pm", "enable", "--user", "0", packageName)
+        if (setApplicationEnabledSetting(packageName, 0)) {
+            restored = true
+        }
+        if (InputValidationUtils.isValidPackageName(packageName)) {
+            ShellExecutor.execBool("cmd", "package", "unsuspend", "--user", callingUserId().toString(), packageName)
+            if (!restored) {
+                restored = ShellExecutor.execBool("pm", "enable", "--user", callingUserId().toString(), packageName)
+            }
+        }
+        return restored
     }
 
     override fun isAppFrozen(packageName: String?): Boolean {
         if (packageName == null) return false
-        // Primary: check ApplicationInfo.enabled via Binder IPC
+        // Primary: check ApplicationInfo.enabled / FLAG_SUSPENDED (1 shl 30) via Binder IPC
         try {
             val ai = Android17Compat.getApplicationInfo(packageName, 0L, callingUserId())
-            if (ai != null) return !ai.enabled
+            if (ai != null) {
+                val suspended = (ai.flags and (1 shl 30)) != 0
+                return !ai.enabled || suspended
+            }
         } catch (e: Exception) {
             Log.w(TAG, "isAppFrozen IPC failed for $packageName, falling back", e)
         }
         // Fallback: pm list packages -d lists only disabled packages
         if (!InputValidationUtils.isValidPackageName(packageName)) return false
-        return ShellExecutor.exec("pm", "list", "packages", "-d", packageName).contains(packageName)
+        // The filter is a substring match, so compare whole lines ("package:<name>").
+        // --user: without it pm walks every user and errors on profiles shell can't access
+        // (Samsung Secure Folder, user 150).
+        return ShellExecutor.exec("pm", "list", "packages", "-d", "--user", callingUserId().toString(), packageName)
+            .lineSequence()
+            .any { it.trim() == "package:$packageName" }
     }
 
     override fun setAppProcessLimit(limit: Int) {

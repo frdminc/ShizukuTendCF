@@ -7,7 +7,7 @@
         <item>@string/follow_system</item>
     </string-array>
 
-    <integer-array name="night_mode_value">
+    <integer-array name="night_mode_value" translatable="false">
         <item>1</item>
         <item>2</item>
         <item>-1</item>
@@ -21,7 +21,7 @@
         <item>@string/settings_action_hide_from_list</item>
     </string-array>
 
-    <string-array name="swipe_actions_values">
+    <string-array name="swipe_actions_values" translatable="false">
         <item>none</item>
         <item>open_app</item>
         <item>app_info</item>
@@ -48,7 +48,7 @@
         <item>TCL 50 Pro</item>
     </string-array>
 
-    <string-array name="spoof_targets_values">
+    <string-array name="spoof_targets_values" translatable="false">
         <item>auto</item>
         <item>pixel_10_pro_xl</item>
         <item>pixel_9_pro_xl</item>
@@ -68,37 +68,23 @@
     </string-array>
 
 
-    <string-array name="corner_style_entries">
-        <item>@string/corner_style_global</item>
-        <item>@string/corner_style_sharp</item>
-        <item>@string/corner_style_rounded</item>
-        <item>@string/corner_style_large</item>
-        <item>@string/corner_style_squircle</item>
-        <item>@string/corner_style_extra_large</item>
-    </string-array>
 
-    <string-array name="corner_style_values">
-        <item>global</item>
-        <item>sharp</item>
-        <item>rounded</item>
-        <item>large</item>
-        <item>squircle</item>
-        <item>xlarge</item>
-    </string-array>
 
     <string-array name="corner_rounding_entries">
-        <item>Enhanced — 32dp (Default)</item>
+        <item>@string/corner_style_sharp</item>
         <item>Gentle — 20dp</item>
-        <item>Standard M3 — 28dp</item>
+        <item>Standard — 28dp</item>
+        <item>Enhanced — 32dp (Default)</item>
         <item>Large — 36dp</item>
         <item>Maximum — 44dp</item>
         <item>System Default</item>
     </string-array>
 
-    <string-array name="corner_rounding_values">
-        <item>default</item>
+    <string-array name="corner_rounding_values" translatable="false">
+        <item>sharp</item>
         <item>gentle</item>
         <item>standard</item>
+        <item>default</item>
         <item>large</item>
         <item>maximum</item>
         <item>system</item>
@@ -109,7 +95,7 @@
         <item>@string/update_channel_dev</item>
     </string-array>
 
-    <string-array name="update_channel_values">
+    <string-array name="update_channel_values" translatable="false">
         <item>stable</item>
         <item>dev</item>
     </string-array>
@@ -123,9 +109,11 @@
         <item>Amber Sunset</item>
         <item>Rose Petal</item>
         <item>Midnight Slate</item>
+        <item>Cyber Neon Cyan</item>
+        <item>Synthwave Neon</item>
     </string-array>
 
-    <string-array name="custom_accents_values">
+    <string-array name="custom_accents_values" translatable="false">
         <item>DEFAULT</item>
         <item>VIOLET</item>
         <item>GREEN</item>
@@ -134,6 +122,135 @@
         <item>AMBER</item>
         <item>ROSE</item>
         <item>SLATE</item>
+        <item>CYAN</item>
+        <item>NEON</item>
     </string-array>
 
+    <string-array name="floating_nav_label_modes">
+        <item>Selected only</item>
+        <item>Always</item>
+        <item>Icons only</item>
+    </string-array>
+
+    <string-array name="floating_nav_label_modes_value" translatable="false">
+        <item>selected</item>
+        <item>labeled</item>
+        <item>unlabeled</item>
+    </string-array>
+
+
+    <string-array name="changelog_styles">
+        <item>@string/changelog_style_classic</item>
+        <item>@string/changelog_style_timeline</item>
+    </string-array>
+
+    <string-array name="changelog_styles_value" translatable="false">
+        <item>classic</item>
+        <item>timeline</item>
+    </string-array>
+
+    <string-array name="tcp_network_protection_entries">
+        <item>@string/tcp_protection_off</item>
+        <item>@string/tcp_protection_open</item>
+        <item>@string/tcp_protection_trusted</item>
+    </string-array>
+
+    <string-array name="tcp_network_protection_values" translatable="false">
+        <item>off</item>
+        <item>open</item>
+        <item>trusted</item>
+    </string-array>
+
+    <string-array name="app_icon_alias_entries">
+        <item>Shizuku+ (Default)</item>
+        <item>Shizuku (Classic)</item>
+        <item>System Service (Camouflage)</item>
+        <item>Tools (Camouflage)</item>
+        <item>Files (Camouflage)</item>
+        <item>Notes (Camouflage)</item>
+    </string-array>
+
+    <string-array name="app_icon_alias_values" translatable="false">
+        <item>default</item>
+        <item>classic</item>
+        <item>system</item>
+        <item>tools</item>
+        <item>files</item>
+        <item>notes</item>
+    </string-array>
+
+    <string-array name="dark_styles">
+        <item>@string/settings_dark_style_standard</item>
+        <item>@string/settings_dark_style_black</item>
+        <item>@string/settings_dark_style_amoled</item>
+    </string-array>
+    <string-array name="dark_styles_value" translatable="false">
+        <item>standard</item>
+        <item>black</item>
+        <item>amoled</item>
+    </string-array>
+    <string-array name="haptics_modes">
+        <item>@string/settings_haptics_off</item>
+        <item>@string/settings_haptics_system</item>
+        <item>@string/settings_haptics_always</item>
+    </string-array>
+    <string-array name="haptics_modes_value" translatable="false">
+        <item>off</item>
+        <item>system</item>
+        <item>always</item>
+    </string-array>
+    <string-array name="floating_nav_styles">
+        <item>@string/settings_floating_nav_style_floating</item>
+        <item>@string/settings_floating_nav_style_docked</item>
+        <item>@string/settings_floating_nav_style_compact</item>
+        <item>@string/settings_floating_nav_style_capsule</item>
+    </string-array>
+    <string-array name="floating_nav_styles_value" translatable="false">
+        <item>floating</item>
+        <item>docked</item>
+        <item>compact</item>
+        <item>capsule</item>
+    </string-array>
+    <string-array name="floating_nav_optional_tabs">
+        <item>@string/nav_apps</item>
+        <item>@string/nav_hub</item>
+    </string-array>
+    <string-array name="floating_nav_optional_tabs_value" translatable="false">
+        <item>apps</item>
+        <item>hub</item>
+    </string-array>
+    <string-array name="helper_notifications">
+        <item>@string/settings_helper_notifications_off</item>
+        <item>@string/settings_helper_notifications_stopped</item>
+        <item>@string/settings_helper_notifications_all</item>
+    </string-array>
+    <string-array name="helper_notifications_values" translatable="false">
+        <item>off</item>
+        <item>stopped</item>
+        <item>all</item>
+    </string-array>
+    <string-array name="icon_morph_modes">
+        <item>@string/settings_icon_morph_mode_spin</item>
+        <item>@string/settings_icon_morph_mode_morph</item>
+        <item>@string/settings_icon_morph_mode_pop</item>
+        <item>@string/settings_icon_morph_mode_sweep</item>
+        <item>@string/settings_icon_morph_mode_liquid</item>
+    </string-array>
+    <string-array name="icon_morph_modes_values" translatable="false">
+        <item>spin</item>
+        <item>morph</item>
+        <item>pop</item>
+        <item>sweep</item>
+        <item>liquid</item>
+    </string-array>
+    <string-array name="switch_row_designs">
+        <item>@string/settings_switch_row_design_standard</item>
+        <item>@string/settings_switch_row_design_icon_switch</item>
+        <item>@string/settings_switch_row_design_shape_thumb</item>
+    </string-array>
+    <string-array name="switch_row_designs_values" translatable="false">
+        <item>standard</item>
+        <item>icon_switch</item>
+        <item>shape_thumb</item>
+    </string-array>
 </resources>

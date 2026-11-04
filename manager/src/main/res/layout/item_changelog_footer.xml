@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:id="@+id/shimmer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="@dimen/margin_horizontal"
+        android:paddingStart="62dp"
+        android:paddingBottom="16dp">
+
+        <View
+            android:id="@+id/bar1"
+            android:layout_width="160dp"
+            android:layout_height="20dp" />
+
+        <View
+            android:id="@+id/bar2"
+            android:layout_width="240dp"
+            android:layout_height="12dp"
+            android:layout_marginTop="8dp" />
+
+        <View
+            android:id="@+id/bar3"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginTop="12dp" />
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/retry"
+        style="?attr/materialButtonTonalStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="@string/changelog_older_retry"
+        android:visibility="gone" />
+</FrameLayout>

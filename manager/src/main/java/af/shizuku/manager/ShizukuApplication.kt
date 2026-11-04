@@ -10,10 +10,13 @@ import af.shizuku.manager.utils.AppContextSettingsImpl
 import af.shizuku.manager.utils.ShizukuStateMachine
 import af.shizuku.manager.utils.ThemeDelegateImpl
 import af.shizuku.manager.worker.RemoteDbSyncWorker
+import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
+import android.os.Bundle
 import android.os.UserManager
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
@@ -51,9 +54,29 @@ import timber.log.Timber
 class ShizukuApplication :
     Application(),
     Configuration.Provider {
+    /** Background work tied to the process. A failure is logged instead of crashing the app. */
+    private val appScope =
+        CoroutineScope(
+            SupervisorJob() + Dispatchers.IO +
+                kotlinx.coroutines.CoroutineExceptionHandler { _, t -> Timber.e(t, "Background task failed") },
+        )
+
+    // SharedPreferences only holds change listeners weakly - keep strong references here or they
+    // get garbage collected and silently stop firing.
+    private var peerSyncPrefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+    private var keepAlivePrefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+
     companion object {
         lateinit var appContext: Context
             private set
+
+        // Shizuku+ activities between onStart and onStop; above zero, the app is on screen.
+        private val startedActivities =
+            java.util.concurrent.atomic
+                .AtomicInteger()
+
+        /** Whether one of the app's own screens is showing (a toast then lands on it). */
+        fun isOnScreen(): Boolean = startedActivities.get() > 0
 
         /** True only if libadb.so loaded successfully. ADB pairing features must check this. */
         var isAdbNativeAvailable: Boolean = false
@@ -67,7 +90,7 @@ class ShizukuApplication :
         private val sentrySessionEventCount =
             java.util.concurrent.atomic
                 .AtomicInteger(0)
-        private const val MAX_SENTRY_EVENTS_PER_SESSION = 100
+        private const val MAX_SENTRY_EVENTS_PER_SESSION = 5
     }
 
     // WorkManager's own internal background thread (e.g. ForceStopRunnable's Room queries) can
@@ -103,16 +126,28 @@ class ShizukuApplication :
         appContext = base
         // Initialize ShizukuSettings as early as possible
         ShizukuSettings.initialize(base)
+        // Before the AICore+ accessibility service can connect (it runs in this process).
+        af.shizuku.manager.automation.AICoreAccessibilityHealer
+            .recordBaseline(base)
     }
 
     /**
      * Initialize Sentry FIRST to catch all crashes including early startup failures
      */
-    private fun initializeSentryEarly() {
+    internal fun initializeSentryEarly() {
         if (BuildConfig.SENTRY_DSN.isEmpty()) {
             Timber.w("Sentry DSN is empty, skipping initialization")
             return
         }
+        // Consent first: nothing is sent until the user said yes (first-run prompt or setting).
+        if (!ShizukuSettings.isCrashReportingEnabled()) {
+            Timber.i("Crash reporting is off")
+            return
+        }
+        if (Sentry.isEnabled()) return
+
+        af.shizuku.manager.utils.SentryEventDeduper
+            .resetIfWindowExpired()
 
         if (ShizukuSettings.isSentryLimitReached()) {
             Timber.i("Sentry quota reached, skipping initialization")
@@ -132,14 +167,7 @@ class ShizukuApplication :
                 options.isAttachScreenshot = false
                 options.isAttachViewHierarchy = false
 
-                // Selective exception: still capture a screenshot for the specific class of
-                // bug where one is actually worth the quota cost (UI-rendering/theme crashes,
-                // e.g. the black-screen recreate() bug) - gated by an allowlist so it only
-                // fires for those, not every event. See SelectiveScreenshotEventProcessor.
-                options.addEventProcessor(
-                    af.shizuku.manager.utils
-                        .SelectiveScreenshotEventProcessor(),
-                )
+                // Screenshots are never attached: they can show anything on screen.
 
                 // Breadcrumbs are bundled into the event itself (not separately billed), so
                 // keep them for context. isEnableUserInteractionTracing and
@@ -175,6 +203,13 @@ class ShizukuApplication :
 
                 // Include breadcrumbs for navigation tracking
                 options.maxBreadcrumbs = 100
+                // Logs become breadcrumbs: strip addresses, network names and emails first.
+                options.setBeforeBreadcrumb { breadcrumb, _ ->
+                    breadcrumb.message =
+                        af.shizuku.manager.utils.TelemetryScrubber
+                            .scrub(breadcrumb.message)
+                    breadcrumb
+                }
 
                 // Send default PII (for device info, not user data)
                 options.isSendDefaultPii = false
@@ -184,12 +219,6 @@ class ShizukuApplication :
 
                 // Add context about the app
                 options.setBeforeSend { event, _ ->
-                    // 0. Session event cap — stop a crash/error loop from draining the quota. The
-                    // first events already capture the bug; further identical ones add cost, not signal.
-                    if (sentrySessionEventCount.incrementAndGet() > MAX_SENTRY_EVENTS_PER_SESSION) {
-                        return@setBeforeSend null
-                    }
-
                     // 1. Drop coroutine cancellations
                     val throwable = event.throwable
                     if (throwable is kotlinx.coroutines.CancellationException) return@setBeforeSend null
@@ -300,6 +329,27 @@ class ShizukuApplication :
                         return@setBeforeSend null
                     }
 
+                    // 13. Crash deduplication — drop repeated occurrences of identical errors within 15 mins
+                    val eventTag = event.exceptions?.firstOrNull()?.type ?: event.throwable?.javaClass?.simpleName ?: "Error"
+                    val eventMsg = event.exceptions?.firstOrNull()?.value ?: event.message?.formatted ?: event.throwable?.message ?: ""
+                    if (!af.shizuku.manager.utils.SentryEventDeduper
+                            .shouldSend(eventTag, eventMsg)
+                    ) {
+                        return@setBeforeSend null
+                    }
+
+                    // 14. Session event cap — stop a crash/error loop from draining the quota
+                    if (sentrySessionEventCount.incrementAndGet() > MAX_SENTRY_EVENTS_PER_SESSION) {
+                        return@setBeforeSend null
+                    }
+
+                    // 15. Daily persistent event cap — hard stop at device daily limit (max 10/day)
+                    if (!af.shizuku.manager.utils.SentryEventDeduper
+                            .checkDailyLimitAndIncrement()
+                    ) {
+                        return@setBeforeSend null
+                    }
+
                     // Add build config info to events
                     event.setTag("version_name", BuildConfig.VERSION_NAME)
                     event.setTag("version_code", BuildConfig.VERSION_CODE.toString())
@@ -349,6 +399,22 @@ class ShizukuApplication :
                         }
                     } catch (_: Exception) {
                         // Ignore errors during state collection
+                    }
+
+                    // Same scrub as breadcrumbs: exception messages can carry addresses ("connect to
+                    // 192.168.1.5:5555 failed").
+                    event.message?.let { m ->
+                        m.formatted =
+                            af.shizuku.manager.utils.TelemetryScrubber
+                                .scrub(m.formatted)
+                        m.message =
+                            af.shizuku.manager.utils.TelemetryScrubber
+                                .scrub(m.message)
+                    }
+                    event.exceptions?.forEach { ex ->
+                        ex.value =
+                            af.shizuku.manager.utils.TelemetryScrubber
+                                .scrub(ex.value)
                     }
 
                     event
@@ -465,23 +531,74 @@ class ShizukuApplication :
      * Initialize settings and managers
      */
     private fun initializeManagers() {
+        // Legacy rish clients (MT Manager and other prebuilt rikka/rish loaders) ask for the
+        // binder with a broadcast and only wait a few hundred milliseconds for the shell socket.
+        // Keep the manager process alive while the server runs so that broadcast is always
+        // answered quickly, even when an OEM freezer would otherwise freeze this process.
+        // See docs/MT_COMPAT.md.
+        appScope.launch {
+            ShizukuStateMachine
+                .asFlow()
+                .distinctUntilChanged()
+                .collect {
+                    af.shizuku.manager.service.LegacyRishKeepAliveService
+                        .sync(this@ShizukuApplication)
+                }
+        }
+        // Apply the settings switch live, not only on the next state change.
+        keepAlivePrefsListener =
+            SharedPreferences
+                .OnSharedPreferenceChangeListener { _, key ->
+                    if (key == ShizukuSettings.Keys.KEY_LEGACY_RISH_KEEPALIVE) {
+                        af.shizuku.manager.service.LegacyRishKeepAliveService
+                            .sync(this)
+                    }
+                }.also { ShizukuSettings.getPreferences()?.registerOnSharedPreferenceChangeListener(it) }
+        // A start refused in the background is retried once the app is in the foreground, where
+        // foreground service starts are always allowed.
+        registerActivityLifecycleCallbacks(
+            object : ActivityLifecycleCallbacks {
+                override fun onActivityStarted(activity: Activity) {
+                    startedActivities.incrementAndGet()
+                    if (!af.shizuku.manager.service.LegacyRishKeepAliveService
+                            .isRunning()
+                    ) {
+                        af.shizuku.manager.service.LegacyRishKeepAliveService
+                            .sync(this@ShizukuApplication)
+                    }
+                }
+
+                override fun onActivityCreated(
+                    activity: Activity,
+                    savedInstanceState: Bundle?,
+                ) = Unit
+
+                override fun onActivityResumed(activity: Activity) = Unit
+
+                override fun onActivityPaused(activity: Activity) = Unit
+
+                override fun onActivityStopped(activity: Activity) {
+                    startedActivities.updateAndGet { (it - 1).coerceAtLeast(0) }
+                    af.shizuku.manager.utils.SettingsBackupManager
+                        .requestAutoBackup(this@ShizukuApplication)
+                }
+
+                override fun onActivitySaveInstanceState(
+                    activity: Activity,
+                    outState: Bundle,
+                ) = Unit
+
+                override fun onActivityDestroyed(activity: Activity) = Unit
+            },
+        )
+
         ActivityLogManager.initialize(this, ActivityLogSettingsImpl())
         af.shizuku.manager.database.ScriptSnippetManager
             .initialize(this)
         af.shizuku.manager.plugin.PlusFeatureRegistry
             .register(af.shizuku.manager.scripting.ScriptingFeatureModule)
 
-        // Run auto-run snippets each time the Shizuku service transitions to RUNNING.
-        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-            ShizukuStateMachine
-                .asFlow()
-                .distinctUntilChanged()
-                .filter { it == ShizukuStateMachine.State.RUNNING }
-                .collect {
-                    af.shizuku.manager.database.ScriptSnippetManager
-                        .runAutoRunSnippets()
-                }
-        }
+        // Auto-run snippets start from ShizukuStateMachine's RUNNING transition, which knows the trigger.
 
         // Redeploy the SU bridge dex whenever the server comes up, not just on app self-update
         // (#423 fix, `9dba4bd3`, only covered ACTION_MY_PACKAGE_REPLACED). If the server wasn't
@@ -492,7 +609,7 @@ class ShizukuApplication :
         // Sync the SU bridge when the server starts. If enabled, ensure the latest bridge is deployed.
         // If disabled, ensure any stale /data/local/tmp/su binaries are cleaned up to prevent Google Wallet
         // and Play Integrity security failures.
-        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+        appScope.launch {
             ShizukuStateMachine
                 .asFlow()
                 .distinctUntilChanged()
@@ -513,9 +630,36 @@ class ShizukuApplication :
                     } catch (e: Exception) {
                         Timber.tag("ShizukuApplication").w(e, "SU bridge sync on service start failed")
                     }
+
+                    // Auto-apply TCP mode and On-Device ADB TCP settings without requiring manual re-toggle
+                    try {
+                        val tcpMode =
+                            ShizukuSettings.getTcpMode() &&
+                                !af.shizuku.manager.utils.NetworkTrust
+                                    .shouldBlockTcp(this@ShizukuApplication)
+                        val onDeviceAdbTcp = ShizukuSettings.isOnDeviceAdbTcpEnabled()
+                        if (tcpMode || onDeviceAdbTcp) {
+                            val desiredPort = if (tcpMode) ShizukuSettings.getTcpPort().takeIf { it in 1..65535 } ?: 5555 else 5555
+                            af.shizuku.manager.service.AdbProxyService
+                                .enableAdbTcp(desiredPort)
+                        }
+                    } catch (e: Exception) {
+                        Timber.tag("ShizukuApplication").w(e, "TCP mode auto-apply on service start failed")
+                    }
+
+                    // Ensure Local ADB Proxy is running if enabled in settings
+                    try {
+                        if (ShizukuSettings.isAdbProxyEnabled()) {
+                            val proxyIntent = Intent(this@ShizukuApplication, af.shizuku.manager.service.AdbProxyService::class.java)
+                            startService(proxyIntent)
+                        }
+                    } catch (e: Exception) {
+                        Timber.tag("ShizukuApplication").w(e, "ADB Proxy Service start failed")
+                    }
                 }
         }
-        AppContextManager.initialize(AppContextSettingsImpl())
+        AppContextManager.initialize(AppContextSettingsImpl(applicationContext))
+        ShizukuSettings.clearLegacyEnhancementPrefs()
         LocaleDelegate.defaultLocale = ShizukuSettings.getLocale()
 
         // #429: one-time migration — push the legacy custom locale into AppCompat's
@@ -537,6 +681,12 @@ class ShizukuApplication :
         // One-time sync so the "Start on boot" toggle (Settings > Behavior) reflects reality from
         // the first time anyone looks at it - see syncStartOnBootDefaultIfNeeded()'s doc comment.
         ShizukuSettings.syncStartOnBootDefaultIfNeeded(this)
+        // Before any activity themes itself: Rounded edges / card corner styles -> Corner rounding.
+        ShizukuSettings.migrateCornerSettingsIfNeeded()
+        // Before the first Plus feature sync sends the firewall state to the server.
+        ShizukuSettings.migrateFirewallAutomationIfNeeded()
+        af.shizuku.manager.utils.ShizukuIssues
+            .deleteRetiredChannels(this)
 
         AppCompatDelegate.setDefaultNightMode(ShizukuSettings.getNightMode())
 
@@ -567,9 +717,8 @@ class ShizukuApplication :
         // foreground-app poll for two rules that, at the time, were non-functional placeholders
         // that could never match real data. Registering rules is cheap and always safe; actually
         // starting the service (and its notification/polling) is gated on real configuration so a
-        // user who never touches either list sees nothing - see ShizukuPlusSettingsFragment's
-        // change listeners for where the service gets started/stopped dynamically as the user
-        // edits those lists after this initial launch-time check.
+        // user who never touches either list sees nothing. Editing the lists later starts or stops
+        // it (TrustedNetworksSheet, the auto-hide picker).
         af.shizuku.manager.automation
             .registerDefaultRules()
         if (ShizukuSettings.isAnyAutomationConfigured()) {
@@ -578,7 +727,19 @@ class ShizukuApplication :
         }
 
         Shizuku.addLogListener { appName, packageName, action ->
-            ActivityLogManager.log(appName, packageName, action)
+            val resolvedName =
+                if (appName.isBlank() && packageName.isNotBlank()) {
+                    try {
+                        val pm = packageManager
+                        val ai = pm.getApplicationInfo(packageName, 0)
+                        pm.getApplicationLabel(ai).toString()
+                    } catch (_: Exception) {
+                        packageName
+                    }
+                } else {
+                    appName
+                }
+            ActivityLogManager.log(resolvedName, packageName, action)
         }
 
         Shizuku.addSentryEventListener { eventJson ->
@@ -586,8 +747,9 @@ class ShizukuApplication :
                 val jsonObject = org.json.JSONObject(eventJson)
                 val levelStr = jsonObject.optString("level", "error")
                 val tag = jsonObject.optString("tag", "ShizukuPlus")
-                val message = jsonObject.optString("message", "")
-                val stackTrace = jsonObject.optString("stackTrace", "")
+                // Server records can carry other apps' command lines, package names, paths and
+                // tokens; only a redacted form reaches crash reports.
+                val message = redactServerEventMessage(jsonObject.optString("message", ""))
 
                 // Guard against a single device's hot-looping error from draining the shared
                 // quota by itself: skip re-sending the exact same tag+message within the
@@ -611,9 +773,6 @@ class ShizukuApplication :
                 io.sentry.Sentry.withScope { scope ->
                     scope.setTag("server_side", "true")
                     scope.setTag("server_tag", tag)
-                    if (stackTrace.isNotEmpty()) {
-                        scope.setExtra("stackTrace", stackTrace)
-                    }
                     val event = io.sentry.SentryEvent()
                     event.level = sentryLevel
                     val sentryMessage = io.sentry.protocol.Message()
@@ -648,6 +807,9 @@ class ShizukuApplication :
         // Watchdog setting: tells a new install (Watchdog on at its first server start) from an
         // update (keeps the off an absent setting meant). See decideWatchdogDefaultIfNeeded().
         ShizukuSettings.decideWatchdogDefaultIfNeeded(this)
+        ShizukuSettings.decideLegacyRishKeepaliveDefaultIfNeeded(this)
+        ShizukuSettings.decideSecurityDefaultsIfNeeded(this)
+        ShizukuSettings.clearSeededCustomAppNameOnce()
 
         // 0. Initialize Timber
         if (BuildConfig.DEBUG) {
@@ -661,6 +823,18 @@ class ShizukuApplication :
         // Prewarm root check on a background thread early to avoid main thread delays/ANRs
         af.shizuku.manager.utils.EnvironmentUtils
             .prewarmAsync()
+
+        // Network-aware TCP protection (#518): registers a callback only when enabled.
+        af.shizuku.manager.utils.TcpNetworkGuard
+            .sync(this)
+
+        // Optional floating navigation bar (#498); attaches itself to top-level screens when enabled.
+        af.shizuku.manager.widget.FloatingNavBar
+            .install(this)
+
+        // Retry the startup connection when Wi-Fi returns (opt-in via start on boot).
+        af.shizuku.manager.utils.ReconnectTrigger
+            .install(this)
 
         // 1. Run security check
         if (af.shizuku.manager.security.SecurityGuard
@@ -682,11 +856,6 @@ class ShizukuApplication :
             ShizukuSettings.setSentryLimitReached(false)
             ShizukuSettings.setLastSeenVersion(currentCode)
         }
-
-        // Track the foreground Activity so a crash captured on a background thread can still
-        // find "what was on screen" for SelectiveScreenshotEventProcessor.
-        af.shizuku.manager.utils.ForegroundActivityTracker
-            .register(this)
 
         // 2. Initialize Sentry FIRST to catch all crashes including early startup failures
         initializeSentryEarly()
@@ -743,6 +912,9 @@ class ShizukuApplication :
         try {
             initializeManagers()
             initPeerSettingsSync()
+            if (ShizukuSettings.isAdbProxyEnabled()) {
+                startService(Intent(this, af.shizuku.manager.service.AdbProxyService::class.java))
+            }
         } catch (e: Throwable) {
             Timber.e(e, "Failed to initialize managers")
             Sentry.captureException(e)
@@ -763,35 +935,79 @@ class ShizukuApplication :
 
     private fun initPeerSettingsSync() {
         val prefs = ShizukuSettings.getPreferences() ?: return
-        prefs.registerOnSharedPreferenceChangeListener { _, key ->
-            if (key != null &&
-                key != ShizukuSettings.Keys.KEY_SETTINGS_LAST_MODIFIED &&
-                key != ShizukuSettings.Keys.KEY_PEER_INITIAL_IMPORT_DONE &&
-                key != ShizukuSettings.Keys.KEY_AUTO_SYNC_PEER_SETTINGS
-            ) {
-                af.shizuku.manager.settings.SettingsShareManager
-                    .markSettingsModified()
-                if (af.shizuku.manager.settings.SettingsShareManager
-                        .isAutoSyncEnabled() &&
-                    af.shizuku.manager.settings.SettingsShareManager
-                        .isPeerInstalled(this)
-                ) {
-                    CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+        peerSyncPrefsListener =
+            SharedPreferences
+                .OnSharedPreferenceChangeListener { _, key ->
+                    if (key != null &&
+                        key != ShizukuSettings.Keys.KEY_SETTINGS_LAST_MODIFIED &&
+                        key != ShizukuSettings.Keys.KEY_PEER_INITIAL_IMPORT_DONE &&
+                        key != ShizukuSettings.Keys.KEY_AUTO_SYNC_PEER_SETTINGS
+                    ) {
                         af.shizuku.manager.settings.SettingsShareManager
-                            .exportToPeer(this@ShizukuApplication)
+                            .markSettingsModified()
+                        af.shizuku.manager.utils.SettingsBackupManager
+                            .requestAutoBackup(this@ShizukuApplication)
+                        if (af.shizuku.manager.settings.SettingsShareManager
+                                .isAutoSyncEnabled() &&
+                            af.shizuku.manager.settings.SettingsShareManager
+                                .isPeerInstalled(this)
+                        ) {
+                            appScope.launch {
+                                af.shizuku.manager.settings.SettingsShareManager
+                                    .exportToPeer(this@ShizukuApplication)
+                            }
+                        }
                     }
-                }
-            }
-        }
+                }.also { prefs.registerOnSharedPreferenceChangeListener(it) }
 
-        // On startup: check for initial import or auto-sync in background
-        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+        // On startup: check for initial import or auto-sync and persist current settings backup
+        appScope.launch {
             try {
+                // Past onboarding this install has its own settings: keep its reinstall copy
+                // current even if no screen is opened, and once remove the copies older builds
+                // left in app storage and public Downloads (they held API keys).
+                if (ShizukuSettings.isOnboardingSeen() &&
+                    !af.shizuku.manager.utils.SettingsBackupManager
+                        .isRestoreChecked()
+                ) {
+                    af.shizuku.manager.utils.SettingsBackupManager
+                        .markRestoreChecked()
+                    af.shizuku.manager.update.UpdateInstaller
+                        .deleteAllBackupCopies(this@ShizukuApplication)
+                }
+                af.shizuku.manager.utils.SettingsBackupManager
+                    .saveAutoBackup(this@ShizukuApplication)
                 af.shizuku.manager.settings.SettingsShareManager
                     .checkAndPerformAutoSync(this@ShizukuApplication)
+                // Downloaded update APKs were never removed after installing (~16 MB each).
+                af.shizuku.manager.update
+                    .UpdateManager(this@ShizukuApplication)
+                    .cleanup()
             } catch (e: Exception) {
-                Timber.tag("ShizukuApplication").w(e, "Peer settings initial auto-sync failed")
+                Timber.tag("ShizukuApplication").w(e, "Peer settings initial auto-sync or backup failed")
             }
         }
     }
+}
+
+/**
+ * What of a server log record may go into a crash report: the description before the first ": ",
+ * then the details with package names, paths, key=value pairs and bearer tokens replaced, cut to
+ * a short length. The server logs blocked commands, caller packages and binder descriptors at
+ * WARN and above, and those were forwarded verbatim.
+ */
+internal fun redactServerEventMessage(message: String): String {
+    val split = message.indexOf(": ")
+    val head = if (split >= 0) message.substring(0, split) else message
+    val tail = if (split >= 0) message.substring(split + 2) else ""
+
+    fun redact(text: String) =
+        text
+            .replace(Regex("""(?i)bearer\s+\S+"""), "<token>")
+            .replace(Regex("""\b[\w.-]+=\S+"""), "<redacted>")
+            .replace(Regex("""(?<![\w])/[^\s,;)]+"""), "<path>")
+            .replace(Regex("""\b[a-zA-Z][\w]*(\.[a-zA-Z_][\w]*){2,}\b"""), "<pkg>")
+    val details = redact(tail).take(80)
+    val redactedHead = redact(head).take(120)
+    return if (details.isEmpty()) redactedHead else "$redactedHead: $details"
 }

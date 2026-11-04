@@ -1,13 +1,17 @@
 package af.shizuku.manager.adb
+
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.receiver.ShizukuReceiverStarter
 import af.shizuku.manager.starter.Starter
+import af.shizuku.manager.utils.AppToast
 import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.HeadlessLogger
 import af.shizuku.manager.utils.ManagerActivityLog
+import af.shizuku.manager.utils.NetworkTrust
 import af.shizuku.manager.utils.SettingsPage
 import af.shizuku.manager.utils.ShizukuStateMachine
+import af.shizuku.manager.utils.UserStopFlag
 import android.Manifest.permission.WRITE_SECURE_SETTINGS
 import android.app.Activity
 import android.content.Context
@@ -15,7 +19,6 @@ import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.provider.Settings
 import android.view.ContextThemeWrapper
-import android.widget.Toast
 import androidx.annotation.VisibleForTesting
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.sentry.Sentry
@@ -30,6 +33,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.EOFException
 import java.net.ConnectException
+import java.net.NoRouteToHostException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -79,6 +83,7 @@ object AdbStarter {
             this is SSLException ||
             this is AdbKeyException ||
             this is AdbAuthPendingException ||
+            this is AdbAuthTimeoutException ||
             this is AdbTlsRequiredException ||
             (includeIllegalState && this is IllegalStateException)
 
@@ -86,12 +91,18 @@ object AdbStarter {
      * @param attempt the background start this call belongs to (see [AdbAuthWait.scheduleAttempt]);
      * its authorisation prompt is posted as that attempt's. Ignored when [log] is given: an
      * interactive start reports through its log and posts nothing.
+     * @param host the address to dial first; every other address of this device is tried after it
+     * (see [AdbPortProber.getCandidateHosts]), since adbd does not listen on loopback on every ROM.
+     * @param activityLogMessage the activity-log line for a successful start, when the caller's
+     * route (a direct TCP port, a probe) is worth naming; the default names the port.
      */
     suspend fun startAdb(
         context: Context,
         port: Int,
         log: ((String) -> Unit)? = null,
         attempt: Long = AdbAuthWait.NO_ATTEMPT,
+        host: String = "127.0.0.1",
+        activityLogMessage: String? = null,
         connectedClient: AdbClient? = null,
         /**
          * True only when this start was made by the user's own hand in the app's UI and may ask
@@ -136,7 +147,7 @@ object AdbStarter {
         AdbAuthWait.starts.begin()
         try {
             ShizukuStateMachine.set(ShizukuStateMachine.State.STARTING)
-            Timber.tag(TAG).i("startAdb: initiating connection on port %d", port)
+            Timber.tag(TAG).i("startAdb: initiating connection on %s:%d", host, port)
             log?.invoke("Starting with wireless adb...\n")
 
             withContext(Dispatchers.IO) {
@@ -165,16 +176,25 @@ object AdbStarter {
                 }
 
                 var activePort = port
+                var activeHost = host
                 var retained = connectedClient
                 var retryPin = confirmedPin.takeIf { userGesture }
                 // The requirement covers the discovered connection; tcpip then starts a new adbd key.
                 var discoveryPin = requiredPin
 
-                fun nextClient(): AdbClient {
+                /**
+                 * One connection to adbd on [activeHost]:[activePort]: the discovery session's
+                 * retained client when there is one (its key is checked against the recorded or
+                 * required pin, never re-dialled), otherwise a fresh client per candidate address
+                 * built with this phase's pins, dialled by [connectAdaptive]. [action] runs once,
+                 * on the connected client; its failures are not retried.
+                 */
+                suspend fun dial(action: suspend (client: AdbClient, connectedHost: String) -> Unit) {
                     val connected = retained
                     retained = null
                     val required = discoveryPin
                     discoveryPin = null
+                    val p = activePort
                     if (connected != null) {
                         val recorded = AdbServerPin.store().connectPin
                         val pin = required ?: recorded
@@ -182,36 +202,44 @@ object AdbStarter {
                             val seen = connected.seenPin
                             connected.close()
                             if (pin == null) {
-                                AdbServerPin.pendingPort = activePort
+                                AdbServerPin.pendingPort = p
                                 throw AdbServerPinMissingException(seen)
                             }
                             throw AdbServerCertChangedException(seenPin = seen)
                         }
-                        return connected
+                        connected.use { action(it, activeHost) }
+                        return
                     }
                     val expected = retryPin
                     retryPin = null
-                    return activePort.let { p ->
-                        AdbClient(
-                            "127.0.0.1",
-                            p,
-                            key,
-                            onPending,
-                            allowLegacyAuth = { required == null && isLegacyAuthPort(p) },
-                            pinChangeLog = log,
-                            expectedPin = expected,
-                            requireRecordedPin = activePort == AdbServerPin.pendingPortForCurrentBoot(),
-                            requiredPin = required,
-                        )
-                    }
+                    connectAdaptive(
+                        activeHost,
+                        p,
+                        newClient = { targetHost ->
+                            AdbClient(
+                                targetHost,
+                                p,
+                                key,
+                                onPending,
+                                allowLegacyAuth = { required == null && isLegacyAuthPort(p) },
+                                pinChangeLog = log,
+                                expectedPin = expected,
+                                requireRecordedPin = p == AdbServerPin.pendingPortForCurrentBoot(),
+                                requiredPin = required,
+                            )
+                        },
+                        action = action,
+                    )
                 }
 
-                suspend fun connectUnlessRetained(client: AdbClient) {
-                    if (client !== connectedClient) connectWithRetry(client, activePort)
-                }
-                val tcpMode = ShizukuSettings.getTcpMode()
+                // An untrusted network (#518) must not get a TCP port opened as a side effect of a
+                // Wireless Debugging start, or the protection is undone one step later.
+                val tcpMode = ShizukuSettings.getTcpMode() && !NetworkTrust.shouldBlockTcp(context)
                 val tcpPort = ShizukuSettings.getTcpPort()
-                HeadlessLogger.i(LOG, "start on port $port (tcp_mode=$tcpMode tcp_port=$tcpPort interactive=${log != null} user_gesture=$userGesture confirmed_key=${confirmedPin != null})")
+                HeadlessLogger.i(
+                    LOG,
+                    "start on $host:$port (tcp_mode=$tcpMode tcp_port=$tcpPort interactive=${log != null} user_gesture=$userGesture confirmed_key=${confirmedPin != null})",
+                )
                 if (tcpMode && activePort != tcpPort) {
                     if (tcpPort !in 1..65535) {
                         Timber.tag(TAG).w("TCP mode enabled but stored TCP port is invalid ($tcpPort) — skipping TCP redirect")
@@ -220,13 +248,12 @@ object AdbStarter {
                         Timber.tag(TAG).d("Switching ADB from port %d to TCP port %d", activePort, tcpPort)
                         log?.invoke("Connecting on port $activePort...")
 
-                        nextClient().use { client ->
-                            connectUnlessRetained(client)
-
-                            log?.invoke("Successfully connected on port $activePort...")
+                        dial { client, connectedHost ->
+                            log?.invoke("Successfully connected on port $activePort ($connectedHost)...")
                             log?.invoke("\nRestarting in TCP mode port: $tcpPort")
 
                             activePort = tcpPort
+                            activeHost = "127.0.0.1"
                             HeadlessLogger.i(LOG, "connected on $port; switching adbd to tcp port $tcpPort (tcpip)")
                             runCatching {
                                 client.command("tcpip:$activePort")
@@ -235,27 +262,35 @@ object AdbStarter {
                     }
                 }
 
-                Timber.tag(TAG).i("Connecting to ADB daemon at 127.0.0.1:%d", activePort)
+                Timber.tag(TAG).i("Connecting to ADB daemon at %s:%d", activeHost, activePort)
                 log?.invoke("Connecting on port $activePort...")
 
-                nextClient().use { client ->
-                    connectUnlessRetained(client)
-                    Timber.tag(TAG).i("Connected to ADB at 127.0.0.1:%d; deploying starter command", activePort)
-                    HeadlessLogger.i(LOG, "connected on $activePort; running the starter")
+                dial { client, connectedHost ->
+                    Timber.tag(TAG).i("Connected to ADB at %s:%d; deploying starter command", connectedHost, activePort)
+                    HeadlessLogger.i(LOG, "connected on $connectedHost:$activePort; running the starter")
                     log?.invoke("Successfully connected on port $activePort...\n")
                     client.runCommand("shell:${Starter.internalCommand}")
                     runCatching {
                         client.runCommand("shell:cmd appops set ${context.packageName} ACCESS_RESTRICTED_SETTINGS allow")
                         client.runCommand("shell:pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS")
                     }.onFailure { Timber.tag(TAG).w(it, "Failed to auto-elevate privileges on ADB start") }
+                    // The TCP port outlives a USB disconnect only if adbd's properties name it.
+                    if (tcpMode || ShizukuSettings.isOnDeviceAdbTcpEnabled()) {
+                        val desiredTcpPort = if (tcpMode) ShizukuSettings.getTcpPort().takeIf { it in 1..65535 } ?: 5555 else 5555
+                        runCatching {
+                            client.runCommand("shell:setprop service.adb.tcp.port $desiredTcpPort")
+                            client.runCommand("shell:setprop persist.adb.tcp.port $desiredTcpPort")
+                        }.onFailure { Timber.tag(TAG).w(it, "Failed to persist TCP properties on ADB start") }
+                    }
                     // A port found by the loopback scan is not saved: the next first attempt dials the
                     // saved port with an ordinary client, and only mDNS or a TCP port should seed it.
                     if (client !== connectedClient) ShizukuSettings.setLastPort(activePort)
                     AdbServerPin.clearPendingPort()
+                    UserStopFlag.clear()
                     AdbAuthWait.clearUnanswered()
-                    ManagerActivityLog.log(context, "Service started via ADB on port $activePort")
+                    ManagerActivityLog.log(context, activityLogMessage ?: "Service started via ADB on port $activePort")
                     ShizukuStateMachine.update()
-                    Timber.tag(TAG).i("Shizuku service started successfully via ADB on port %d", activePort)
+                    Timber.tag(TAG).i("Shizuku service started successfully via ADB on %s:%d", connectedHost, activePort)
                     HeadlessLogger.i(LOG, "starter ran on port $activePort")
                 }
             }
@@ -268,6 +303,11 @@ object AdbStarter {
             }
             Timber.tag(TAG).e(e, "startAdb failed on port %d: %s", port, e.message)
             HeadlessLogger.w(LOG, "failed on port $port: ${HeadlessLogger.brief(e)}")
+            if (e !is CancellationException && !stoodDown) {
+                runCatching {
+                    ManagerActivityLog.log(context, "Connection: ADB start failed on port $port (${e.javaClass.simpleName}: ${e.message?.take(80)})")
+                }
+            }
             if (e is SSLException && (e.message?.contains("protocol version") == true || e is javax.net.ssl.SSLProtocolException)) {
                 withContext(Dispatchers.Main) {
                     val activity = context.getActivity()
@@ -282,7 +322,7 @@ object AdbStarter {
                     } else {
                         // Fallback for non-activity context
                         val themedContext = ContextThemeWrapper(context, R.style.AppTheme)
-                        Toast.makeText(themedContext, R.string.adb_error_ssl_message, Toast.LENGTH_LONG).show()
+                        AppToast.show(themedContext, themedContext.getString(R.string.adb_error_ssl_message), long = true)
                     }
                 }
             }
@@ -319,8 +359,11 @@ object AdbStarter {
                 ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPING)
                 val key = AdbKey(PreferenceAdbKeyStore(ShizukuSettings.getPreferences()), "shizuku+")
                 withContext(Dispatchers.IO) {
-                    AdbClient("127.0.0.1", port, key, allowLegacyAuth = { isLegacyAuthPort(port) }).use { client ->
-                        connectWithRetry(client, port)
+                    connectAdaptive(
+                        "127.0.0.1",
+                        port,
+                        newClient = { targetHost -> AdbClient(targetHost, port, key, allowLegacyAuth = { isLegacyAuthPort(port) }) },
+                    ) { client, _ ->
                         client.command("usb:")
                     }
                 }
@@ -328,7 +371,7 @@ object AdbStarter {
         result.onFailure {
             if (it is CancellationException) throw it
             HeadlessLogger.w(LOG, "leaving tcp mode on port $port failed: ${HeadlessLogger.brief(it)}")
-            if (it !is CancellationException && !it.isExpectedAdbError(includeIllegalState = true)) {
+            if (!it.isExpectedAdbError(includeIllegalState = true)) {
                 Sentry.captureException(it)
             }
             if (EnvironmentUtils.getAdbTcpPort() > 0) {
@@ -339,67 +382,96 @@ object AdbStarter {
                             is AdbKeyException -> context.getString(R.string.adb_error_key_store)
                             else -> it.message
                         }
-                    Toast
-                        .makeText(context, context.getString(R.string.adb_error_stop_tcp) + ". ${errorMsg?.take(80)}", Toast.LENGTH_LONG)
-                        .show()
+                    AppToast.show(context, context.getString(R.string.adb_error_stop_tcp) + ". ${errorMsg?.take(80)}", long = true)
                 }
             }
         }
         return result.exceptionOrNull() !is AdbAuthTimeoutException
     }
 
-    private suspend fun connectWithRetry(
-        client: AdbClient,
+    /**
+     * Dials [port] on [preferredHost] and then on this device's other addresses
+     * ([AdbPortProber.getCandidateHosts]), with a backoff between rounds, and runs [action] once on
+     * the first connection that completes. A refused or unroutable address moves on to the next
+     * one at once; any other failure ends the round. [newClient] builds the client for one address,
+     * so each dial starts from a fresh connection with the same pins.
+     */
+    private suspend fun connectAdaptive(
+        preferredHost: String,
         port: Int,
+        newClient: (host: String) -> AdbClient,
+        action: suspend (client: AdbClient, connectedHost: String) -> Unit,
     ) = coroutineScope {
+        val candidateHosts = AdbPortProber.getCandidateHosts(preferredHost)
+        var delayTime = 500L
+        val maxAttempts = 8
+        var lastException: Exception? = null
+        var connected: AdbClient? = null
+        var connectedHost = preferredHost
+
         // connect() blocks in a socket read that coroutine cancellation cannot interrupt, and it can
         // now wait minutes for the authorisation dialog. Close the socket when this scope is
         // cancelled so a cancelled start does not leave a connection (and the AdbAuthWait gate) held.
         val finished = AtomicBoolean(false)
+        var currentClient: AdbClient? = null
         val watcher =
             launch {
                 try {
                     awaitCancellation()
                 } finally {
-                    if (!finished.get()) client.close()
+                    if (!finished.get()) currentClient?.close()
                 }
             }
         try {
-            var delayTime = 500L
-            val maxAttempts = 8
-            for (attempt in 1..maxAttempts) {
-                try {
-                    if (attempt > 1) {
-                        delay(delayTime)
-                        delayTime = (delayTime * 1.5).toLong().coerceAtMost(3000L) // Exponential backoff up to 3s
-                    }
-                    Timber.tag(TAG).d("Connecting to ADB attempt %d/%d (port=%d)", attempt, maxAttempts, port)
-                    client.connect()
-                    Timber.tag(TAG).d("Connected successfully on attempt %d", attempt)
-                    break
-                } catch (e: Exception) {
-                    // A cancelled start closes the socket (see the watcher above), which surfaces
-                    // here as an I/O failure; report it as the cancellation it is.
-                    ensureActive()
-                    Timber.tag(TAG).w(e, "Connection attempt %d/%d failed: %s", attempt, maxAttempts, e.message)
-                    HeadlessLogger.w(LOG, "connect $attempt/$maxAttempts to port $port failed: ${HeadlessLogger.brief(e)}")
-                    if (
-                        attempt == maxAttempts ||
-                        e is CancellationException ||
-                        // Reconnecting would raise another "Allow USB debugging?" dialog.
-                        e is AdbAuthTimeoutException ||
-                        // A CAS loser must stand down, not reconnect: a retry could claim the
-                        // slot the instant its owner releases it and offer a second key, or —
-                        // once the owner's key is accepted — start a second server in parallel.
-                        e is AdbAuthPendingException ||
-                        // The peer would not use TLS on a port that requires it; it will not change.
-                        e is AdbTlsRequiredException ||
-                        e is AdbServerPinException
-                    ) {
-                        throw e
+            attempts@ for (attempt in 1..maxAttempts) {
+                if (attempt > 1) {
+                    delay(delayTime)
+                    delayTime = (delayTime * 1.5).toLong().coerceAtMost(3000L) // Exponential backoff up to 3s
+                }
+                for (targetHost in candidateHosts) {
+                    val client = newClient(targetHost)
+                    currentClient = client
+                    try {
+                        Timber.tag(TAG).d("Connecting to ADB attempt %d/%d (host=%s, port=%d)", attempt, maxAttempts, targetHost, port)
+                        client.connect()
+                        Timber.tag(TAG).d("Connected to ADB at %s:%d on attempt %d", targetHost, port, attempt)
+                        connected = client
+                        connectedHost = targetHost
+                        break@attempts
+                    } catch (e: Exception) {
+                        // A cancelled start closes the socket (see the watcher above), which surfaces
+                        // here as an I/O failure; report it as the cancellation it is.
+                        ensureActive()
+                        client.close()
+                        lastException = e
+                        Timber.tag(TAG).w(e, "Connection attempt %d/%d to %s failed: %s", attempt, maxAttempts, targetHost, e.message)
+                        HeadlessLogger.w(LOG, "connect $attempt/$maxAttempts to $targetHost:$port failed: ${HeadlessLogger.brief(e)}")
+                        if (
+                            e is CancellationException ||
+                            // Reconnecting would raise another "Allow USB debugging?" dialog.
+                            e is AdbAuthTimeoutException ||
+                            // A CAS loser must stand down, not reconnect: a retry could claim the
+                            // slot the instant its owner releases it and offer a second key, or —
+                            // once the owner's key is accepted — start a second server in parallel.
+                            e is AdbAuthPendingException ||
+                            // The peer would not use TLS on a port that requires it; it will not change.
+                            e is AdbTlsRequiredException ||
+                            e is AdbServerPinException
+                        ) {
+                            throw e
+                        }
+                        if (e is ConnectException || e is NoRouteToHostException) {
+                            Timber.tag(TAG).d("Host %s refused port %d, checking alternate interface...", targetHost, port)
+                            continue
+                        }
+                        break
                     }
                 }
             }
+            val client =
+                connected
+                    ?: throw (lastException ?: ConnectException("Could not connect to ADB daemon on port $port across candidate hosts $candidateHosts"))
+            client.use { action(it, connectedHost) }
         } finally {
             finished.set(true)
             watcher.cancel()

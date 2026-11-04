@@ -60,7 +60,7 @@ class SettingsSharingProvider : ContentProvider() {
             }
             METHOD_SET_SETTINGS -> {
                 val json = extras?.getString(EXTRA_SETTINGS_JSON) ?: return null
-                val success = SettingsBackupManager.import(ctx, json)
+                val success = SettingsBackupManager.import(ctx, json, trustPrivileged = true)
                 if (success) {
                     val timestamp = extras.getLong(EXTRA_LAST_MODIFIED, System.currentTimeMillis())
                     ShizukuSettings.setSettingsLastModified(timestamp)

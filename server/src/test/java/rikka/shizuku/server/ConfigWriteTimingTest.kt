@@ -155,6 +155,19 @@ class ConfigWriteTimingTest {
     }
 
     @Test
+    fun `a change that changes nothing is not written`() {
+        storeGrant(APP_UID)
+        val manager = start()
+        advance(BATCH_DELAY)
+        writes.clear()
+
+        manager.update(APP_UID, listOf(packageOf(APP_UID)), ConfigManager.MASK_PERMISSION, ConfigManager.FLAG_ALLOWED)
+        advance(BATCH_DELAY)
+
+        assertTrue(writes.isEmpty())
+    }
+
+    @Test
     fun `changes made together are written once`() {
         val manager = start()
 
@@ -181,6 +194,17 @@ class ConfigWriteTimingTest {
         assertEquals(2, writes.size, "the change made during the first write was left for later")
         assertEquals(ConfigManager.FLAG_DENIED, flagsOf(writes.last(), OTHER_UID))
         assertEquals(ConfigManager.FLAG_ALLOWED, flagsOf(writes.last(), APP_UID))
+    }
+
+    @Test
+    fun `marking the permission migration done is written at once`() {
+        val manager = start()
+
+        manager.markPermGrantMigrationDone()
+        advance(0)
+
+        assertEquals(1, writes.size, "the migration flag was not written at once")
+        assertTrue(writes.single().permGrantMigrationDone)
     }
 
     // --- start-up ------------------------------------------------------------------------------
@@ -412,6 +436,20 @@ class ConfigWriteTimingTest {
         assertEquals(ConfigManager.FLAG_ALLOWED, flagsOf(writes.single(), OTHER_UID))
         assertEquals(ConfigManager.FLAG_DENIED, flagsOf(writes.single(), THIRD_UID))
         assertTrue(queue.isEmpty(), "a write is still waiting after every change was saved")
+    }
+
+    @Test
+    fun `start-up's delayed write that fails is tried again`() {
+        importHolders(10_201)
+        failWrites = 1
+
+        start()
+        advance(BATCH_DELAY)
+        assertTrue(writes.isEmpty())
+        advance(FIRST_RETRY)
+
+        assertEquals(listOf(BATCH_DELAY, BATCH_DELAY + FIRST_RETRY), attempts)
+        assertEquals(ConfigManager.FLAG_ALLOWED, flagsOf(writes.single(), 10_201))
     }
 
     @Test

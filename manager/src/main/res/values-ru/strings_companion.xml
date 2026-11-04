@@ -21,6 +21,5 @@
     <string name="compat_hub_install_signature_conflict">Не удалось установить: другое приложение (например, оригинальный Shizuku) уже установлено как moe.shizuku.privileged.api с несовместимой цифровой подписью. Сначала удалите его.</string>
     <string name="compat_hub_install_fail_storage">Не удалось установить: недостаточно свободного места в памяти устройства.</string>
     <string name="compat_hub_install_fail_abi">Не удалось установить: Compat Hub не поддерживает архитектуру процессора этого устройства.</string>
-    <string name="compat_hub_install_manual_launched">Открытие установщика — следуйте инструкциям на экране для завершения установки.</string>
     <string name="compat_hub_install_fail_newprocess">Ваше устройство ограничивает доступ к API создания процессов Shizuku. Открывается системный установщик — нажмите «Установить» при появлении запроса.</string>
 </resources>

@@ -7,6 +7,7 @@
          canScheduleExactAlarms() if declined/unavailable (see WatchdogAlarmReceiver). -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Normal-protection, auto-granted - declared so HapticFeedbackConstants calls (which
          don't need this on stock AOSP) actually work on OEM skins whose haptics stack routes
@@ -29,6 +30,8 @@
         android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="33" />
+    <!-- Runtime-requested only when the user taps "Trust this network" (#518); needed to read the SSID. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
@@ -36,6 +39,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
 
     <uses-permission
@@ -61,10 +65,12 @@
          package - installing both side by side used to fail with error -126 ("attempting to
          redeclare permission group... already owned by...") (#316). Unlike the permission below,
          nothing outside this manifest references the group name by string, so scoping it is safe. -->
+    <!-- Icons Android shows outside the app (permission screens, the Quick Settings tile, the
+         automation plugin) use the Shizuku+ glyph from ic_notification_icon. -->
     <permission-group
         android:name="${applicationId}.permission-group.API"
         android:description="@string/permission_group_description_plus"
-        android:icon="@drawable/ic_system_icon"
+        android:icon="@drawable/ic_notification_icon"
         android:label="@string/permission_group_label_plus" />
 
     <permission
@@ -78,7 +84,7 @@
     <permission
         android:name="af.shizuku.plus.permission.API_V23"
         android:description="@string/permission_description_plus"
-        android:icon="@drawable/ic_system_icon"
+        android:icon="@drawable/ic_notification_icon"
         android:label="@string/permission_label_plus"
         android:permissionGroup="${applicationId}.permission-group.API"
         android:protectionLevel="dangerous" />
@@ -127,9 +133,10 @@
 
         <meta-data android:name="io.sentry.dsn" android:value="${sentryDsn}" />
         <meta-data android:name="io.sentry.auto-init" android:value="false" />
-        <meta-data android:name="io.sentry.traces-sample-rate" android:value="0.2" />
-        <meta-data android:name="io.sentry.attach-screenshot" android:value="true" />
-        <meta-data android:name="io.sentry.attach-view-hierarchy" android:value="true" />
+        <!-- Matches the manual init in ShizukuApplication: no tracing, no screenshots. -->
+        <meta-data android:name="io.sentry.traces-sample-rate" android:value="0.0" />
+        <meta-data android:name="io.sentry.attach-screenshot" android:value="false" />
+        <meta-data android:name="io.sentry.attach-view-hierarchy" android:value="false" />
 
         <!-- Main launcher activity -->
         <activity
@@ -143,7 +150,95 @@
             android:name=".LauncherAlias"
             android:targetActivity=".MainActivity"
             android:enabled="true"
-            android:exported="true">
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherAliasClassic"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_classic"
+            android:roundIcon="@mipmap/ic_launcher_classic"
+            android:label="@string/app_name_classic">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherAliasSystem"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_system"
+            android:roundIcon="@mipmap/ic_launcher_system"
+            android:label="@string/app_name_system">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherAliasTools"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_tools"
+            android:roundIcon="@mipmap/ic_launcher_tools"
+            android:label="@string/app_name_tools">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherAliasFiles"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_files"
+            android:roundIcon="@mipmap/ic_launcher_files"
+            android:label="@string/app_name_files">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherAliasNotes"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_notes"
+            android:roundIcon="@mipmap/ic_launcher_notes"
+            android:label="@string/app_name_notes">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -249,24 +344,23 @@
             android:name=".shell.ShellTutorialActivity"
             android:exported="false"
             android:label="@string/home_terminal_title" />
+        <!-- Not exported: its extras (port, root, user gesture) are trusted. Other apps start the
+             service through ExternalStartActivity, which passes none of theirs. -->
         <activity
             android:name=".starter.StarterActivity"
             android:exported="false"
             android:label="@string/starter" />
-        <!-- Other apps reach the starter only through this alias, which StarterActivity
-             recognises and for which it ignores the caller-supplied ADB port: connecting to a
-             port chosen by another app would let that app relay adbd's auth challenge and have
-             it signed with this app's authorised key. -->
-        <activity-alias
-            android:name=".starter.ExternalStarterActivity"
+        <activity
+            android:name=".starter.ExternalStartActivity"
             android:exported="true"
-            android:label="@string/starter"
-            android:targetActivity=".starter.StarterActivity">
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
             <intent-filter>
                 <action android:name="af.shizuku.manager.action.START_SERVICE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </activity-alias>
+        </activity>
         <activity
             android:name=".settings.BugReportDialogActivity"
             android:theme="@style/Theme.App.DialogHost"
@@ -379,7 +473,7 @@
         <service
             android:name=".service.ShizukuTileService"
             android:exported="true"
-            android:icon="@drawable/ic_server_ok_24"
+            android:icon="@drawable/ic_notification_icon"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
@@ -429,6 +523,7 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.USER_PRESENT" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
@@ -447,6 +542,14 @@
                 <action android:name="${applicationId}.START" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".receiver.TcpGuardReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".receiver.IssueDismissReceiver"
+            android:exported="false" />
 
         <receiver
             android:name=".receiver.ManualStopReceiver"
@@ -520,8 +623,12 @@
         <receiver
             android:name=".receiver.NotifAttemptReceiver"
             android:exported="false" />
-        <receiver android:name=".receiver.NotifCancelReceiver" />
-        <receiver android:name=".receiver.NotifRestoreReceiver" />
+        <receiver
+            android:name=".receiver.NotifCancelReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".receiver.NotifRestoreReceiver"
+            android:exported="false" />
         <!-- Sent only by the system's network callback (WirelessDebugging.armResume). -->
         <receiver
             android:name=".receiver.WifiRestoreReceiver"
@@ -643,7 +750,7 @@
         <activity
             android:name="af.shizuku.manager.automation.locale.LocaleActionEditActivity"
             android:exported="true"
-            android:icon="@drawable/ic_bolt_24"
+            android:icon="@mipmap/ic_launcher"
             android:label="@string/automation_plugin_action_label"
             android:theme="@style/Theme.App.DialogHost">
             <intent-filter>
@@ -666,7 +773,7 @@
         <activity
             android:name="af.shizuku.manager.automation.locale.LocaleConditionEditActivity"
             android:exported="true"
-            android:icon="@drawable/ic_bolt_24"
+            android:icon="@mipmap/ic_launcher"
             android:label="@string/automation_plugin_condition_label"
             android:theme="@style/Theme.App.DialogHost">
             <intent-filter>
@@ -714,6 +821,18 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
-    </application>
+            <!-- Keeps the manager process reachable while the server runs, so legacy rish clients
+             (MT Manager and other prebuilt rikka/rish loaders) can obtain the binder through the
+             REQUEST_BINDER broadcast. See docs/MT_COMPAT.md. -->
+        <service
+            android:name=".service.LegacyRishKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the Shizuku+ manager process reachable for legacy rish clients (MT Manager) while the privileged server is running." />
+        </service>
+
+</application>
 
 </manifest>

@@ -109,6 +109,66 @@
 
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- KernelSU installed but Shizuku is ADB-mode: prompt to restart as root -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/kernelsu_upgrade_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:visibility="gone"
+            app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerLarge"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp"
+            app:cardBackgroundColor="?attr/colorTertiaryContainer">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_marginEnd="10dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_root_24"
+                        app:tint="?attr/colorOnTertiaryContainer" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/su_bridge_kernelsu_upgrade_title"
+                        android:textAppearance="?textAppearanceTitleSmall"
+                        android:textColor="?attr/colorOnTertiaryContainer" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/su_bridge_kernelsu_upgrade_body"
+                    android:textAppearance="?textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnTertiaryContainer" />
+
+                <androidx.compose.ui.platform.ComposeView
+                    android:id="@+id/btn_kernelsu_restart"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/global_setup_card"
             android:layout_width="match_parent"
@@ -224,7 +284,7 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerExtraLarge"
-            app:cardBackgroundColor="?attr/colorSurfaceContainerLow">
+            app:cardBackgroundColor="?attr/colorSurfaceContainerHigh">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -273,6 +333,59 @@
                     android:layout_marginTop="2dp"
                     android:text="@string/su_bridge_step_4"
                     android:textAppearance="?textAppearanceBodySmall" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Terminal & Environment Setup Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/terminal_setup_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerExtraLarge"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerHigh">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/su_bridge_terminal_profile_title"
+                    android:textAppearance="?textAppearanceTitleMedium"
+                    android:textColor="?attr/colorPrimary" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/su_bridge_terminal_profile_desc"
+                    android:textAppearance="?textAppearanceBodySmall" />
+
+                <TextView
+                    android:id="@+id/termux_command_preview"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="?attr/colorSurfaceContainerHighest"
+                    android:fontFamily="monospace"
+                    android:padding="8dp"
+                    android:text="export PATH=&quot;/data/local/tmp:$PATH&quot;"
+                    android:textAppearance="?textAppearanceLabelMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+
+                <androidx.compose.ui.platform.ComposeView
+                    android:id="@+id/btn_copy_termux_setup"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp" />
 
             </LinearLayout>
 

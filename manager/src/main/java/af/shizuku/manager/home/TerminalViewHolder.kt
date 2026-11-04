@@ -7,10 +7,8 @@ import af.shizuku.manager.ktx.startWithSceneTransition
 import af.shizuku.manager.model.ServiceStatus
 import af.shizuku.manager.shell.ShellTutorialActivity
 import af.shizuku.manager.utils.IconStyleHelper
-import af.shizuku.manager.utils.MotionUtils.applySpringTouch
 import android.content.Intent
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import rikka.core.content.asActivity
@@ -33,23 +31,7 @@ class TerminalViewHolder(
 
     init {
         containerBinding.root.setOnClickListener(this)
-        containerBinding.root.setOnLongClickListener {
-            HomeEditMode.enter()
-            true
-        }
-        containerBinding.root.applySpringTouch()
-        containerBinding.dragHandle.apply {
-            setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_DOWN) {
-                    HomeEditMode.startDragCallback?.invoke(this@TerminalViewHolder)
-                }
-                false
-            }
-            setOnLongClickListener {
-                HomeEditMode.enter()
-                true
-            }
-        }
+        HomeEditMode.bindCardGestures(containerBinding, this)
     }
 
     private inline val summary get() = binding.text2
@@ -60,21 +42,18 @@ class TerminalViewHolder(
         HomeEditMode.applyOverlay(containerBinding)
         IconStyleHelper.applyToCardIcon(binding.icon, originalIcon, "home_terminal")
         if (!data.isRunning) {
-            containerBinding.root.isEnabled = false
             summary.text =
                 context.getString(R.string.home_status_service_not_running, context.getString(R.string.app_name))
         } else {
-            containerBinding.root.isEnabled = true
             summary.text = context.getString(R.string.home_terminal_description)
         }
     }
 
     override fun onClick(v: View) {
+        if (!data.isRunning) return
         val activity = v.context.asActivity<android.app.Activity>() ?: return
         activity.startWithSceneTransition(
             Intent(activity, ShellTutorialActivity::class.java),
-            binding.icon,
-            "icon_terminal",
         )
     }
 }

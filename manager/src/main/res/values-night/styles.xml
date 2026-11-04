@@ -7,6 +7,7 @@
     <!-- Dialog-host activities (transparent window, material dialog on top) use dark
          Material3 tokens in dark mode so dialog surface colors match the system theme. -->
     <style name="Theme.App.DialogHost" parent="Theme.Material3Expressive.Dark.Shizuku">
+        <item name="materialSwitchStyle">@style/Widget.App.MaterialSwitch</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>
@@ -14,6 +15,7 @@
 
     <!-- Permission-request overlay: dark surface in dark mode. -->
     <style name="GrantPermissions" parent="Theme.Material3Expressive.Dark.Shizuku">
+        <item name="materialSwitchStyle">@style/Widget.App.MaterialSwitch</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:colorBackground">?colorBackgroundFloating</item>
         <item name="android:colorBackgroundCacheHint">@null</item>

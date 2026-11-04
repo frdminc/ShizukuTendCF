@@ -257,7 +257,7 @@ for f in glob.glob('manager/src/main/res/values*/*.xml') + glob.glob('core/*/src
         if parent is None and '.' in name:
             implicit.append((f, name))
 # Library prefixes whose styles exist in dependencies, not project res.
-LIB = re.compile(r'^(Theme|ThemeOverlay\.Material3|ShapeAppearance\.(Material3|M3)|Widget|TextAppearance|Base|Platform|Preference|PreferenceThemeOverlay|Animation|MaterialAlertDialog|CollapsingToolbar)([.$]|$)')
+LIB = re.compile(r'^(Theme|ThemeOverlay\.Material3|ShapeAppearance\.(Material3|M3)|Motion(\.Material3|\.M3)?|Widget|TextAppearance|Base|Platform|Preference|PreferenceThemeOverlay|Animation|MaterialAlertDialog|CollapsingToolbar)([.$]|$)')
 for f, name in implicit:
     parent = name.rsplit('.', 1)[0]
     if parent not in defined and not LIB.match(parent) and not LIB.match(name):
@@ -417,7 +417,7 @@ defined = set()
 for f in glob.glob('manager/src/main/res/values*/*.xml') + glob.glob('core/*/src/main/res/values*/*.xml'):
     for m in re.finditer(r'<style\s+name="([^"]+)"', open(f, encoding='utf-8').read()):
         defined.add(m.group(1))
-LIB = re.compile(r'^(Theme|ThemeOverlay\.Material3|ShapeAppearance\.(Material3|M3)|Widget|TextAppearance|Base|Platform|Preference|PreferenceThemeOverlay|Animation|MaterialAlertDialog|CollapsingToolbar)([.$]|$)')
+LIB = re.compile(r'^(Theme|ThemeOverlay\.Material3|ShapeAppearance\.(Material3|M3)|Motion(\.Material3|\.M3)?|Widget|TextAppearance|Base|Platform|Preference|PreferenceThemeOverlay|Animation|MaterialAlertDialog|CollapsingToolbar)([.$]|$)')
 
 missing = []
 for f in glob.glob('manager/src/main/res/**/*.xml', recursive=True) + glob.glob('core/*/src/main/res/**/*.xml', recursive=True):
@@ -440,7 +440,7 @@ fi
 step "Validating Gradle build configuration (dry-run)"
 if [ -n "${SKIP_GRADLE_CHECK:-}" ]; then
     echo -e "${COLOR_YELLOW}SKIP${COLOR_RESET} (SKIP_GRADLE_CHECK set)"
-elif ./gradlew assembleDebug --dry-run >/dev/null 2>&1; then
+elif bash ./gradlew assembleDebug --dry-run >/dev/null 2>&1; then
     echo -e "${COLOR_GREEN}PASS${COLOR_RESET}"
 else
     echo -e "${COLOR_RED}FAIL${COLOR_RESET} (Gradle build configuration failed. Run ./gradlew assembleDebug for details)"

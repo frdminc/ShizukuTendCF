@@ -44,16 +44,19 @@ class ChangelogDialogFragment : BottomSheetDialogFragment() {
         val date: String,
         val body: String,
         val isNew: Boolean = false,
+        val isPrerelease: Boolean = false,
     )
 
     companion object {
         const val TAG = "ChangelogDialogFragment"
         private const val ARG_RELEASES_JSON = "releases_json"
         private const val ARG_TAG_NAME = "tag_name"
+        private const val ARG_STYLE_PICKER = "style_picker"
 
         fun newInstance(
             releases: List<UpdateChecker.ReleaseEntry>,
             currentTagName: String,
+            showStylePicker: Boolean = false,
         ): ChangelogDialogFragment =
             ChangelogDialogFragment().apply {
                 val arr = JSONArray()
@@ -64,6 +67,7 @@ class ChangelogDialogFragment : BottomSheetDialogFragment() {
                             put("date", r.publishedAt)
                             put("body", r.body)
                             put("is_new", r.isNew)
+                            put("is_prerelease", r.isPrerelease)
                         },
                     )
                 }
@@ -71,20 +75,25 @@ class ChangelogDialogFragment : BottomSheetDialogFragment() {
                     Bundle().apply {
                         putString(ARG_RELEASES_JSON, arr.toString())
                         putString(ARG_TAG_NAME, currentTagName)
+                        putBoolean(ARG_STYLE_PICKER, showStylePicker)
                     }
             }
 
-        private val COMMIT_HASH_SUFFIX = Regex("""\s+\([0-9a-f]{7,8}\)$""", RegexOption.MULTILINE)
+        private val COMMIT_HASH_SUFFIX =
+            Regex(
+                """\s+\(\[?[0-9a-f]{7,40}\]?(\([^)]+\))?\)\s*$|\s+\([0-9a-f]{7,40}\)\s*$""",
+                RegexOption.MULTILINE,
+            )
         private val CC_PREFIX =
             Regex(
-                """^(fix|feat|chore|refactor|perf|test|docs|build|ci|style|revert)(\([^)]+\))?:\s*""",
+                """^(fix|feat|chore|refactor|perf|test|docs|build|ci|style|revert|i18n)(\([^)]+\))?!?:\s*""",
                 RegexOption.IGNORE_CASE,
             )
 
         private fun stripConventionalPrefixes(text: String): String =
             text.lines().joinToString("\n") { line ->
                 val bulletEnd =
-                    Regex("""^[-*]\s+""")
+                    Regex("""^[-*•+]\s+""")
                         .find(line)
                         ?.range
                         ?.last
@@ -100,19 +109,106 @@ class ChangelogDialogFragment : BottomSheetDialogFragment() {
                 }
             }
 
-        fun formatNotes(rawNotes: String): String =
-            rawNotes
-                .substringBefore("## 📦 Recent Releases")
-                .replace(COMMIT_HASH_SUFFIX, "")
-                .let { stripConventionalPrefixes(it) }
-                .trim()
+        // README / docs-only bullets are repo housekeeping, not something users care about.
+        private val README_BULLET =
+            Regex("""^\s*[-*•+]\s+.*\breadme(\.md)?\b.*$""", RegexOption.IGNORE_CASE)
+
+        private fun cleanEmptyHeadings(lines: List<String>): List<String> {
+            val result = mutableListOf<String>()
+            for (i in lines.indices) {
+                val line = lines[i]
+                if (Regex("""^#{1,6}\s+""").containsMatchIn(line)) {
+                    var hasContent = false
+                    for (j in (i + 1) until lines.size) {
+                        val next = lines[j].trim()
+                        if (next.isEmpty()) continue
+                        if (Regex("""^#{1,6}\s+""").containsMatchIn(next)) break
+                        hasContent = true
+                        break
+                    }
+                    if (hasContent) {
+                        result.add(line)
+                    }
+                } else {
+                    result.add(line)
+                }
+            }
+            return result
+        }
+
+        fun formatNotes(rawNotes: String): String {
+            if (rawNotes.isBlank()) return ""
+
+            val unwrapped =
+                rawNotes
+                    .replace(Regex("""<details>\s*<summary>(.*?)</summary>""", RegexOption.IGNORE_CASE), "\n\n#### $1\n\n")
+                    .replace(Regex("""</details>""", RegexOption.IGNORE_CASE), "")
+
+            val hasRecentSection = unwrapped.contains("## 📦 Recent Releases")
+            val primary = unwrapped.substringBefore("## 📦 Recent Releases")
+            val recent = if (hasRecentSection) "## 📦 Recent Releases" + unwrapped.substringAfter("## 📦 Recent Releases") else ""
+
+            val pLines = primary.lines().map { COMMIT_HASH_SUFFIX.replace(it, "") }
+            val pFiltered = pLines.filterNot { README_BULLET.matches(it) }.toMutableList()
+
+            // Remove redundant top-level # version header (dialog header already displays it)
+            if (pFiltered.isNotEmpty() && Regex("""^#\s+\S+""").matches(pFiltered.first().trim())) {
+                pFiltered.removeAt(0)
+            }
+
+            val pClean = cleanEmptyHeadings(pFiltered)
+            val hasSubstance =
+                pClean.any { line ->
+                    val trimmed = line.trim()
+                    Regex("""^[-*•+]\s+\S+""").containsMatchIn(trimmed) || (trimmed.isNotEmpty() && !trimmed.startsWith("#"))
+                }
+
+            if (hasSubstance) {
+                val cleanedText = pClean.joinToString("\n").let { stripConventionalPrefixes(it) }.trim()
+                return cleanedText.replace(Regex("""\n{3,}"""), "\n\n")
+            }
+
+            // Fallback: If primary notes had no substantive changes (e.g. docs/maintenance only),
+            // extract the recent release highlights and rollup table from Recent Releases.
+            if (recent.isNotBlank()) {
+                val recLines = recent.lines().filterNot { it.trim() == "## 📦 Recent Releases" }
+                val highlights =
+                    recLines
+                        .filter { l ->
+                            val t = l.trim()
+                            t.startsWith(">") ||
+                                t.startsWith("|") ||
+                                t.startsWith("###") ||
+                                t.startsWith("-") ||
+                                t.startsWith("•") ||
+                                t.startsWith("*")
+                        }.joinToString("\n")
+                        .trim()
+
+                if (highlights.isNotEmpty()) {
+                    return "*Maintenance and stability updates.*\n\n### Recent Highlights\n\n$highlights"
+                }
+            }
+
+            return "*Maintenance and stability updates.*"
+        }
     }
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?,
-    ): View = inflater.inflate(R.layout.dialog_changelog, container, false)
+    ): View =
+        inflater.inflate(
+            if (useTimeline()) R.layout.dialog_changelog_timeline else R.layout.dialog_changelog,
+            container,
+            false,
+        )
+
+    // "Classic" stays the default; the timeline style is opt-in via Settings > Personalization.
+    private fun useTimeline() =
+        af.shizuku.manager.ShizukuSettings
+            .getChangelogStyle() == "timeline"
 
     override fun onViewCreated(
         view: View,
@@ -122,6 +218,12 @@ class ChangelogDialogFragment : BottomSheetDialogFragment() {
 
         val tagName = arguments?.getString(ARG_TAG_NAME) ?: ""
         val releases = parseReleases(arguments?.getString(ARG_RELEASES_JSON))
+
+        bindStylePicker(view)
+        if (useTimeline()) {
+            setupTimeline(view, releases, tagName)
+            return
+        }
 
         var currentSelectedTag = tagName
         val versionText = view.findViewById<TextView>(R.id.version_text)
@@ -215,8 +317,10 @@ class ChangelogDialogFragment : BottomSheetDialogFragment() {
             notesView
                 .animate()
                 .alpha(1f)
-                .setDuration(200L)
-                .setInterpolator(FastOutSlowInInterpolator())
+                .setDuration(
+                    af.shizuku.manager.ShizukuSettings
+                        .scaledAnimationDuration(200L),
+                ).setInterpolator(FastOutSlowInInterpolator())
                 .start()
             notesScroll?.scrollTo(0, 0)
         }
@@ -354,7 +458,17 @@ class ChangelogDialogFragment : BottomSheetDialogFragment() {
             displayRelease(releases.first())
         } else {
             versionText.text = tagName
-            notesView.setText(R.string.changelog_fallback_message)
+            notesView.setText(R.string.changelog_loading)
+            lifecycleScope.launch {
+                val fetched = UpdateChecker.fetchReleaseNotesForTag(tagName)
+                if (isAdded && !isDetached) {
+                    if (fetched != null && fetched.isNotBlank()) {
+                        displayRelease(ReleaseItem(tag = tagName, date = "", body = fetched))
+                    } else {
+                        notesView.setText(R.string.changelog_fallback_message)
+                    }
+                }
+            }
         }
         notesView.movementMethod = LinkMovementMethod.getInstance()
 
@@ -372,9 +486,117 @@ class ChangelogDialogFragment : BottomSheetDialogFragment() {
             }
         }
 
+        view.findViewById<MaterialButton>(R.id.btn_tour)?.setOnClickListener {
+            dismissAllowingStateLoss()
+            val intent =
+                Intent(requireContext(), af.shizuku.manager.onboarding.OnboardingActivity::class.java).apply {
+                    putExtra(af.shizuku.manager.onboarding.OnboardingActivity.EXTRA_NEW_FEATURES_ONLY, true)
+                }
+            startActivity(intent)
+        }
+
         view.findViewById<MaterialButton>(R.id.btn_close).setOnClickListener {
             dismissAllowingStateLoss()
         }
+    }
+
+    /**
+     * First-run chooser shown inside What's New for returning users: picking a style re-renders the
+     * real changelog in it straight away, so the choice is a live preview rather than a guess.
+     */
+    private fun bindStylePicker(view: View) {
+        val picker = view.findViewById<View>(R.id.style_picker) ?: return
+        if (arguments?.getBoolean(ARG_STYLE_PICKER, false) != true) return
+        picker.visibility = View.VISIBLE
+        val cards =
+            mapOf(
+                "timeline" to picker.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_timeline),
+                "classic" to picker.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_classic),
+            )
+        val current =
+            af.shizuku.manager.ShizukuSettings
+                .getChangelogStyle()
+        cards.forEach { (key, card) ->
+            val on = key == current
+            card.isChecked = on
+            card.strokeColor =
+                com.google.android.material.color.MaterialColors.getColor(
+                    card,
+                    if (on) androidx.appcompat.R.attr.colorPrimary else com.google.android.material.R.attr.colorOutlineVariant,
+                )
+            card.setOnClickListener {
+                if (key ==
+                    af.shizuku.manager.ShizukuSettings
+                        .getChangelogStyle()
+                ) {
+                    return@setOnClickListener
+                }
+                HapticUtils.toggleOn(it)
+                af.shizuku.manager.ShizukuSettings
+                    .setChangelogStyle(key)
+                // Re-inflate the dialog content in the newly chosen style.
+                parentFragmentManager
+                    .beginTransaction()
+                    .detach(this)
+                    .commitNowAllowingStateLoss()
+                parentFragmentManager
+                    .beginTransaction()
+                    .attach(this)
+                    .commitAllowingStateLoss()
+            }
+        }
+        view.findViewById<MaterialButton>(R.id.btn_confirm).setOnClickListener {
+            HapticUtils.success(it)
+            af.shizuku.manager.ShizukuSettings
+                .setChangelogStylePrompted()
+            picker
+                .animate()
+                .alpha(0f)
+                .setDuration(
+                    af.shizuku.manager.ShizukuSettings
+                        .scaledAnimationDuration(200L),
+                ).withEndAction { picker.visibility = View.GONE }
+                .start()
+        }
+    }
+
+    private fun setupTimeline(
+        view: View,
+        releases: List<ReleaseItem>,
+        tagName: String,
+    ) {
+        val controller =
+            af.shizuku.manager.home.changelog
+                .TimelineChangelogController(this, view, releases)
+        controller.setup()
+        view.findViewById<MaterialButton>(R.id.btn_github).setOnClickListener {
+            val tag = controller.selectedTag.ifBlank { tagName }
+            try {
+                startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/thejaustin/ShizukuPlus/releases/tag/$tag")),
+                )
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to open release page for $tag")
+            }
+        }
+        view.findViewById<MaterialButton>(R.id.btn_tour)?.setOnClickListener {
+            dismissAllowingStateLoss()
+            val intent =
+                Intent(requireContext(), af.shizuku.manager.onboarding.OnboardingActivity::class.java).apply {
+                    putExtra(af.shizuku.manager.onboarding.OnboardingActivity.EXTRA_NEW_FEATURES_ONLY, true)
+                }
+            startActivity(intent)
+        }
+        view.findViewById<MaterialButton>(R.id.btn_close).setOnClickListener { dismissAllowingStateLoss() }
+    }
+
+    override fun onDestroyView() {
+        // Closing What's New also retires the one-time style prompt (not on rotation).
+        if (activity?.isChangingConfigurations != true && arguments?.getBoolean(ARG_STYLE_PICKER, false) == true) {
+            af.shizuku.manager.ShizukuSettings
+                .setChangelogStylePrompted()
+        }
+        super.onDestroyView()
     }
 
     override fun onStart() {
@@ -401,6 +623,7 @@ class ChangelogDialogFragment : BottomSheetDialogFragment() {
                         date = obj.optString("date", ""),
                         body = obj.optString("body", ""),
                         isNew = obj.optBoolean("is_new", false),
+                        isPrerelease = obj.optBoolean("is_prerelease", false),
                     )
                 }.filter { it.tag.isNotBlank() }
         } catch (e: Exception) {

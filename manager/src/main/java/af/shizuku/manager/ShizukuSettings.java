@@ -51,6 +51,9 @@ public class ShizukuSettings {
         public static final String KEY_HELP = "help";
         public static final String KEY_REPORT_BUG = "report_bug";
         public static final String KEY_LEGACY_PAIRING = "legacy_pairing";
+        public static final String KEY_NUMERICAL_PAIRING_KEYBOARD = "numerical_pairing_keyboard";
+        public static final String KEY_SWIPE_GESTURES_ENABLED = "swipe_gestures_enabled";
+        public static final String KEY_APPLY_CORNER_ROUNDING_TO_HOME = "apply_corner_rounding_to_home";
 
         // Home screen visibility (Shizuku+ additions)
         public static final String KEY_SHOW_TERMINAL_HOME = "show_terminal_home";
@@ -84,6 +87,8 @@ public class ShizukuSettings {
         public static final String KEY_PACKAGE_GOVERNOR_PLUS_ENABLED = "package_governor_plus_enabled";
         public static final String KEY_DISPLAY_TUNER_PLUS_ENABLED = "display_tuner_plus_enabled";
         public static final String KEY_EXPERIMENTAL_ROOT_COMPAT = "experimental_root_compat";
+        public static final String KEY_UNRESTRICTED_APP_DATA = "unrestricted_app_data_enabled";
+        public static final String KEY_UNRESTRICTED_PERSONAL_DATA = "unrestricted_personal_data_enabled";
         public static final String KEY_SPOOF_DEVICE_ENABLED = "spoof_device_enabled";
         public static final String KEY_SPOOF_TARGET = "spoof_target";
         public static final String KEY_VECTOR_ENABLED = "vector_enabled";
@@ -111,6 +116,7 @@ public class ShizukuSettings {
         public static final String KEY_CUSTOM_APP_LABEL = "custom_app_label";
         public static final String KEY_ON_DEVICE_ADB_TCP = "on_device_adb_tcp";
         public static final String KEY_FORCE_START_WADB = "force_start_wadb";
+        public static final String KEY_USB_PHONE_SWITCH_NOTIFY = "usb_phone_switch_notify";
         public static final String KEY_SU_BRIDGE_ENABLED = "su_bridge_enabled";
         public static final String KEY_ROOT_MAGISK_MOCKING_ENABLED = "root_magisk_mocking_enabled";
         public static final String KEY_ROOT_AUTO_GRANT_ENABLED = "root_auto_grant_enabled";
@@ -138,6 +144,7 @@ public class ShizukuSettings {
         // Swipe action preferences (Shizuku+ additions)
         public static final String KEY_SWIPE_RIGHT_ACTION = "swipe_right_action";
         public static final String KEY_SWIPE_LEFT_ACTION = "swipe_left_action";
+        public static final String KEY_SWIPE_SETTINGS_SANDBOX = "swipe_settings_sandbox";
 
         // APK verification API keys (Shizuku+ additions)
         public static final String KEY_VIRUSTOTAL_API_KEY = "virustotal_api_key";
@@ -151,6 +158,7 @@ public class ShizukuSettings {
         public static final String KEY_EXPRESSIVE_SHAPES = "expressive_shapes";
         public static final String KEY_SENTRY_LIMIT_REACHED = "sentry_limit_reached";
         public static final String KEY_EXPRESSIVE_ANIMATIONS = "expressive_animations";
+        public static final String KEY_CHANGELOG_STYLE = "changelog_style";
         public static final String KEY_HAPTIC_FEEDBACK = "haptic_feedback";
         public static final String KEY_ICON_STYLE = "icon_style";
         public static final String KEY_ICON_COLOR_MODE = "icon_color_mode";
@@ -167,6 +175,48 @@ public class ShizukuSettings {
         public static final String KEY_FOLLOW_SYSTEM_ANIMATIONS = "follow_system_animations";
         public static final String KEY_FOLLOW_SYSTEM_HAPTICS = "follow_system_haptics";
 
+        // Management cache (Shizuku+ additions)
+        public static final String KEY_LAST_GRANTED_APP_COUNT = "last_granted_app_count";
+        public static final String KEY_SHOW_ADVANCED_SETTINGS = "show_advanced_settings";
+        public static final String KEY_DOCTOR_ADAPTIVE_AUTO_HEAL = "doctor_adaptive_auto_heal";
+        public static final String KEY_DOCTOR_HEAL_PAIRING_HELPER = "doctor_heal_pairing_helper";
+        public static final String KEY_WATCHDOG_AUTO_RESTART = "watchdog_auto_restart";
+        public static final String KEY_TOASTS_OVER_OTHER_APPS = "toasts_over_other_apps";
+        public static final String KEY_PROBLEMS_ON_HOME = "problems_on_home";
+        public static final String KEY_DOCTOR_REPORT_FAILED_FIXES = "doctor_report_failed_fixes";
+        public static final String KEY_FLOATING_NAV_BAR_ENABLED = "floating_nav_enabled";
+        public static final String KEY_HIDE_LAUNCHER_ICON = "hide_launcher_icon";
+        public static final String KEY_APP_ICON_ALIAS = "app_icon_alias";
+        public static final String KEY_SHOW_HOME_CARDS_OUTLINE = "show_home_cards_outline";
+        public static final String KEY_DEV_OPTIONS_UNLOCKED = "dev_options_unlocked";
+        public static final String KEY_CUSTOM_APP_NAME = "custom_app_name";
+        public static final String KEY_CUSTOM_APP_NAME_SEED_CLEARED = "custom_app_name_seed_cleared";
+        public static final String KEY_AICORE_A11Y_USER_ENABLED = "aicore_a11y_user_enabled";
+        public static final String KEY_AICORE_A11Y_INHERITED = "aicore_a11y_inherited";
+        public static final String KEY_ALLOW_AUTOMATION_PLUGIN = "allow_automation_plugin";
+        public static final String KEY_SECURITY_DEFAULTS_DECIDED = "security_defaults_decided";
+        public static final String KEY_FORCE_RESIZABLE_PACKAGES = "force_resizable_packages";
+        public static final String KEY_ADAPTIVE_RECOMMENDATIONS_ENABLED = "adaptive_recommendations_enabled";
+        public static final String KEY_ROOT_TO_ADB_FALLBACK_ENABLED = "root_to_adb_fallback_enabled";
+        public static final String KEY_ADB_LOOPBACK_PROBE_ENABLED = "adb_loopback_probe_enabled";
+        public static final String KEY_SHOW_APP_DESCRIPTIONS = "show_app_descriptions";
+        public static final String KEY_SHOW_PLUS_FEATURE_HINTS = "show_plus_feature_hints";
+        public static final String KEY_DPM_FREEZE_ENABLED = "dpm_freeze_enabled";
+        public static final String KEY_LP_API_SCOPES = "lp_api_scopes";
+        public static final String KEY_LP_SELECT_MULTIPLE = "lp_select_multiple";
+        public static final String KEY_LP_FREEZE_APP = "lp_freeze_app";
+        public static final String KEY_LP_FREEFORM_RESIZE = "lp_freeform_resize";
+        public static final String KEY_CRASH_REPORTING = "crash_reporting_enabled";
+        public static final String KEY_CRASH_REPORTING_ASKED = "crash_reporting_asked";
+        public static final String KEY_EXPERIMENTAL_APP_IDENTITY = "experimental_app_identity";
+        /** Experimental: generated accent schemes + Medium/High contrast schemes (off = released accents). */
+        public static final String KEY_EXPERIMENTAL_COLOR_SCHEMES = "experimental_color_schemes";
+        /** Experimental: M3 shared-axis transitions between screens and settings pages (off = Explode / cuts). */
+        public static final String KEY_EXPERIMENTAL_SCREEN_TRANSITIONS = "experimental_screen_transitions";
+        public static final String KEY_FLOATING_NAV_LABEL_MODE = "floating_nav_label_mode";
+        public static final String KEY_FLOATING_NAV_AUTOHIDE = "floating_nav_autohide";
+        public static final String KEY_HIGH_CONTRAST = "high_contrast_mode";
+
         // Migration (Shizuku+ additions)
         public static final String KEY_MIGRATION_OFFERED = "migration_offered";
         public static final String KEY_HOME_NOTIF_PERMISSION_REQUESTED = "home_notif_permission_requested";
@@ -182,6 +232,7 @@ public class ShizukuSettings {
         public static final String KEY_UPDATE_CHANNEL = "update_channel"; // "stable" or "dev"
         public static final String KEY_LAST_SEEN_VERSION = "last_seen_version";
         public static final String KEY_LAST_SEEN_CHANGELOG_VERSION = "last_seen_changelog_version";
+        public static final String KEY_LAST_SEEN_ONBOARDING_VERSION = "last_seen_onboarding_version";
         public static final String KEY_SERVER_STARTED_BUILD = "server_started_build";
         public static final String KEY_LAST_SETTLED_STATE = "last_settled_shizuku_state";
 
@@ -199,6 +250,13 @@ public class ShizukuSettings {
         public static final String KEY_AUTO_RECONNECT_MDNS = "auto_reconnect_mdns";
         public static final String KEY_STEALTH_MODE = "stealth_mode";
         public static final String KEY_DEVICE_HARDENING_ENABLED = "device_hardening_enabled";
+        public static final String KEY_WATCHDOG_CRASH_ALERTS = "watchdog_crash_alerts";
+        public static final String KEY_HELPER_NOTIFICATIONS = "helper_notifications";
+        public static final String KEY_NOTIFICATION_SYSTEM_ENABLED = "notification_system_enabled";
+        public static final String KEY_LOCK_HOME_LAYOUT = "lock_home_layout";
+        public static final String KEY_PER_APP_DISABLED_SCOPES = "per_app_disabled_scopes";
+        /** Keep the manager process alive while the privileged server runs (legacy rish clients). */
+        public static final String KEY_LEGACY_RISH_KEEPALIVE = "legacy_rish_keepalive";
     }
 
     private static SharedPreferences sPreferences;
@@ -222,6 +280,14 @@ public class ShizukuSettings {
         getPreferences().edit().putInt(Keys.KEY_LAST_SEEN_CHANGELOG_VERSION, versionCode).apply();
     }
 
+    public static int getLastSeenOnboardingVersion() {
+        return getPreferences().getInt(Keys.KEY_LAST_SEEN_ONBOARDING_VERSION, -1);
+    }
+
+    public static void setLastSeenOnboardingVersion(int versionCode) {
+        getPreferences().edit().putInt(Keys.KEY_LAST_SEEN_ONBOARDING_VERSION, versionCode).apply();
+    }
+
     /** versionCode of the app build that started the currently-running privileged server (0 = unknown). */
     public static int getServerStartedBuild() {
         return getPreferences().getInt(Keys.KEY_SERVER_STARTED_BUILD, 0);
@@ -239,12 +305,38 @@ public class ShizukuSettings {
      * default (STOPPED) makes an unexpected death indistinguishable from an intentional stop, so the
      * watchdog's external re-arm (WatchdogAlarmReceiver) never sees a CRASHED transition to act on.
      */
+    /**
+     * The settled state saved by the last process, or null when it was saved before the latest
+     * reboot: a server never survives one, and reading a pre-reboot RUNNING made every boot look
+     * like a crash (a false "dropped unexpectedly", self-healing and a Watchdog restart racing
+     * start on boot).
+     */
     public static String getLastSettledState() {
-        return getPreferences().getString(Keys.KEY_LAST_SETTLED_STATE, null);
+        SharedPreferences p = getPreferences();
+        int savedBoot = p.getInt(KEY_LAST_SETTLED_BOOT, -1);
+        int boot = currentBootCount();
+        if (boot >= 0 && savedBoot != boot) return null;
+        return p.getString(Keys.KEY_LAST_SETTLED_STATE, null);
     }
 
     public static void setLastSettledState(String stateName) {
-        getPreferences().edit().putString(Keys.KEY_LAST_SETTLED_STATE, stateName).apply();
+        getPreferences().edit()
+                .putString(Keys.KEY_LAST_SETTLED_STATE, stateName)
+                .putInt(KEY_LAST_SETTLED_BOOT, currentBootCount())
+                .apply();
+    }
+
+    private static final String KEY_LAST_SETTLED_BOOT = "last_settled_state_boot";
+
+    /** Settings.Global.BOOT_COUNT, or -1 when it can't be read. */
+    private static int currentBootCount() {
+        try {
+            return android.provider.Settings.Global.getInt(
+                    af.shizuku.manager.ShizukuApplication.Companion.getAppContext().getContentResolver(),
+                    android.provider.Settings.Global.BOOT_COUNT, -1);
+        } catch (Throwable t) {
+            return -1;
+        }
     }
 
     public static boolean isSentryLimitReached() {
@@ -268,16 +360,66 @@ public class ShizukuSettings {
         getPreferences().edit().putBoolean(Keys.KEY_HOME_NOTIF_PERMISSION_REQUESTED, requested).apply();
     }
 
+    /** Corners on unless Corner rounding is "sharp" (the legacy Rounded edges key still counts until migrated). */
     public static boolean isRoundedEdgesEnabled() {
-        return getPreferences().getBoolean(Keys.KEY_ROUNDED_EDGES, true);
+        SharedPreferences p = getPreferences();
+        if (p == null) return true;
+        if ("sharp".equals(p.getString(Keys.KEY_CORNER_ROUNDING_OVERRIDE, "default"))) return false;
+        return p.getBoolean(Keys.KEY_ROUNDED_EDGES, true);
     }
 
-    public static void setRoundedEdgesEnabled(boolean enabled) {
-        getPreferences().edit().putBoolean(Keys.KEY_ROUNDED_EDGES, enabled).apply();
+    /**
+     * Folds the old corner settings into the one Corner rounding control: "Rounded edges" off
+     * becomes Corner rounding "sharp", and the per-surface Home / Settings card corner styles are
+     * dropped so every card follows the theme's corners. Runs at start-up and after a settings
+     * restore (old backups bring the legacy keys back).
+     */
+    public static void migrateCornerSettingsIfNeeded() {
+        SharedPreferences p = getPreferences();
+        if (p == null) return;
+        SharedPreferences.Editor e = p.edit();
+        boolean changed = false;
+        if (p.contains(Keys.KEY_ROUNDED_EDGES)) {
+            if (!p.getBoolean(Keys.KEY_ROUNDED_EDGES, true)) {
+                e.putString(Keys.KEY_CORNER_ROUNDING_OVERRIDE, "sharp");
+            }
+            e.remove(Keys.KEY_ROUNDED_EDGES);
+            changed = true;
+        }
+        for (String key : new String[] {"home_card_corner_style", "settings_card_corner_style"}) {
+            if (p.contains(key)) {
+                e.remove(key);
+                changed = true;
+            }
+        }
+        if (changed) e.apply();
     }
 
     public static boolean isExpressiveShapesEnabled() {
         return getPreferences().getBoolean(Keys.KEY_EXPRESSIVE_SHAPES, true);
+    }
+
+    /** "timeline" (default) or "classic". */
+    public static String getChangelogStyle() {
+        return getPreferences().getString(Keys.KEY_CHANGELOG_STYLE, "timeline");
+    }
+
+    public static void setChangelogStyle(String style) {
+        getPreferences().edit().putString(Keys.KEY_CHANGELOG_STYLE, style).apply();
+    }
+
+    /** Whether the one-time "choose your changelog style" prompt has been answered or skipped. */
+    public static boolean isChangelogStylePrompted() {
+        return getPreferences().contains("changelog_style_prompted");
+    }
+
+    public static void setChangelogStylePrompted() {
+        getPreferences().edit().putBoolean("changelog_style_prompted", true).apply();
+    }
+
+    /** True for installs that predate the style prompt: they have finished onboarding or seen a changelog. */
+    public static boolean isReturningUser() {
+        return getPreferences().getBoolean("onboarding_seen", false) || getLastSeenChangelogVersion() != -1;
     }
 
     public static boolean isExpressiveAnimationsEnabled() {
@@ -299,6 +441,42 @@ public class ShizukuSettings {
 
     public static String getIconColorMode() {
         return getPreferences().getString(Keys.KEY_ICON_COLOR_MODE, "uniform");
+    }
+
+    /** M3E morph shape for icon containers ("off" = use the regular shape style). */
+    public static String getIconMorphShape() {
+        SharedPreferences p = getPreferences();
+        return p != null ? p.getString("icon_morph_shape", "off") : "off";
+    }
+
+    /** Switch rows morph their icon container from circle to the chosen shape when turned on. */
+    /** The icon container's shape while a switch is off (and while Shizuku+ is stopped, on Home). */
+    @NonNull
+    public static String getIconMorphOffShape() {
+        SharedPreferences p = getPreferences();
+        String v = p != null ? p.getString("icon_morph_off_shape", "circle") : "circle";
+        return v != null ? v : "circle";
+    }
+
+    /** How the icon container moves between its off and on shapes; Spin by default. */
+    @NonNull
+    public static String getIconMorphMode() {
+        SharedPreferences p = getPreferences();
+        String v = p != null ? p.getString("icon_morph_mode", "spin") : "spin";
+        return v != null ? v : "spin";
+    }
+
+    /** Experimental switch row design: "standard", "icon_switch" or "shape_thumb". */
+    @NonNull
+    public static String getSwitchRowDesign() {
+        SharedPreferences p = getPreferences();
+        String v = p != null ? p.getString("switch_row_design", "standard") : "standard";
+        return v != null ? v : "standard";
+    }
+
+    public static boolean isIconMorphOnToggle() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean("icon_morph_on_toggle", true);
     }
 
     public static String getShapeStyle() {
@@ -325,6 +503,40 @@ public class ShizukuSettings {
         return getPreferences().getBoolean(Keys.KEY_ONE_HANDED_MODE, false);
     }
 
+    /**
+     * Keep the manager process alive while the privileged server is running so that legacy rish
+     * clients (MT Manager 2.x and other apps bundling a prebuilt rikka/rish loader) can always ask
+     * for the server binder through the REQUEST_BINDER broadcast. Those clients only wait a few
+     * hundred milliseconds for the shell socket, so a manager process that an OEM freezer put to
+     * sleep cannot answer in time and the client never gets shell access.
+     *
+     * <p>Default: on for the Drop-In flavor (moe.shizuku.privileged.api, the package legacy
+     * clients look for), off for the Shizuku+ flavor. See docs/MT_COMPAT.md.
+     */
+    public static boolean isLegacyRishKeepaliveEnabled() {
+        return getPreferences().getBoolean(
+            Keys.KEY_LEGACY_RISH_KEEPALIVE, "dropin".equals(BuildConfig.FLAVOR));
+    }
+
+    public static void setLegacyRishKeepaliveEnabled(boolean enabled) {
+        getPreferences().edit().putBoolean(Keys.KEY_LEGACY_RISH_KEEPALIVE, enabled).apply();
+    }
+
+    /**
+     * Persists the per-flavor default once so the settings switch and
+     * {@link #isLegacyRishKeepaliveEnabled()} agree from the first start. Call once at app start.
+     */
+    public static void decideLegacyRishKeepaliveDefaultIfNeeded(Context context) {
+        try {
+            SharedPreferences prefs = getPreferences();
+            if (prefs == null || prefs.contains(Keys.KEY_LEGACY_RISH_KEEPALIVE)) return;
+            prefs.edit()
+                .putBoolean(Keys.KEY_LEGACY_RISH_KEEPALIVE, "dropin".equals(BuildConfig.FLAVOR))
+                .apply();
+        } catch (Exception e) {
+            Timber.w(e, "Legacy rish keep-alive default: could not decide");
+        }
+    }
     public static boolean isBoldTypographyEnabled() {
         return getPreferences().getBoolean(Keys.KEY_BOLD_TYPOGRAPHY, false);
     }
@@ -347,10 +559,19 @@ public class ShizukuSettings {
 
     public static int getAnimationIntensity() {
         try {
-            return Integer.parseInt(getPreferences().getString(Keys.KEY_ANIMATION_INTENSITY, "2"));
-        } catch (NumberFormatException e) {
-            return 2;
+            SharedPreferences prefs = getPreferences();
+            if (prefs == null) return 2;
+            Object raw = prefs.getAll().get(Keys.KEY_ANIMATION_INTENSITY);
+            if (raw instanceof Integer) {
+                return (Integer) raw;
+            } else if (raw instanceof String) {
+                return Integer.parseInt((String) raw);
+            } else if (raw instanceof Number) {
+                return ((Number) raw).intValue();
+            }
+        } catch (Exception ignored) {
         }
+        return 2;
     }
 
     /**
@@ -361,6 +582,14 @@ public class ShizukuSettings {
      * instead, so the app respects the user's system-wide animation speed preference.
      */
     public static float getAnimationDurationScale() {
+        if (!isExpressiveAnimationsEnabled()) {
+            return 0f;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!android.animation.ValueAnimator.areAnimatorsEnabled()) {
+                return 0f;
+            }
+        }
         if (isFollowSystemAnimations() && sContext != null) {
             try {
                 String raw = Settings.Global.getString(
@@ -379,11 +608,19 @@ public class ShizukuSettings {
 
     /** Scales an animation duration (ms) by the current animation-intensity multiplier. */
     public static long scaledAnimationDuration(long baseMs) {
-        return Math.max(1L, (long) (baseMs * getAnimationDurationScale()));
+        float scale = getAnimationDurationScale();
+        if (scale <= 0f) return 0L;
+        return Math.max(1L, (long) (baseMs * scale));
     }
 
     public static SharedPreferences getPreferences() {
         return sPreferences;
+    }
+
+    /** Tests only: replaces the settings store (the one-prompt scenario harness's fake prefs). */
+    @androidx.annotation.VisibleForTesting
+    public static void setPreferencesForTesting(SharedPreferences preferences) {
+        sPreferences = preferences;
     }
 
     @NonNull
@@ -460,6 +697,18 @@ public class ShizukuSettings {
         return getPreferences().getBoolean(Keys.KEY_AUTO_DISABLE_USB_DEBUGGING, false);
     }
 
+    public static boolean isUsbPhoneSwitchNotifyEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_USB_PHONE_SWITCH_NOTIFY, false);
+    }
+
+    public static void setUsbPhoneSwitchNotifyEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) {
+            p.edit().putBoolean(Keys.KEY_USB_PHONE_SWITCH_NOTIFY, enabled).apply();
+        }
+    }
+
     public static String getAuthToken() {
         String authToken = getPreferences().getString("auth_token", null);
         if (authToken == null || authToken.isEmpty()) {
@@ -480,7 +729,12 @@ public class ShizukuSettings {
     }
 
     public static boolean isSamsungSystemUidEscalationEnabled() {
-        return getPreferences().getBoolean(Keys.KEY_SAMSUNG_SYSTEM_UID_ESCALATION_ENABLED, false);
+        // Samsung patched system-UID elevation starting with OneUI 7 (Android 15).
+        // Gate the feature to OneUI <= 6 so it never silently fails on modern Samsung devices.
+        int oneUiVersion = af.shizuku.common.util.EnvironmentUtils.getOneUiVersion();
+        return af.shizuku.common.util.EnvironmentUtils.isSamsung()
+                && (oneUiVersion >= 1 && oneUiVersion <= 6)
+                && getPreferences().getBoolean(Keys.KEY_SAMSUNG_SYSTEM_UID_ESCALATION_ENABLED, false);
     }
 
     public static boolean isSoftwareKeystoreFallbackEnabled() {
@@ -606,6 +860,55 @@ public class ShizukuSettings {
         Keys.KEY_MIGRATED_APPCOMPAT_LOCALES,
         Keys.KEY_LAST_SEEN_VERSION,
     };
+
+    /**
+     * One-time split of the safer defaults between new installs and updates. New installs start
+     * with TCP mode (adbd listening on a network port) and the Tasker/Locale start-stop plugin off;
+     * an update keeps what the earlier defaults gave it (both on), so nobody's setup changes.
+     */
+    public static void decideSecurityDefaultsIfNeeded(Context context) {
+        try {
+            SharedPreferences prefs = getPreferences();
+            if (prefs == null || prefs.getBoolean(Keys.KEY_SECURITY_DEFAULTS_DECIDED, false)) return;
+            boolean existing = isUpgradedInstall(context) || hasEarlierBuildSettings(prefs);
+            SharedPreferences.Editor editor = prefs.edit();
+            if (!prefs.contains(Keys.KEY_TCP_MODE)) editor.putBoolean(Keys.KEY_TCP_MODE, existing);
+            if (!prefs.contains(Keys.KEY_ALLOW_AUTOMATION_PLUGIN)) {
+                editor.putBoolean(Keys.KEY_ALLOW_AUTOMATION_PLUGIN, existing);
+            }
+            editor.putBoolean(Keys.KEY_SECURITY_DEFAULTS_DECIDED, true).apply();
+        } catch (Exception e) {
+            Timber.w(e, "Security defaults: could not decide");
+        }
+    }
+
+    /** Crash reports go to Sentry only after the user said yes (first-run prompt or the setting). */
+    public static boolean isCrashReportingEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_CRASH_REPORTING_ASKED, false)
+                && p.getBoolean(Keys.KEY_CRASH_REPORTING, false);
+    }
+
+    public static boolean isCrashReportingAsked() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_CRASH_REPORTING_ASKED, false);
+    }
+
+    public static void setCrashReportingEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) {
+            p.edit()
+                    .putBoolean(Keys.KEY_CRASH_REPORTING, enabled)
+                    .putBoolean(Keys.KEY_CRASH_REPORTING_ASKED, true)
+                    .apply();
+        }
+    }
+
+    /** Whether Tasker/Locale-compatible apps may start and stop the server through the plugin. */
+    public static boolean isAutomationPluginAllowed() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_ALLOW_AUTOMATION_PLUGIN, false);
+    }
 
     /**
      * The Watchdog is on by default for new installs only. Builds before this one read an absent
@@ -736,12 +1039,107 @@ public class ShizukuSettings {
         return;
     }
 
+    /**
+     * The "Helper notifications" setting: "off", "stopped" (only when Shizuku+ stops or something needs
+     * attention now) or "all". The old "Crash notifications" switch, when turned off, reads as off.
+     */
+    public static String getHelperNotificationLevel() {
+        SharedPreferences p = getPreferences();
+        if (p == null) return "stopped";
+        String level = p.getString(Keys.KEY_HELPER_NOTIFICATIONS, null);
+        if (level != null) return level;
+        return p.getBoolean(Keys.KEY_WATCHDOG_CRASH_ALERTS, true) ? "stopped" : "off";
+    }
+
+    public static void setHelperNotificationLevel(String level) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putString(Keys.KEY_HELPER_NOTIFICATIONS, level).apply();
+    }
+
+    public static boolean isNotificationSystemEnabled() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_NOTIFICATION_SYSTEM_ENABLED, true);
+    }
+
+    public static void setNotificationSystemEnabled(boolean enable) {
+        SharedPreferences p = getPreferences();
+        if (p != null) {
+            p.edit().putBoolean(Keys.KEY_NOTIFICATION_SYSTEM_ENABLED, enable).apply();
+        }
+    }
+
     public static boolean getTcpMode() {
         return getPreferences().getBoolean(Keys.KEY_TCP_MODE, true);
     }
 
     public static void setTcpMode(boolean enable) {
         getPreferences().edit().putBoolean(Keys.KEY_TCP_MODE, enable).apply();
+    }
+
+    public static boolean isDiagnosticsEnabled() {
+        return getPreferences().getBoolean("diagnostics_enabled", true);
+    }
+
+    public static void setDiagnosticsEnabled(boolean enable) {
+        getPreferences().edit().putBoolean("diagnostics_enabled", enable).apply();
+    }
+
+    public static boolean isAdaptiveDoctorAutoHealEnabled() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_DOCTOR_ADAPTIVE_AUTO_HEAL, true);
+    }
+
+    /**
+     * Whether the Watchdog restarts a server that stopped unexpectedly (on by default). Off, it
+     * only keeps its status notification up and reports the stop.
+     */
+    public static boolean isWatchdogAutoRestartEnabled() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_WATCHDOG_AUTO_RESTART, true);
+    }
+
+    /** Whether Home's status card shows the current problem (on by default). */
+    public static boolean isProblemsOnHomeEnabled() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_PROBLEMS_ON_HOME, true);
+    }
+
+    /** Whether short messages may show while another app is open (off by default). */
+    public static boolean isToastsOverOtherAppsEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_TOASTS_OVER_OTHER_APPS, false);
+    }
+
+    /** Whether background self-healing may turn the Pairing Helper back on (off by default). */
+    public static boolean isDoctorHealPairingHelperEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_DOCTOR_HEAL_PAIRING_HELPER, false);
+    }
+
+    public static void setDoctorHealPairingHelperEnabled(boolean enable) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_DOCTOR_HEAL_PAIRING_HELPER, enable).apply();
+    }
+
+    /** Whether fixes background self-healing tried and could not make are reported (off by default). */
+    public static boolean isDoctorReportFailedFixesEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_DOCTOR_REPORT_FAILED_FIXES, false);
+    }
+
+    public static void setDoctorReportFailedFixesEnabled(boolean enable) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_DOCTOR_REPORT_FAILED_FIXES, enable).apply();
+    }
+
+    public static void setAdaptiveDoctorAutoHealEnabled(boolean enable) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_DOCTOR_ADAPTIVE_AUTO_HEAL, enable).apply();
+    }
+
+    public static void setAutoReconnectMdnsEnabled(boolean enable) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_AUTO_RECONNECT_MDNS, enable).apply();
     }
 
     public static int getTcpPort() {
@@ -777,6 +1175,30 @@ public class ShizukuSettings {
         return getPreferences().getBoolean(Keys.KEY_LEGACY_PAIRING, false);
     }
 
+    public static boolean isNumericalPairingKeyboardEnabled() {
+        return getPreferences().getBoolean(Keys.KEY_NUMERICAL_PAIRING_KEYBOARD, true);
+    }
+
+    public static void setNumericalPairingKeyboardEnabled(boolean enabled) {
+        getPreferences().edit().putBoolean(Keys.KEY_NUMERICAL_PAIRING_KEYBOARD, enabled).apply();
+    }
+
+    public static boolean isSwipeGesturesEnabled() {
+        return getPreferences().getBoolean(Keys.KEY_SWIPE_GESTURES_ENABLED, true);
+    }
+
+    public static void setSwipeGesturesEnabled(boolean enabled) {
+        getPreferences().edit().putBoolean(Keys.KEY_SWIPE_GESTURES_ENABLED, enabled).apply();
+    }
+
+    public static boolean isCornerRoundingAppliedToHome() {
+        return getPreferences().getBoolean(Keys.KEY_APPLY_CORNER_ROUNDING_TO_HOME, false);
+    }
+
+    public static void setCornerRoundingAppliedToHome(boolean enabled) {
+        getPreferences().edit().putBoolean(Keys.KEY_APPLY_CORNER_ROUNDING_TO_HOME, enabled).apply();
+    }
+
     @AppCompatDelegate.NightMode
     public static int getNightMode() {
         int defValue = AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
@@ -803,7 +1225,27 @@ public class ShizukuSettings {
 
     public static boolean getLongPressHideFromList() {
         SharedPreferences p = getPreferences();
-        return p == null || p.getBoolean(Keys.KEY_LP_HIDE_FROM_LIST, true);
+        return p != null && p.getBoolean(Keys.KEY_LP_HIDE_FROM_LIST, false);
+    }
+
+    public static boolean getLongPressApiScopes() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_LP_API_SCOPES, true);
+    }
+
+    public static boolean getLongPressSelectMultiple() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_LP_SELECT_MULTIPLE, true);
+    }
+
+    public static boolean getLongPressFreezeApp() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_LP_FREEZE_APP, true);
+    }
+
+    public static boolean getLongPressFreeformResize() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_LP_FREEFORM_RESIZE, false);
     }
 
     public static String getSwipeRightAction() {
@@ -814,6 +1256,12 @@ public class ShizukuSettings {
     public static String getSwipeLeftAction() {
         SharedPreferences p = getPreferences();
         return p == null ? "app_info" : p.getString(Keys.KEY_SWIPE_LEFT_ACTION, "app_info");
+    }
+
+    /** Developer option: Swipe actions settings show a drag-it-yourself sandbox instead of the preview. */
+    public static boolean isSwipeSettingsSandboxEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_SWIPE_SETTINGS_SANDBOX, false);
     }
 
     public static String getVirusTotalApiKey() {
@@ -832,9 +1280,10 @@ public class ShizukuSettings {
         getPreferences().edit().putString(Keys.KEY_PITHUS_API_KEY, key).apply();
     }
 
+    /** The Home activity-log card: its own switch, and logging itself must be on (else it's empty). */
     public static boolean showActivityLogHome() {
         SharedPreferences p = getPreferences();
-        return p == null || p.getBoolean(Keys.KEY_SHOW_ACTIVITY_LOG_HOME, true);
+        return (p == null || p.getBoolean(Keys.KEY_SHOW_ACTIVITY_LOG_HOME, true)) && isActivityLogEnabled();
     }
 
     /** Whether to show a colored outline on the service status card. Default: on. */
@@ -846,6 +1295,26 @@ public class ShizukuSettings {
     public static void setShowStatusCardOutlineEnabled(boolean enabled) {
         SharedPreferences p = getPreferences();
         if (p != null) p.edit().putBoolean(Keys.KEY_SHOW_STATUS_CARD_OUTLINE, enabled).apply();
+    }
+
+    public static boolean isShowHomeCardsOutlineEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_SHOW_HOME_CARDS_OUTLINE, false);
+    }
+
+    public static void setShowHomeCardsOutlineEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_SHOW_HOME_CARDS_OUTLINE, enabled).apply();
+    }
+
+    public static String getAppIconAlias() {
+        SharedPreferences p = getPreferences();
+        return p != null ? p.getString(Keys.KEY_APP_ICON_ALIAS, "default") : "default";
+    }
+
+    public static void setAppIconAlias(String alias) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putString(Keys.KEY_APP_ICON_ALIAS, alias).apply();
     }
 
     /** "material" (default) = theme colorPrimary/colorError; "status" = green/amber/red semantic colors. */
@@ -905,19 +1374,35 @@ public class ShizukuSettings {
         getPreferences().edit().putString(Keys.KEY_REMOTE_DB_LAST_MODIFIED, lastModified).apply();
     }
 
-    public static boolean isAppEnhancementEnabled(String packageName, String enhancementKey) {
+    /** Drops the per-app enhancement toggles (enh_*): they were saved but never read by anything. */
+    public static void clearLegacyEnhancementPrefs() {
         SharedPreferences p = getPreferences();
-        return p != null && p.getBoolean("enh_" + packageName + "_" + enhancementKey, false);
+        if (p == null || p.getBoolean("enh_prefs_cleared", false)) return;
+        SharedPreferences.Editor e = p.edit();
+        for (String key : p.getAll().keySet()) {
+            if (key.startsWith("enh_")) e.remove(key);
+        }
+        e.putBoolean("enh_prefs_cleared", true).apply();
     }
 
-    public static void setAppEnhancementEnabled(String packageName, String enhancementKey, boolean enabled) {
+    public static boolean isOnboardingSeen() {
         SharedPreferences p = getPreferences();
-        if (p != null) p.edit().putBoolean("enh_" + packageName + "_" + enhancementKey, enabled).apply();
+        return p != null && p.getBoolean("onboarding_seen", false);
     }
 
     public static void setOnboardingSeen() {
         SharedPreferences p = getPreferences();
         if (p != null) p.edit().putBoolean("onboarding_seen", true).apply();
+    }
+
+    public static boolean isOnboardingV2Seen() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean("onboarding_v2_seen", false);
+    }
+
+    public static void setOnboardingV2Seen() {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean("onboarding_v2_seen", true).apply();
     }
 
     public static Locale getLocale() {
@@ -1006,6 +1491,48 @@ public class ShizukuSettings {
         return p == null || p.getBoolean(Keys.KEY_AI_CORE_PLUS_ENABLED, true);
     }
 
+    /**
+     * Whether the AICore+ accessibility service has ever been connected on this device, i.e. the
+     * user switched it on through Android's own consent screen. Only then may the self-heal turn it
+     * back on after an OEM disables it; an AICore+ setting that merely defaults to on is not consent.
+     */
+    public static boolean isAICoreAccessibilityUserEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_AICORE_A11Y_USER_ENABLED, false);
+    }
+
+    /**
+     * Records once whether the AICore+ accessibility service was already on when this build first
+     * ran. Builds before it could turn the service on by themselves, so a connection in that
+     * inherited state is not the user's consent. Must run before the service can connect.
+     */
+    public static void recordAICoreAccessibilityBaselineIfNeeded(boolean enabledNow) {
+        SharedPreferences p = getPreferences();
+        if (p != null && !p.contains(Keys.KEY_AICORE_A11Y_INHERITED)) {
+            p.edit().putBoolean(Keys.KEY_AICORE_A11Y_INHERITED, enabledNow).apply();
+        }
+    }
+
+    /** The service was turned off (by the user or an OEM): its next connection is a fresh enable. */
+    public static void clearAICoreAccessibilityInherited() {
+        SharedPreferences p = getPreferences();
+        if (p != null && p.getBoolean(Keys.KEY_AICORE_A11Y_INHERITED, false)) {
+            p.edit().putBoolean(Keys.KEY_AICORE_A11Y_INHERITED, false).apply();
+        }
+    }
+
+    public static boolean isAICoreAccessibilityInherited() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_AICORE_A11Y_INHERITED, false);
+    }
+
+    public static void markAICoreAccessibilityUserEnabled() {
+        SharedPreferences p = getPreferences();
+        if (p != null && !p.getBoolean(Keys.KEY_AICORE_A11Y_USER_ENABLED, false)) {
+            p.edit().putBoolean(Keys.KEY_AICORE_A11Y_USER_ENABLED, true).apply();
+        }
+    }
+
     public static void setAICorePlusEnabled(boolean enabled) {
         SharedPreferences p = getPreferences();
         if (p != null) p.edit().putBoolean(Keys.KEY_AI_CORE_PLUS_ENABLED, enabled).apply();
@@ -1086,11 +1613,63 @@ public class ShizukuSettings {
         return p != null && p.getBoolean(Keys.KEY_BINDER_FIREWALL_ENABLED, false);
     }
 
-    /** Was missing entirely (#435) - NetworkFirewallRule needs to flip this programmatically,
-     *  not just have the user flip it by hand in Settings. */
-    public static void setBinderFirewallEnabled(boolean enabled) {
+    /**
+     * Older versions' NetworkFirewallRule wrote the Binder Firewall switch itself, turning it off
+     * on a trusted network, so a user whose last network was trusted has it stored off. Automation
+     * now leaves the switch alone, which would keep the firewall off everywhere. A trusted-networks
+     * list can only be set while the switch is on, so it is turned back on once for those users.
+     */
+    public static void migrateFirewallAutomationIfNeeded() {
         SharedPreferences p = getPreferences();
-        if (p != null) p.edit().putBoolean(Keys.KEY_BINDER_FIREWALL_ENABLED, enabled).apply();
+        if (p == null || p.getBoolean(KEY_FIREWALL_AUTOMATION_MIGRATED, false)) return;
+        SharedPreferences.Editor e = p.edit().putBoolean(KEY_FIREWALL_AUTOMATION_MIGRATED, true);
+        if (!getTrustedNetworksSet().isEmpty()) e.putBoolean(Keys.KEY_BINDER_FIREWALL_ENABLED, true);
+        e.apply();
+    }
+
+    private static final String KEY_FIREWALL_AUTOMATION_MIGRATED = "firewall_automation_migrated";
+
+    // What automation knows, kept apart from the user's switch so no rule ever rewrites it. In
+    // memory only: AutomationService evaluates the network and foreground app again when it starts.
+    private static volatile boolean onTrustedNetwork = false;
+    @Nullable
+    private static volatile Boolean appFirewallOverride = null;
+
+    /** NetworkFirewallRule: the current Wi-Fi is one the user trusts, so the firewall relaxes. */
+    public static void setOnTrustedNetwork(boolean trusted) {
+        onTrustedNetwork = trusted;
+    }
+
+    public static boolean isOnTrustedNetwork() {
+        return onTrustedNetwork;
+    }
+
+    /** AppSpecificProfileRule: the foreground app's Block/Allow profile, or null for none. */
+    public static void setAppFirewallOverride(@Nullable Boolean enabled) {
+        appFirewallOverride = enabled;
+    }
+
+    @Nullable
+    public static Boolean getAppFirewallOverride() {
+        return appFirewallOverride;
+    }
+
+    /** AutomationService stopped: nothing is watching, so the user's switch applies as set. */
+    public static void clearAutomationFirewallState() {
+        boolean changed = onTrustedNetwork || appFirewallOverride != null;
+        onTrustedNetwork = false;
+        appFirewallOverride = null;
+        if (changed) syncAllPlusFeaturesToServer();
+    }
+
+    /**
+     * The firewall state the server should apply: a foreground app's profile wins, otherwise the
+     * user's switch, relaxed on a trusted network.
+     */
+    public static boolean isBinderFirewallEffective() {
+        Boolean override = appFirewallOverride;
+        if (override != null) return override;
+        return isBinderFirewallEnabled() && !onTrustedNetwork;
     }
 
     public static boolean isBinderLoggingEnabled() {
@@ -1232,6 +1811,26 @@ public class ShizukuSettings {
         if (p != null) p.edit().putBoolean(Keys.KEY_VECTOR_ENABLED, enable).apply();
     }
 
+    public static boolean isDevOptionsUnlocked() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_DEV_OPTIONS_UNLOCKED, false);
+    }
+
+    public static void setDevOptionsUnlocked(boolean unlocked) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_DEV_OPTIONS_UNLOCKED, unlocked).apply();
+    }
+
+    public static boolean isHideLauncherIconEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_HIDE_LAUNCHER_ICON, false);
+    }
+
+    public static void setHideLauncherIconEnabled(boolean hide) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_HIDE_LAUNCHER_ICON, hide).apply();
+    }
+
     public static boolean isExperimentalRootCompatEnabled() {
         SharedPreferences p = getPreferences();
         return p != null && p.getBoolean(Keys.KEY_EXPERIMENTAL_ROOT_COMPAT, false);
@@ -1240,6 +1839,18 @@ public class ShizukuSettings {
     public static void setExperimentalRootCompatEnabled(boolean enable) {
         SharedPreferences p = getPreferences();
         if (p != null) p.edit().putBoolean(Keys.KEY_EXPERIMENTAL_ROOT_COMPAT, enable).apply();
+    }
+
+    // Off by default: third-party apps can't reach other apps' private data (Storage Bridge,
+    // temp-debug, BackupRestorePlus) or personal data and device control until the user opts in.
+    public static boolean isUnrestrictedAppDataEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_UNRESTRICTED_APP_DATA, false);
+    }
+
+    public static boolean isUnrestrictedPersonalDataEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_UNRESTRICTED_PERSONAL_DATA, false);
     }
 
     public static boolean isSpoofDeviceEnabled() {
@@ -1352,7 +1963,9 @@ public class ShizukuSettings {
 
     public static java.util.Set<String> getHiddenHomeCards() {
         SharedPreferences p = getPreferences();
-        return p != null ? p.getStringSet(Keys.KEY_HIDDEN_HOME_CARDS, new java.util.HashSet<>()) : new java.util.HashSet<>();
+        // Default: hide "Learn More" (6) — it's informational onboarding content, not an action.
+        java.util.Set<String> defaultHidden = new java.util.HashSet<>(java.util.Arrays.asList("6"));
+        return p != null ? p.getStringSet(Keys.KEY_HIDDEN_HOME_CARDS, defaultHidden) : defaultHidden;
     }
 
     public static void setHiddenHomeCards(java.util.Set<String> hidden) {
@@ -1403,9 +2016,40 @@ public class ShizukuSettings {
         if (p != null) p.edit().putBoolean(Keys.KEY_HIDE_DISABLED_PLUS_FEATURES, enable).apply();
     }
 
+    // One worker for every sync: requests made while one is queued fold into it.
+    private static final java.util.concurrent.ExecutorService PLUS_SYNC_EXECUTOR =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> new Thread(r, "PlusFeatureSync"));
+    private static final java.util.concurrent.atomic.AtomicBoolean PLUS_SYNC_QUEUED = new java.util.concurrent.atomic.AtomicBoolean(false);
+    // Created on first use, not at class load: plain JVM tests load this class without a Looper.
+    private static volatile android.os.Handler sMainHandler;
+
+    private static android.os.Handler mainHandler() {
+        android.os.Handler h = sMainHandler;
+        if (h == null) {
+            synchronized (ShizukuSettings.class) {
+                if (sMainHandler == null) sMainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+                h = sMainHandler;
+            }
+        }
+        return h;
+    }
+
+    /**
+     * Pushes every Plus flag to the server. Safe to call from a preference change listener:
+     * the read waits until the current main-thread message is done, by which point the new
+     * value has been saved (listeners run before it is).
+     */
     public static void syncAllPlusFeaturesToServer() {
+        if (!PLUS_SYNC_QUEUED.compareAndSet(false, true)) return;
+        mainHandler().post(() -> PLUS_SYNC_EXECUTOR.execute(() -> {
+            PLUS_SYNC_QUEUED.set(false);
+            syncAllPlusFeaturesNow();
+        }));
+    }
+
+    private static void syncAllPlusFeaturesNow() {
         if (!rikka.shizuku.Shizuku.pingBinder()) return;
-        new Thread(() -> {
+        {
             try {
                 android.os.IBinder binder = (android.os.IBinder) rikka.shizuku.Shizuku.getBinder();
                 if (binder == null) return;
@@ -1437,15 +2081,29 @@ public class ShizukuSettings {
                 service.updatePlusFeatureEnabled("root_iptables_mocking", isRootIptablesMockingEnabled());
                 service.updatePlusFeatureEnabled("vector", isVectorEnabled());
                 service.updatePlusFeatureEnabled("experimental_root", isExperimentalRootCompatEnabled());
+                service.updatePlusFeatureEnabled("unrestricted_app_data", isUnrestrictedAppDataEnabled());
+                service.updatePlusFeatureEnabled("unrestricted_personal_data", isUnrestrictedPersonalDataEnabled());
                 service.updatePlusFeatureEnabled("spoof_device", isSpoofDeviceEnabled());
                 service.setPlusSetting("spoof_target", getSpoofTarget());
                 service.updatePlusFeatureEnabled("on_device_adb_tcp", isOnDeviceAdbTcpEnabled());
                 service.updatePlusFeatureEnabled("force_start_wadb", isForceStartWadbEnabled());
                 service.updatePlusFeatureEnabled("enable_activity_log", isActivityLogEnabled());
-                service.updatePlusFeatureEnabled("binder_firewall", isBinderFirewallEnabled());
+                service.updatePlusFeatureEnabled("binder_firewall", isBinderFirewallEffective());
                 service.updatePlusFeatureEnabled("binder_logging", isBinderLoggingEnabled());
                 service.updatePlusFeatureEnabled("shadow_binder", isShadowBinderEnabled());
                 service.setPlusSetting("shadow_hidden_packages", getShadowBinderHiddenPackages());
+                service.setPlusSetting("per_app_disabled_scopes", getPerAppDisabledScopesSerialized());
+                if (isCustomApiEnabled() && isWindowManagerPlusEnabled()) {
+                    try {
+                        af.shizuku.server.IWindowManagerPlus wmPlus = service.getWindowManagerPlus();
+                        if (wmPlus != null) {
+                            for (String pkg : getForceResizablePackages()) {
+                                wmPlus.forceResizable(pkg, true);
+                            }
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
                 service.updatePlusFeatureEnabled("samsung_system_uid_escalation", isSamsungSystemUidEscalationEnabled());
                 service.updatePlusFeatureEnabled("software_keystore_fallback", isSoftwareKeystoreFallbackEnabled());
                 service.updatePlusFeatureEnabled("overlay_fs_proxy", isOverlayFsProxyEnabled());
@@ -1487,7 +2145,7 @@ public class ShizukuSettings {
             } catch (Throwable tr) {
                 Timber.tag("ShizukuSettings").w(tr, "failed to sync plus features");
             }
-        }).start();
+        }
     }
 
     // Auto Update Settings (Shizuku+ additions)
@@ -1670,5 +2328,277 @@ public class ShizukuSettings {
     public static void setSettingsLastModified(long timestamp) {
         SharedPreferences p = getPreferences();
         if (p != null) p.edit().putLong(Keys.KEY_SETTINGS_LAST_MODIFIED, timestamp).apply();
+    }
+
+    public static int getLastGrantedAppCount() {
+        SharedPreferences p = getPreferences();
+        return p != null ? p.getInt(Keys.KEY_LAST_GRANTED_APP_COUNT, -1) : -1;
+    }
+
+    public static void setLastGrantedAppCount(int count) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putInt(Keys.KEY_LAST_GRANTED_APP_COUNT, count).apply();
+    }
+
+    public static boolean isShowAdvancedSettingsEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_SHOW_ADVANCED_SETTINGS, false);
+    }
+
+    public static void setShowAdvancedSettingsEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_SHOW_ADVANCED_SETTINGS, enabled).apply();
+    }
+
+    public static boolean isFloatingNavBarEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_FLOATING_NAV_BAR_ENABLED, false);
+    }
+
+    public static void setFloatingNavBarEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_FLOATING_NAV_BAR_ENABLED, enabled).apply();
+    }
+
+    @NonNull
+    public static String getCustomAppName(Context context) {
+        SharedPreferences p = getPreferences();
+        String custom = p != null ? p.getString(Keys.KEY_CUSTOM_APP_NAME, "") : "";
+        if (custom != null && !custom.trim().isEmpty()) {
+            return custom.trim();
+        }
+        return context != null ? context.getString(R.string.app_name) : "Shizuku+";
+    }
+
+    /**
+     * App icon & name customization (launcher alias, custom name, Icon Studio) is experimental and
+     * hidden behind a Developer options toggle. Defaults to on only for people who already changed
+     * the icon or name, so nobody is left with a camouflaged icon they can no longer switch back.
+     */
+    public static boolean isExperimentalScreenTransitionsEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_EXPERIMENTAL_SCREEN_TRANSITIONS, false);
+    }
+
+    public static boolean isExperimentalColorSchemesEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_EXPERIMENTAL_COLOR_SCHEMES, false);
+    }
+
+    public static boolean isExperimentalAppIdentityEnabled() {
+        SharedPreferences p = getPreferences();
+        if (p == null) return false;
+        if (p.contains(Keys.KEY_EXPERIMENTAL_APP_IDENTITY)) {
+            return p.getBoolean(Keys.KEY_EXPERIMENTAL_APP_IDENTITY, false);
+        }
+        String alias = p.getString(Keys.KEY_APP_ICON_ALIAS, "default");
+        String name = p.getString(Keys.KEY_CUSTOM_APP_NAME, "");
+        return !"default".equals(alias) || (name != null && !name.trim().isEmpty());
+    }
+
+    public static void setExperimentalAppIdentityEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_EXPERIMENTAL_APP_IDENTITY, enabled).apply();
+    }
+
+    /**
+     * One-time cleanup: the Personalization screen used to save this flavor's own name as a
+     * custom name just by being opened, and peer sync carried it to the other flavor (where
+     * Drop-In then showed "Shizuku+"). Clears a stored name equal to either flavor's default.
+     */
+    public static void clearSeededCustomAppNameOnce() {
+        SharedPreferences p = getPreferences();
+        if (p == null || p.getBoolean(Keys.KEY_CUSTOM_APP_NAME_SEED_CLEARED, false)) return;
+        String name = p.getString(Keys.KEY_CUSTOM_APP_NAME, "");
+        SharedPreferences.Editor editor = p.edit().putBoolean(Keys.KEY_CUSTOM_APP_NAME_SEED_CLEARED, true);
+        if (name != null && ("Shizuku+".equals(name.trim()) || "Shizuku".equals(name.trim()))) {
+            editor.remove(Keys.KEY_CUSTOM_APP_NAME);
+        }
+        editor.apply();
+    }
+
+    public static void setCustomAppName(String name) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putString(Keys.KEY_CUSTOM_APP_NAME, name != null ? name.trim() : "").apply();
+    }
+
+    @NonNull
+    public static String getFloatingNavLabelMode() {
+        SharedPreferences p = getPreferences();
+        String mode = p != null ? p.getString(Keys.KEY_FLOATING_NAV_LABEL_MODE, "labeled") : "labeled";
+        return mode != null ? mode : "labeled";
+    }
+
+    public static void setFloatingNavLabelMode(String mode) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putString(Keys.KEY_FLOATING_NAV_LABEL_MODE, mode).apply();
+    }
+
+    public static boolean isFloatingNavAutohideEnabled() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_FLOATING_NAV_AUTOHIDE, true);
+    }
+
+    public static void setFloatingNavAutohideEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_FLOATING_NAV_AUTOHIDE, enabled).apply();
+    }
+
+    public static boolean isHighContrastEnabled() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_HIGH_CONTRAST, false);
+    }
+
+    public static void setHighContrastEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_HIGH_CONTRAST, enabled).apply();
+    }
+
+    public static boolean isHomeLayoutLocked() {
+        SharedPreferences p = getPreferences();
+        return p != null && p.getBoolean(Keys.KEY_LOCK_HOME_LAYOUT, false);
+    }
+
+    public static void setHomeLayoutLocked(boolean locked) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_LOCK_HOME_LAYOUT, locked).apply();
+    }
+
+    @NonNull
+    public static String getPerAppDisabledScopesSerialized() {
+        SharedPreferences p = getPreferences();
+        if (p == null) return "";
+        String val = p.getString(Keys.KEY_PER_APP_DISABLED_SCOPES, "");
+        return val != null ? val : "";
+    }
+
+    @NonNull
+    public static java.util.Set<String> getAppDisabledScopes(String packageName) {
+        java.util.Set<String> result = new java.util.HashSet<>();
+        if (packageName == null || packageName.isEmpty()) return result;
+        String serialized = getPerAppDisabledScopesSerialized();
+        if (serialized.isEmpty()) return result;
+        String prefix = packageName + ":";
+        for (String entry : serialized.split(";")) {
+            if (entry.startsWith(prefix)) {
+                String scopesPart = entry.substring(prefix.length());
+                for (String s : scopesPart.split("\\|")) {
+                    if (!s.trim().isEmpty()) {
+                        result.add(s.trim());
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    public static void setAppDisabledScopes(String packageName, java.util.Set<String> disabledScopes) {
+        if (packageName == null || packageName.isEmpty()) return;
+        SharedPreferences p = getPreferences();
+        if (p == null) return;
+        String serialized = getPerAppDisabledScopesSerialized();
+        java.util.List<String> entries = new java.util.ArrayList<>();
+        String prefix = packageName + ":";
+        if (!serialized.isEmpty()) {
+            for (String entry : serialized.split(";")) {
+                if (!entry.trim().isEmpty() && !entry.startsWith(prefix)) {
+                    entries.add(entry.trim());
+                }
+            }
+        }
+        if (disabledScopes != null && !disabledScopes.isEmpty()) {
+            entries.add(prefix + android.text.TextUtils.join("|", disabledScopes));
+        }
+        String updated = android.text.TextUtils.join(";", entries);
+        p.edit().putString(Keys.KEY_PER_APP_DISABLED_SCOPES, updated).apply();
+        syncAllPlusFeaturesToServer();
+    }
+
+    @NonNull
+    public static java.util.Set<String> getForceResizablePackages() {
+        SharedPreferences p = getPreferences();
+        if (p == null) return new java.util.HashSet<>();
+        java.util.Set<String> stored = p.getStringSet(Keys.KEY_FORCE_RESIZABLE_PACKAGES, null);
+        return stored != null ? new java.util.HashSet<>(stored) : new java.util.HashSet<>();
+    }
+
+    public static boolean isAppForceResizable(String packageName) {
+        if (packageName == null || packageName.isEmpty()) return false;
+        return getForceResizablePackages().contains(packageName);
+    }
+
+    public static void setAppForceResizable(String packageName, boolean enabled) {
+        if (packageName == null || packageName.isEmpty()) return;
+        SharedPreferences p = getPreferences();
+        if (p == null) return;
+        java.util.Set<String> current = getForceResizablePackages();
+        if (enabled) {
+            current.add(packageName);
+        } else {
+            current.remove(packageName);
+        }
+        p.edit().putStringSet(Keys.KEY_FORCE_RESIZABLE_PACKAGES, current).apply();
+    }
+
+    public static boolean isAdaptiveRecommendationsEnabled() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_ADAPTIVE_RECOMMENDATIONS_ENABLED, true);
+    }
+
+    public static void setAdaptiveRecommendationsEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_ADAPTIVE_RECOMMENDATIONS_ENABLED, enabled).apply();
+    }
+
+    public static boolean isRootToAdbFallbackEnabled() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_ROOT_TO_ADB_FALLBACK_ENABLED, true);
+    }
+
+    public static void setRootToAdbFallbackEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_ROOT_TO_ADB_FALLBACK_ENABLED, enabled).apply();
+    }
+
+    public static boolean isAdbLoopbackProbeEnabled() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_ADB_LOOPBACK_PROBE_ENABLED, true);
+    }
+
+    public static void setAdbLoopbackProbeEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_ADB_LOOPBACK_PROBE_ENABLED, enabled).apply();
+    }
+
+    public static boolean isShowAppDescriptionsEnabled() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_SHOW_APP_DESCRIPTIONS, true);
+    }
+
+    public static void setShowAppDescriptionsEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_SHOW_APP_DESCRIPTIONS, enabled).apply();
+    }
+
+    public static boolean isShowPlusFeatureHintsEnabled() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_SHOW_PLUS_FEATURE_HINTS, true);
+    }
+
+    public static void setShowPlusFeatureHintsEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) p.edit().putBoolean(Keys.KEY_SHOW_PLUS_FEATURE_HINTS, enabled).apply();
+    }
+
+    public static boolean isDpmFreezeEnabled() {
+        SharedPreferences p = getPreferences();
+        return p == null || p.getBoolean(Keys.KEY_DPM_FREEZE_ENABLED, true);
+    }
+
+    public static void setDpmFreezeEnabled(boolean enabled) {
+        SharedPreferences p = getPreferences();
+        if (p != null) {
+            p.edit().putBoolean(Keys.KEY_DPM_FREEZE_ENABLED, enabled).apply();
+        }
     }
 }

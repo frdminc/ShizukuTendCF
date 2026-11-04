@@ -21,6 +21,5 @@
     <string name="compat_hub_install_signature_conflict">ไม่สามารถติดตั้งได้: มีแอปอื่น (เช่น Shizuku ดั้งเดิม) ติดตั้งในชื่อ moe.shizuku.privileged.api ไว้อยู่แล้วด้วยลายเซ็นที่ไม่เข้ากัน โปรดถอนการติดตั้งก่อน</string>
     <string name="compat_hub_install_fail_storage">ไม่สามารถติดตั้งได้: พื้นที่จัดเก็บข้อมูลในอุปกรณ์ไม่เพียงพอ</string>
     <string name="compat_hub_install_fail_abi">ไม่สามารถติดตั้งได้: Compat Hub ไม่รองรับสถาปัตยกรรม CPU ของอุปกรณ์นี้</string>
-    <string name="compat_hub_install_manual_launched">กำลังเปิดโปรแกรมติดตั้ง — ทำตามคำแนะนำบนหน้าจอเพื่อติดตั้งให้เสร็จสมบูรณ์</string>
     <string name="compat_hub_install_fail_newprocess">อุปกรณ์ของคุณจำกัด API การสร้างกระบวนการของ Shizuku ระบบจะเปิดโปรแกรมติดตั้งของระบบแทน — แตะติดตั้งเมื่อได้รับแจ้ง</string>
 </resources>

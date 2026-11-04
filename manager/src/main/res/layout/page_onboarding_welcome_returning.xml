@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="36dp"
+        android:paddingBottom="36dp">
+
+        <ImageView
+            android:id="@+id/hero_icon"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:src="@drawable/ic_system_icon"
+            android:layout_marginBottom="16dp"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/text_welcome_returning_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/onboarding_returning_welcome_title"
+            android:textAppearance="?textAppearanceHeadlineMedium"
+            android:textColor="?colorOnSurface"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Status chip: Setup preserved -->
+        <com.google.android.material.chip.Chip
+            android:id="@+id/chip_status_preserved"
+            style="@style/Widget.Material3.Chip.Assist"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/onboarding_returning_status_preserved"
+            app:chipIcon="@drawable/ic_server_ok_24"
+            app:chipIconTint="?colorPrimary"
+            android:clickable="false"
+            android:focusable="false"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/onboarding_returning_welcome_desc"
+            android:textAppearance="?textAppearanceBodyMedium"
+            android:textColor="?colorOnSurfaceVariant"
+            android:gravity="center"
+            android:lineSpacingMultiplier="1.3"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Highlight Card 1: Material 3 Expressive -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_feat_m3e"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerLarge"
+            app:strokeWidth="0dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="?colorSurfaceContainer">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp">
+
+                <ImageView
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/ic_palette_24"
+                    app:tint="?colorPrimary"
+                    android:contentDescription="@null" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_returning_feat_m3e_title"
+                        android:textAppearance="?textAppearanceTitleSmall"
+                        android:textColor="?colorOnSurface" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_returning_feat_m3e_desc"
+                        android:textAppearance="?textAppearanceBodySmall"
+                        android:textColor="?colorOnSurfaceVariant" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Highlight Card 2: Connected Gestures & Action Clouds -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_feat_gestures"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerLarge"
+            app:strokeWidth="0dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="?colorSurfaceContainer">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp">
+
+                <ImageView
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/ic_swipe_24"
+                    app:tint="?colorSecondary"
+                    android:contentDescription="@null" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_returning_feat_gestures_title"
+                        android:textAppearance="?textAppearanceTitleSmall"
+                        android:textColor="?colorOnSurface" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_returning_feat_gestures_desc"
+                        android:textAppearance="?textAppearanceBodySmall"
+                        android:textColor="?colorOnSurfaceVariant" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Highlight Card 3: Adaptive Service Doctor -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_feat_doctor"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerLarge"
+            app:strokeWidth="0dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="?colorSurfaceContainer">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp">
+
+                <ImageView
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/ic_medical_services_24"
+                    app:tint="?colorTertiary"
+                    android:contentDescription="@null" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_returning_feat_doctor_title"
+                        android:textAppearance="?textAppearanceTitleSmall"
+                        android:textColor="?colorOnSurface" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_returning_feat_doctor_desc"
+                        android:textAppearance="?textAppearanceBodySmall"
+                        android:textColor="?colorOnSurfaceVariant" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Highlight Card 4: Modern Layouts & Floating Nav -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_feat_layout_nav"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerLarge"
+            app:strokeWidth="0dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="?colorSurfaceContainer">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp">
+
+                <ImageView
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/ic_smartphone_24"
+                    app:tint="?colorPrimary"
+                    android:contentDescription="@null" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_returning_feat_layout_nav_title"
+                        android:textAppearance="?textAppearanceTitleSmall"
+                        android:textColor="?colorOnSurface" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_returning_feat_layout_nav_desc"
+                        android:textAppearance="?textAppearanceBodySmall"
+                        android:textColor="?colorOnSurfaceVariant" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Highlight Card 5: Enhanced Wireless ADB & Keypad -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_feat_wireless"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            app:shapeAppearanceOverlay="?attr/shapeAppearanceCornerLarge"
+            app:strokeWidth="0dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="?colorSurfaceContainer">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp">
+
+                <ImageView
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/ic_wadb_24"
+                    app:tint="?colorSecondary"
+                    android:contentDescription="@null" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_returning_feat_wireless_title"
+                        android:textAppearance="?textAppearanceTitleSmall"
+                        android:textColor="?colorOnSurface" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_returning_feat_wireless_desc"
+                        android:textAppearance="?textAppearanceBodySmall"
+                        android:textColor="?colorOnSurfaceVariant" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Quick Jump to App Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_jump_to_app"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/onboarding_returning_action_jump"
+            app:icon="@drawable/ic_nav_home_24"
+            app:iconGravity="textStart" />
+
+    </LinearLayout>
+
+</ScrollView>

@@ -3,6 +3,7 @@ package af.shizuku.manager.receiver
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.service.WatchdogService
 import af.shizuku.manager.utils.ShizukuStateMachine
+import af.shizuku.manager.utils.TcpNetworkGuard
 import af.shizuku.manager.worker.WatchdogWorker
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -49,6 +50,8 @@ class WatchdogAlarmReceiver : BroadcastReceiver() {
             }
         }
         ShizukuStateMachine.update()
+        TcpNetworkGuard.sync(context)
+        TcpNetworkGuard.enforce(context)
 
         schedule(context.applicationContext)
     }

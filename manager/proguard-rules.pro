@@ -64,6 +64,18 @@
 -keep class rikka.rish.** { *; }
 -keep class rikka.shizuku.** { *; }
 -keep class af.shizuku.manager.shell.** { *; }
+
+# Legacy rish loaders (MT Manager and other prebuilt rikka/rish clients) hard-code the
+# upstream class name moe.shizuku.manager.shell.Shell and load it reflectively from this
+# APK after the REQUEST_BINDER handshake. The source shim in
+# manager/src/main/java/moe/shizuku/manager/shell/Shell.java forwards to the real
+# af.shizuku.manager.shell.Shell, but R8 would otherwise inline/rename/remove it and the
+# loader would again fail with ClassNotFoundException. Keep the exact class name and the
+# exact main(...) signature both parties agree on. See docs/MT_COMPAT.md.
+-keep class moe.shizuku.manager.shell.Shell {
+    public static void main(java.lang.String[], java.lang.String, android.os.IBinder, android.os.Handler);
+}
+
 -keep class moe.shizuku.server.** { *; }
 -keep class af.shizuku.server.** { *; }
 
@@ -81,12 +93,6 @@
 -keep class af.shizuku.manager.settings.GrayableIconSwitchPreference {
     public <init>(android.content.Context, android.util.AttributeSet);
 }
--keep class af.shizuku.manager.settings.IntegerSimpleMenuPreference {
-    public <init>(android.content.Context, android.util.AttributeSet);
-}
--keep class af.shizuku.manager.settings.HomeLayoutSimulatorPreference {
-    public <init>(android.content.Context, android.util.AttributeSet);
-}
 -keep class af.shizuku.manager.settings.PlusNavPreference {
     public <init>(android.content.Context, android.util.AttributeSet);
 }
@@ -99,6 +105,26 @@
 -keep class af.shizuku.manager.settings.AppPickerPreference {
     public <init>(android.content.Context, android.util.AttributeSet);
 }
+-keep class af.shizuku.manager.settings.WirelessAdbPreference {
+    public <init>(android.content.Context, android.util.AttributeSet);
+}
+-keep class af.shizuku.manager.settings.SegmentedControlPreference {
+    public <init>(android.content.Context, android.util.AttributeSet);
+}
+-keep class af.shizuku.manager.settings.FilterChipPreference {
+    public <init>(android.content.Context, android.util.AttributeSet);
+}
+
+# Blanket guard for all Preference subclasses inflated from XML screens
+-keep class * extends androidx.preference.Preference {
+    public <init>(android.content.Context, android.util.AttributeSet);
+    public <init>(android.content.Context, android.util.AttributeSet, int);
+    public <init>(android.content.Context, android.util.AttributeSet, int, int);
+}
+
+# Koin dependency injection keep rules
+-dontwarn org.koin.**
+-keep class org.koin.** { *; }
 
 # Keep WorkManager workers instantiated by name via reflection.
 # Both RemoteDbSyncWorker and AdbStartWorker must maintain their class names.
@@ -162,6 +188,18 @@
 
 # Custom View subclasses inflated from XML by class name — R8 must not rename or remove them.
 -keep class af.shizuku.manager.utils.EmptyStateView { public <init>(android.content.Context, android.util.AttributeSet); }
+-keep class af.shizuku.manager.home.changelog.TimelineRailView { public <init>(android.content.Context, android.util.AttributeSet); }
+
+# Custom Preference subclasses inflated from XML by class name
+-keep class * extends androidx.preference.Preference {
+    public <init>(android.content.Context, android.util.AttributeSet);
+    public <init>(android.content.Context, android.util.AttributeSet, int);
+    public <init>(android.content.Context, android.util.AttributeSet, int, int);
+}
+
+# Koin dependency injection
+-dontwarn org.koin.**
+-keep class org.koin.** { *; }
 
 -keepattributes RuntimeVisibleAnnotations,RuntimeVisibleParameterAnnotations,AnnotationDefault
 
@@ -187,6 +225,11 @@
 -dontwarn androidx.window.sidecar.**
 
 -allowaccessmodification
-#-repackageclasses rikka.shizuku
+# R8 full mode moves renamed classes into the default package unless told otherwise, and so does
+# the rish dex (shell module). rish starts this APK's Shell in a class loader whose parent holds
+# rish_shizuku.dex, and lookups go to the parent first: a renamed class here that shares a short
+# name with one in the rish dex (all 54 of its names did) resolved to the wrong class, and rish
+# failed with "VerifyError ... not instanceof Throwable" (#626). A package of our own can't clash.
+-repackageclasses af.shizuku.r8
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile

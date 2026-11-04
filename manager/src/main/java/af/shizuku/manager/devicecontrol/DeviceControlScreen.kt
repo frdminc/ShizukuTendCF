@@ -1,12 +1,18 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package af.shizuku.manager.devicecontrol
 
 import af.shizuku.manager.R
+import af.shizuku.manager.widget.AppSwitch
+import af.shizuku.manager.widget.GuardHeightOffset
+import af.shizuku.manager.widget.nonNegative
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -163,9 +169,14 @@ fun DeviceControlScreen(onBackClick: () -> Unit) {
         )
     }
 
+    // M3 app-bar contract: a flexible medium bar that compresses on scroll, title wraps.
+    val appBarScroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    appBarScroll.GuardHeightOffset()
     Scaffold(
+        modifier = Modifier.nestedScroll(appBarScroll.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+            androidx.compose.material3.MediumFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.home_device_control_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
@@ -175,9 +186,11 @@ fun DeviceControlScreen(onBackClick: () -> Unit) {
                         )
                     }
                 },
+                scrollBehavior = appBarScroll,
             )
         },
-    ) { innerPadding ->
+    ) { rawPadding ->
+        val innerPadding = rawPadding.nonNegative()
         if (isLoading) {
             Box(
                 modifier =
@@ -186,7 +199,7 @@ fun DeviceControlScreen(onBackClick: () -> Unit) {
                         .padding(innerPadding),
                 contentAlignment = Alignment.Center,
             ) {
-                CircularProgressIndicator()
+                androidx.compose.material3.LoadingIndicator()
             }
             return@Scaffold
         }
@@ -474,7 +487,7 @@ private fun ControlToggleRow(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        AppSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

@@ -2,13 +2,18 @@ package af.shizuku.manager.settings
 
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
+import af.shizuku.manager.utils.MotionUtils.cancelSpring
+import af.shizuku.manager.utils.MotionUtils.springTo
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.AttributeSet
 import androidx.core.view.ViewCompat
+import androidx.dynamicanimation.animation.SpringAnimation
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceManager
 import androidx.preference.PreferenceViewHolder
+import androidx.preference.TwoStatePreference
 
 class CollapsiblePreferenceCategory
     @JvmOverloads
@@ -17,16 +22,27 @@ class CollapsiblePreferenceCategory
         attrs: AttributeSet? = null,
     ) : PreferenceCategory(context, attrs) {
         private var expanded = false
-        private var isAnimating = false
         var onExpansionChanged: ((Boolean) -> Unit)? = null
 
         private var defaultExpanded = false
         private var collapsible = true
+        val isCollapsible: Boolean get() = collapsible
 
         // Keys of children that are conditionally unavailable (e.g. hidden by an OWNER fragment
         // based on OS version or another setting). Such children must stay hidden even when the
         // category is expanded, and the collapse toggle must not resurrect them.
         private val unavailableChildKeys = mutableSetOf<String>()
+
+        // Refreshes the active-count chip when a child switch is toggled while the category
+        // is collapsed, so the count is never stale the next time the header rebinds.
+        private val childChangeListener =
+            SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                if (!expanded && key != null) {
+                    val childKeys = (0 until preferenceCount).mapNotNull { getPreference(it).key }.toSet()
+                    if (key in childKeys) notifyChanged()
+                }
+            }
+        private var prefListenerRegistered = false
 
         init {
             layoutResource = R.layout.collapsible_preference_category_card
@@ -41,11 +57,19 @@ class CollapsiblePreferenceCategory
             // way back to them.
             expanded = if (collapsible) defaultExpanded else true
             isSelectable = collapsible
+            if (!collapsible) layoutResource = R.layout.preference_section_label
         }
 
         override fun onBindViewHolder(holder: PreferenceViewHolder) {
             super.onBindViewHolder(holder)
 
+            if (!collapsible) {
+                // Plain section label: nothing to toggle, count or decorate.
+                holder.itemView.tag = "section_label"
+                holder.isDividerAllowedAbove = false
+                holder.isDividerAllowedBelow = false
+                return
+            }
             holder.itemView.tag = "category_header"
 
             val cornerStyle = ShizukuSettings.getPreferences().getString("settings_card_corner_style", "global") ?: "global"
@@ -56,34 +80,120 @@ class CollapsiblePreferenceCategory
                     card.radius =
                         when (cornerStyle) {
                             "sharp" -> 0f
-                            "rounded" -> 12f * density
-                            "large" -> 24f * density
+                            "rounded" -> 16f * density
+                            "large" -> 20f * density
                             "squircle" -> 28f * density
-                            "xlarge" -> 36f * density
+                            "xlarge" -> 32f * density
                             else -> card.radius
                         }
                 }
             }
 
+            val (activeCount, totalSwitches) = countActiveSwitches()
+            val ctx = holder.itemView.context
+            val density = ctx.resources.displayMetrics.density
+
+            // M3E icon pill: when a section has active switches, enclose the icon in a filled
+            // colorPrimaryContainer oval so users can scan section state without expanding.
             val iconView = holder.findViewById(android.R.id.icon) as? android.widget.ImageView
             if (iconView != null) {
                 val catIcon = icon
                 if (catIcon != null) {
                     iconView.setImageDrawable(catIcon)
                     iconView.visibility = android.view.View.VISIBLE
+                    val style =
+                        af.shizuku.manager.utils.IconStyleHelper
+                            .current()
+                    if (style == af.shizuku.manager.utils.IconStyleHelper.Style.TWO_TONE && activeCount > 0 && collapsible) {
+                        val bgColor =
+                            com.google.android.material.color.MaterialColors.getColor(
+                                ctx,
+                                com.google.android.material.R.attr.colorPrimaryContainer,
+                                0xFFE8DEF8.toInt(),
+                            )
+                        val fgColor =
+                            com.google.android.material.color.MaterialColors.getColor(
+                                ctx,
+                                com.google.android.material.R.attr.colorOnPrimaryContainer,
+                                0xFF21005D.toInt(),
+                            )
+                        val pill =
+                            android.graphics.drawable.GradientDrawable().apply {
+                                shape = android.graphics.drawable.GradientDrawable.OVAL
+                                setColor(bgColor)
+                            }
+                        val pad = (5 * density).toInt()
+                        iconView.setPadding(pad, pad, pad, pad)
+                        iconView.background = pill
+                        iconView.imageTintList =
+                            android.content.res.ColorStateList
+                                .valueOf(fgColor)
+                    } else {
+                        iconView.setPadding(0, 0, 0, 0)
+                        iconView.background = null
+                        val iconColor =
+                            if (style == af.shizuku.manager.utils.IconStyleHelper.Style.OUTLINED) {
+                                com.google.android.material.color.MaterialColors.getColor(
+                                    ctx,
+                                    com.google.android.material.R.attr.colorOnSurfaceVariant,
+                                    android.graphics.Color.GRAY,
+                                )
+                            } else {
+                                com.google.android.material.color.MaterialColors.getColor(
+                                    ctx,
+                                    androidx.appcompat.R.attr.colorPrimary,
+                                    android.graphics.Color.BLUE,
+                                )
+                            }
+                        iconView.imageTintList =
+                            android.content.res.ColorStateList
+                                .valueOf(iconColor)
+                    }
                 } else {
                     iconView.visibility = android.view.View.GONE
                 }
             }
 
+            // M3E active-count chip: "X / Y on" shown as a rounded pill in the summary row
+            // when the category is collapsed and at least one switch is on — gives users a
+            // live status at a glance without needing to open the section.
             val summaryView = holder.findViewById(android.R.id.summary) as? android.widget.TextView
             if (summaryView != null) {
-                val catSummary = summary
-                if (!catSummary.isNullOrEmpty()) {
-                    summaryView.text = catSummary
-                    summaryView.visibility = android.view.View.VISIBLE
-                } else {
+                if (!collapsible || expanded || activeCount == 0) {
                     summaryView.visibility = android.view.View.GONE
+                    summaryView.background = null
+                    summaryView.setPadding(0, 0, 0, 0)
+                } else {
+                    val chipBgColor =
+                        com.google.android.material.color.MaterialColors.getColor(
+                            ctx,
+                            com.google.android.material.R.attr.colorSecondaryContainer,
+                            0xFFE8DEF8.toInt(),
+                        )
+                    val chipTextColor =
+                        com.google.android.material.color.MaterialColors.getColor(
+                            ctx,
+                            com.google.android.material.R.attr.colorOnSecondaryContainer,
+                            0xFF1D192B.toInt(),
+                        )
+                    val chipBg =
+                        android.graphics.drawable.GradientDrawable().apply {
+                            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                            cornerRadius = 100f * density // fully rounded pill
+                            setColor(chipBgColor)
+                        }
+                    val padH = (7 * density).toInt()
+                    val padV = (2 * density).toInt()
+                    summaryView.background = chipBg
+                    summaryView.setPadding(padH, padV, padH, padV)
+                    summaryView.setTextColor(chipTextColor)
+                    summaryView.text =
+                        if (totalSwitches > 1) {
+                            ctx.getString(R.string.settings_category_active_count, activeCount, totalSwitches)
+                        } else {
+                            ctx.getString(R.string.settings_category_active_single, activeCount)
+                        }
+                    summaryView.visibility = android.view.View.VISIBLE
                 }
             }
 
@@ -100,35 +210,28 @@ class CollapsiblePreferenceCategory
                 arrowContainer?.visibility = android.view.View.VISIBLE
             }
 
-            // Cancel any in-flight animator before snapping to current state on rebind —
-            // otherwise a running ViewPropertyAnimator takes priority over the direct rotation setter
-            // and can leave the arrow pointing the wrong way for the actual expanded state.
-            // ViewPropertyAnimator.cancel() does NOT fire withEndAction, so we must reset isAnimating
-            // manually here — otherwise a mid-animation rebind leaves it stuck at true forever.
-            arrow?.animate()?.cancel()
-            isAnimating = false
+            // Stop a running arrow spring before snapping to the current state on rebind, or it
+            // keeps writing its own rotation over the direct setter.
+            arrow?.cancelSpring(SpringAnimation.ROTATION)
             arrow?.rotation = if (expanded) 180f else 0f
             updateExpandedStateDescription(holder.itemView)
 
             holder.itemView.setOnClickListener {
-                // Guard against fast double-taps: a second tap before the arrow finishes rotating
-                // would flip `expanded` twice and leave the arrow snapped to the wrong angle.
-                if (isAnimating) return@setOnClickListener
-                af.shizuku.manager.utils.HapticUtils
-                    .tap(holder.itemView)
                 expanded = !expanded
+                if (expanded) {
+                    af.shizuku.manager.utils.HapticUtils
+                        .toggleOn(holder.itemView)
+                } else {
+                    af.shizuku.manager.utils.HapticUtils
+                        .toggleOff(holder.itemView)
+                }
                 if (shouldPersist()) persistBoolean(expanded)
-                // Animate arrow with M3E spring-style motion
-                arrow
-                    ?.animate()
-                    ?.rotation(if (expanded) 180f else 0f)
-                    ?.setDuration(
-                        af.shizuku.manager.ShizukuSettings
-                            .scaledAnimationDuration(260),
-                    )?.setInterpolator(android.view.animation.OvershootInterpolator(1.1f))
-                    ?.withStartAction { isAnimating = true }
-                    ?.withEndAction { isAnimating = false }
-                    ?.start()
+                // Arrow rotates on the spatial spring; a quick second tap just retargets it.
+                arrow?.springTo(
+                    SpringAnimation.ROTATION,
+                    if (expanded) 180f else 0f,
+                    com.google.android.material.R.attr.motionSpringDefaultSpatial,
+                )
                 // updateChildren() already notifies the adapter per child via Preference.setVisible();
                 // an additional notifyChanged() here used to schedule a rebind of this same header
                 // ViewHolder mid-animation, which snapped the arrow's rotation back and forth against
@@ -138,6 +241,20 @@ class CollapsiblePreferenceCategory
                 updateExpandedStateDescription(holder.itemView)
                 onExpansionChanged?.invoke(expanded)
             }
+        }
+
+        /** Returns (activeCount, totalSwitchCount) for TwoState (switch/checkbox) direct children. */
+        private fun countActiveSwitches(): Pair<Int, Int> {
+            var active = 0
+            var total = 0
+            for (i in 0 until preferenceCount) {
+                val child = getPreference(i)
+                if (child is TwoStatePreference && !unavailableChildKeys.contains(child.key)) {
+                    total++
+                    if (child.isChecked) active++
+                }
+            }
+            return active to total
         }
 
         /** The rotating arrow is the only visual cue this header is an expand/collapse toggle -
@@ -180,6 +297,35 @@ class CollapsiblePreferenceCategory
                 expanded = getPersistedBoolean(defaultExpanded)
             }
             updateChildren()
+            if (collapsible && !prefListenerRegistered) {
+                preferenceManager.sharedPreferences?.registerOnSharedPreferenceChangeListener(childChangeListener)
+                prefListenerRegistered = true
+            }
+        }
+
+        override fun onPrepareForRemoval() {
+            super.onPrepareForRemoval()
+            if (prefListenerRegistered) {
+                preferenceManager?.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(childChangeListener)
+                prefListenerRegistered = false
+            }
+        }
+
+        override fun onDetached() {
+            super.onDetached()
+            if (prefListenerRegistered) {
+                preferenceManager?.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(childChangeListener)
+                prefListenerRegistered = false
+            }
+        }
+
+        fun expand() {
+            if (!expanded) {
+                expanded = true
+                if (shouldPersist()) persistBoolean(true)
+                updateChildren()
+                notifyChanged()
+            }
         }
 
         override fun addPreference(preference: Preference): Boolean {
@@ -190,3 +336,14 @@ class CollapsiblePreferenceCategory
             return result
         }
     }
+
+/**
+ * Shows/hides a preference in a way a collapsible parent respects. Setting isVisible directly is
+ * undone the next time the category expands (it re-shows every child), which is how hidden rows
+ * like the peer-sync entries came back with their raw "%1$s" XML titles.
+ */
+fun androidx.preference.Preference.setAvailable(available: Boolean) {
+    val category = parent as? CollapsiblePreferenceCategory
+    val k = key
+    if (category != null && k != null) category.setChildAvailable(k, available) else isVisible = available
+}

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shareInterpolator="false">
+    <translate
+        android:fromXDelta="0"
+        android:toXDelta="12%p"
+        android:duration="240"
+        android:interpolator="@interpolator/m3e_emphasized_accelerate" />
+    <alpha
+        android:fromAlpha="1"
+        android:toAlpha="0"
+        android:duration="150"
+        android:interpolator="@interpolator/m3e_emphasized_accelerate" />
+</set>

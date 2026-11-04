@@ -4,15 +4,13 @@ import af.shizuku.manager.home.ChangelogDialogFragment
 import af.shizuku.manager.home.HomeActivity
 import af.shizuku.manager.update.UpdateChecker
 import af.shizuku.manager.utils.ShizukuStateMachine
+import android.content.Intent
 import android.os.Bundle
-import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.sentry.Breadcrumb
 import io.sentry.Sentry
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 class MainActivity : HomeActivity() {
@@ -32,16 +30,49 @@ class MainActivity : HomeActivity() {
                 }
             }
 
-            Timber.d("Checking onboarding status")
-            Sentry.addBreadcrumb(Breadcrumb("Checking onboarding status"))
+            // Auto-restore settings if a force-update or migration backup exists before checking onboarding
+            markRestoreCheckedForExistingInstall()
 
-            // Auto-restore settings if a force-update backup exists
-            checkAndRestoreBackup()
+            val currentCode =
+                try {
+                    packageManager.getPackageInfo(packageName, 0).versionCode
+                } catch (_: Exception) {
+                    BuildConfig.VERSION_CODE
+                }
+            val lastSeenOnboardingVersion = ShizukuSettings.getLastSeenOnboardingVersion()
+
+            Timber.d("Checking onboarding status: lastSeen=$lastSeenOnboardingVersion, current=$currentCode")
+            Sentry.addBreadcrumb(Breadcrumb("Checking onboarding status: lastSeen=$lastSeenOnboardingVersion, current=$currentCode"))
+            if (!ShizukuSettings.isOnboardingSeen()) {
+                val intent = Intent(this, af.shizuku.manager.onboarding.OnboardingActivity::class.java)
+                val isExistingUser =
+                    ShizukuSettings.isReturningUser() ||
+                        ShizukuSettings.getLastSeenChangelogVersion() != -1 ||
+                        ShizukuSettings.getLastLaunchMode() != ShizukuSettings.LaunchMethod.UNKNOWN ||
+                        ShizukuStateMachine.isRunning()
+                if (isExistingUser) {
+                    intent.putExtra(af.shizuku.manager.onboarding.OnboardingActivity.EXTRA_NEW_FEATURES_ONLY, true)
+                    intent.putExtra(af.shizuku.manager.onboarding.OnboardingActivity.EXTRA_SINCE_VERSION_CODE, lastSeenOnboardingVersion)
+                }
+                startActivity(intent)
+                finish()
+                return
+            } else if (lastSeenOnboardingVersion < currentCode) {
+                // Existing user updated to a newer version: show new features added since last update
+                val intent =
+                    Intent(this, af.shizuku.manager.onboarding.OnboardingActivity::class.java).apply {
+                        putExtra(af.shizuku.manager.onboarding.OnboardingActivity.EXTRA_NEW_FEATURES_ONLY, true)
+                        putExtra(af.shizuku.manager.onboarding.OnboardingActivity.EXTRA_SINCE_VERSION_CODE, lastSeenOnboardingVersion)
+                    }
+                startActivity(intent)
+                finish()
+                return
+            }
 
             // Show what's new after an update. Separate from the Sentry-quota-reset version
             // tracking in ShizukuApplication.onCreate() — that one bumps its own flag before any
             // Activity runs, so this needs its own last-seen key or it would never see an advance.
-            checkAndShowChangelog()
+            maybePromptChangelogStyle()
 
             Timber.d("MainActivity onCreate complete")
             Sentry.addBreadcrumb(Breadcrumb("MainActivity onCreate complete"))
@@ -69,28 +100,17 @@ class MainActivity : HomeActivity() {
         }
     }
 
-    private fun checkAndRestoreBackup() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            val backupFile =
-                af.shizuku.manager.update.UpdateInstaller
-                    .getBackupFile(this@MainActivity)
-            if (backupFile != null && backupFile.exists()) {
-                try {
-                    val json = backupFile.readText()
-                    if (af.shizuku.manager.utils.SettingsBackupManager
-                            .import(this@MainActivity, json)
-                    ) {
-                        Timber.i("Successfully auto-restored settings from force-update backup")
-                        backupFile.delete()
-                        // Notify user or refresh UI if needed
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(this@MainActivity, R.string.migration_success_message, Toast.LENGTH_LONG).show()
-                        }
-                    }
-                } catch (e: Exception) {
-                    Timber.e(e, "Failed to auto-restore settings")
-                }
-            }
+    // Restoring a backup is the user's choice, made on the onboarding welcome page. An install
+    // past onboarding already has its own settings: mark it so its reinstall copy is kept current.
+    private fun markRestoreCheckedForExistingInstall() {
+        if (ShizukuSettings.isOnboardingSeen() &&
+            !af.shizuku.manager.utils.SettingsBackupManager
+                .isRestoreChecked()
+        ) {
+            af.shizuku.manager.utils.SettingsBackupManager
+                .markRestoreChecked()
+            af.shizuku.manager.update.UpdateInstaller
+                .deleteAllBackupCopies(this)
         }
     }
 
@@ -100,7 +120,23 @@ class MainActivity : HomeActivity() {
      *
      * Supports both the new "r{N}" tag format and the legacy "v{semver}.r{N}" format.
      */
-    private fun checkAndShowChangelog() {
+
+    /**
+     * Returning users see the style chooser inside What's New once (forcing the dialog open even
+     * without a version bump); fresh installs just get the default.
+     */
+    private fun maybePromptChangelogStyle() {
+        if (ShizukuSettings.isChangelogStylePrompted()) {
+            checkAndShowChangelog()
+            return
+        }
+        if (!ShizukuSettings.isReturningUser()) {
+            ShizukuSettings.setChangelogStylePrompted()
+        }
+        checkAndShowChangelog(forceStylePicker = ShizukuSettings.isReturningUser())
+    }
+
+    private fun checkAndShowChangelog(forceStylePicker: Boolean = false) {
         val currentCode =
             try {
                 packageManager.getPackageInfo(packageName, 0).versionCode
@@ -108,7 +144,7 @@ class MainActivity : HomeActivity() {
                 0
             }
         val lastSeenCode = ShizukuSettings.getLastSeenChangelogVersion()
-        if (currentCode <= lastSeenCode) return
+        if (currentCode <= lastSeenCode && !forceStylePicker) return
 
         val versionSuffix = BuildConfig.VERSION_NAME.substringAfterLast(' ').trim()
         val tagName =
@@ -137,16 +173,25 @@ class MainActivity : HomeActivity() {
                     emptyList()
                 }
 
-            // Mark seen regardless of fetch outcome so offline users aren't re-prompted every launch.
-            ShizukuSettings.setLastSeenChangelogVersion(currentCode)
-
             if (isFinishing || isDestroyed) return@launch
-            try {
-                ChangelogDialogFragment
-                    .newInstance(releases, tagName)
-                    .show(supportFragmentManager, ChangelogDialogFragment.TAG)
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to show changelog dialog")
+
+            if (releases.isNotEmpty()) {
+                ShizukuSettings.setLastSeenChangelogVersion(currentCode)
+                try {
+                    ChangelogDialogFragment
+                        .newInstance(releases, tagName, showStylePicker = forceStylePicker)
+                        .show(supportFragmentManager, ChangelogDialogFragment.TAG)
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to show changelog dialog")
+                }
+            } else if (forceStylePicker) {
+                try {
+                    ChangelogDialogFragment
+                        .newInstance(emptyList(), tagName, showStylePicker = true)
+                        .show(supportFragmentManager, ChangelogDialogFragment.TAG)
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to show changelog dialog")
+                }
             }
         }
     }

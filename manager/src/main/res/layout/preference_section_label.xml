@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Non-collapsible category: a quiet M3E section label above its grouped card, instead of a
+     full-height header card. Tagged "section_label" so SettingsItemDecoration leaves it bare. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="2dp"
+    android:accessibilityHeading="true"
+    android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+    android:textColor="?colorPrimary"
+    android:tag="section_label" />

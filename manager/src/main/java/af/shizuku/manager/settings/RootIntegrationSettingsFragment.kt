@@ -3,20 +3,26 @@ package af.shizuku.manager.settings
 import af.shizuku.manager.R
 import af.shizuku.manager.ShizukuSettings
 import af.shizuku.manager.ShizukuSettings.Keys.KEY_COMPANION_FALLBACK
+import af.shizuku.manager.ShizukuSettings.Keys.KEY_DHIZUKU_MODE
 import af.shizuku.manager.database.RootCompatHelper
-import af.shizuku.manager.service.AdbProxyService
 import af.shizuku.manager.utils.EnvironmentUtils
 import af.shizuku.manager.utils.StockShizukuCompat
+import android.app.admin.DevicePolicyManager
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
-import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceGroup
 import androidx.preference.TwoStatePreference
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 
 /**
@@ -62,42 +68,148 @@ class RootIntegrationSettingsFragment : BaseSettingsFragment() {
             true
         }
 
-        findPreference<TwoStatePreference>("adb_proxy_enabled")?.setOnPreferenceChangeListener { _, newValue ->
-            if (newValue is Boolean) {
-                val intent = Intent(context, AdbProxyService::class.java)
-                if (newValue) context.startService(intent) else context.stopService(intent)
+        val dhizukuPref = findPreference<TwoStatePreference>(KEY_DHIZUKU_MODE)
+        if (dhizukuPref != null) {
+            dhizukuPref.isChecked = ShizukuSettings.isDhizukuModeEnabled()
+            updateDhizukuDeviceOwnerStatus(dhizukuPref)
+            dhizukuPref.setOnPreferenceClickListener {
+                val ctx = context ?: return@setOnPreferenceClickListener true
+                if (!isDeviceOwnerActive(ctx)) {
+                    showDhizukuSetupDialog(ctx)
+                    return@setOnPreferenceClickListener true
+                }
+                false
             }
+            dhizukuPref.setOnPreferenceChangeListener { _, newValue ->
+                if (newValue is Boolean) {
+                    ShizukuSettings.setDhizukuModeEnabled(newValue)
+                    maybePromptRestart(KEY_DHIZUKU_MODE, newValue) {
+                        dhizukuPref.isChecked = newValue
+                    }
+                }
+                true
+            }
+        }
+
+        val clearDoPref = findPreference<Preference>("clear_device_owner")
+        clearDoPref?.let { setChildAvailable(it, isDeviceOwnerActive(requireContext())) }
+        clearDoPref?.setOnPreferenceClickListener {
+            val ctx = context ?: return@setOnPreferenceClickListener true
+            showClearDeviceOwnerDialog(ctx)
             true
         }
 
-        findPreference<TwoStatePreference>("on_device_adb_tcp")?.setOnPreferenceChangeListener { _, newValue ->
-            if (newValue is Boolean) {
-                preferenceManager.sharedPreferences
-                    ?.edit()
-                    ?.putBoolean("on_device_adb_tcp", newValue)
-                    ?.apply()
-                lifecycleScope.launch(Dispatchers.IO) {
-                    if (newValue) {
-                        af.shizuku.manager.service.AdbProxyService
-                            .enableAdbTcp()
-                    } else {
-                        af.shizuku.manager.service.AdbProxyService
-                            .disableAdbTcp()
+        findPreference<TwoStatePreference>("dpm_freeze_enabled")?.apply {
+            isChecked = ShizukuSettings.isDpmFreezeEnabled()
+            setOnPreferenceChangeListener { _, newValue ->
+                if (newValue is Boolean) ShizukuSettings.setDpmFreezeEnabled(newValue)
+                true
+            }
+        }
+
+        findPreference<TwoStatePreference>("dhizuku_disable_screencap")?.setOnPreferenceChangeListener { _, newValue ->
+            val enabled = newValue as? Boolean ?: false
+            val ctx = context ?: return@setOnPreferenceChangeListener false
+            try {
+                val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                val admin = ComponentName(ctx, af.shizuku.manager.admin.DhizukuAdminReceiver::class.java)
+                dpm.setScreenCaptureDisabled(admin, enabled)
+                notifyUser(if (enabled) R.string.dpm_screen_capture_disabled else R.string.dpm_screen_capture_enabled)
+                true
+            } catch (_: Exception) {
+                notifyUser(R.string.dpm_requires_device_owner, long = true)
+                false
+            }
+        }
+
+        findPreference<TwoStatePreference>("dhizuku_disallow_usb")?.setOnPreferenceChangeListener { _, newValue ->
+            val enabled = newValue as? Boolean ?: false
+            val ctx = context ?: return@setOnPreferenceChangeListener false
+            try {
+                val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                val admin = ComponentName(ctx, af.shizuku.manager.admin.DhizukuAdminReceiver::class.java)
+                if (enabled) {
+                    dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_USB_FILE_TRANSFER)
+                    notifyUser(R.string.dpm_usb_locked)
+                } else {
+                    dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_USB_FILE_TRANSFER)
+                    notifyUser(R.string.dpm_usb_unlocked)
+                }
+                true
+            } catch (_: Exception) {
+                notifyUser(R.string.dpm_requires_device_owner, long = true)
+                false
+            }
+        }
+
+        findPreference<Preference>("dhizuku_suspended_packages")?.setOnPreferenceChangeListener { _, newValue ->
+            val packagesStr = newValue as? String ?: ""
+            val packagesList = if (packagesStr.isBlank()) emptyList() else packagesStr.split(",").map { it.trim() }
+            val ctx = context ?: return@setOnPreferenceChangeListener false
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                    val admin = ComponentName(ctx, af.shizuku.manager.admin.DhizukuAdminReceiver::class.java)
+                    val pm = ctx.packageManager
+                    val installed = pm.getInstalledPackages(0).map { it.packageName }.toSet()
+
+                    val toUnsuspend = installed.toMutableList()
+                    dpm.setPackagesSuspended(admin, toUnsuspend.toTypedArray(), false)
+
+                    var message: String? = null
+                    if (packagesList.isNotEmpty()) {
+                        val toSuspend = packagesList.filter { installed.contains(it) }
+                        val failed = dpm.setPackagesSuspended(admin, toSuspend.toTypedArray(), true)
+                        message =
+                            if (failed.isNotEmpty()) {
+                                ctx.getString(R.string.dpm_freeze_failed, failed.joinToString())
+                            } else {
+                                ctx.getString(R.string.dpm_freeze_success, toSuspend.size)
+                            }
+                    }
+                    withContext(Dispatchers.Main) {
+                        message?.let { notifyUser(it) }
+                    }
+                } catch (_: Exception) {
+                    withContext(Dispatchers.Main) {
+                        notifyUser(R.string.dpm_requires_device_owner, long = true)
                     }
                 }
             }
             true
         }
 
-        findPreference<TwoStatePreference>("force_start_wadb")?.setOnPreferenceChangeListener { _, newValue ->
-            if (newValue is Boolean) {
-                preferenceManager.sharedPreferences
-                    ?.edit()
-                    ?.putBoolean("force_start_wadb", newValue)
-                    ?.apply()
-                ShizukuSettings.syncAllPlusFeaturesToServer()
+        findPreference<TwoStatePreference>("samsung_system_uid_escalation_enabled")?.let { pref ->
+            // Only show on Samsung OneUI 1–6; OneUI 7+ patched the system-UID elevation path.
+            val samsungSupported = EnvironmentUtils.isSamsung() && EnvironmentUtils.getOneUiVersion() in 1..6
+            setChildAvailable(pref, samsungSupported)
+            if (samsungSupported) {
+                pref.setOnPreferenceChangeListener { _, newValue ->
+                    val enabled = newValue as? Boolean ?: false
+                    if (enabled) {
+                        val ctx = context ?: return@setOnPreferenceChangeListener false
+                        MaterialAlertDialogBuilder(ctx)
+                            .setTitle(R.string.settings_samsung_uid_escalation)
+                            .setMessage(R.string.settings_samsung_uid_escalation_summary)
+                            .setPositiveButton(android.R.string.ok) { _, _ ->
+                                preferenceManager.sharedPreferences
+                                    ?.edit()
+                                    ?.putBoolean("samsung_system_uid_escalation_enabled", true)
+                                    ?.apply()
+                                ShizukuSettings.syncAllPlusFeaturesToServer()
+                            }.setNegativeButton(android.R.string.cancel, null)
+                            .show()
+                        false
+                    } else {
+                        preferenceManager.sharedPreferences
+                            ?.edit()
+                            ?.putBoolean("samsung_system_uid_escalation_enabled", false)
+                            ?.apply()
+                        ShizukuSettings.syncAllPlusFeaturesToServer()
+                        true
+                    }
+                }
             }
-            true
         }
 
         findPreference<TwoStatePreference>("su_bridge_enabled")?.setOnPreferenceChangeListener { pref, newValue ->
@@ -263,13 +375,11 @@ class RootIntegrationSettingsFragment : BaseSettingsFragment() {
                         // so push the new path to the server explicitly.
                         suPathPref.text = chosen
                         ShizukuSettings.syncAllPlusFeaturesToServer()
-                        Toast.makeText(context, context?.getString(R.string.su_path_preset_applied, presets[which]), Toast.LENGTH_SHORT).show()
+                        notifyUser(context?.getString(R.string.su_path_preset_applied, presets[which]))
                     }
                 }.show()
             true // Intercept click to show presets dialog first
         }
-
-        applyModeConstraints()
     }
 
     override fun onResume() {
@@ -278,66 +388,89 @@ class RootIntegrationSettingsFragment : BaseSettingsFragment() {
     }
 
     /**
-     * Show/hide and enable/disable preferences based on the current connection mode (#433).
-     *
-     * ADB mode (uid 2000): root-only categories (SU Bridge, rootless bridges, mocking/simulation,
-     *   bootloader integration) are grayed out -- they require a root shell to function.
-     *   The ADB connection category gets an explanatory summary.
-     *
-     * Root mode: ADB connection tools (adb_proxy, on_device_adb_tcp, force_start_wadb) are hidden
-     *   since they are meaningless when Shizuku is started by a root process directly.
-     *
-     * When the server is not running (uid == -1) no restrictions are applied so users can still
-     * browse and configure settings before starting Shizuku.
+     * In ADB mode (uid 2000) the bootloader integration needs an unlocked bootloader, so it's
+     * greyed out on a locked one. Every other category works in any mode. The uid is a binder
+     * call, so it's read off the main thread.
      */
     private fun applyModeConstraints() {
-        val uid =
-            try {
-                Shizuku.getUid()
-            } catch (_: Exception) {
-                -1
-            }
-
-        val isRootMode =
-            EnvironmentUtils.isRooted() ||
-                ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ROOT
-
-        when {
-            uid == 2000 -> {
-                // Running in ADB/shell mode -- enable rootless bridges, SU bridge (rish emulation),
-                // and mocking/simulation features so ADB users gain full access.
-                val bridgeCategories =
-                    listOf(
-                        "category_su_bridge",
-                        "category_root_modules",
-                        "category_ghost_bridge",
-                    )
-                for (key in bridgeCategories) {
-                    findPreference<PreferenceGroup>(key)?.apply {
-                        isEnabled = true
-                    }
-                }
-                findPreference<PreferenceGroup>("category_unlocked_bootloader")?.apply {
-                    isEnabled = isBootloaderUnlocked()
-                }
-                // ADB connection category: keep visible and annotate with mode indicator
-                findPreference<PreferenceCategory>("category_adb_connection")?.apply {
-                    isVisible = true
-                    summary = getString(R.string.settings_mode_indicator_adb)
-                }
-            }
-            isRootMode && uid != -1 -> {
-                // Running in root mode -- hide ADB-specific connection tools (not applicable)
-                findPreference<PreferenceCategory>("category_adb_connection")?.isVisible = false
-            }
-            else -> {
-                // Server not running -- show everything, clear any stale indicator
-                findPreference<PreferenceCategory>("category_adb_connection")?.apply {
-                    isVisible = true
-                    summary = null
-                }
+        viewLifecycleOwnerLiveData.value?.lifecycleScope?.launch {
+            val adbMode = withContext(Dispatchers.IO) { runCatching { Shizuku.getUid() }.getOrDefault(-1) == 2000 }
+            if (adbMode) {
+                findPreference<PreferenceGroup>("category_unlocked_bootloader")?.isEnabled = isBootloaderUnlocked()
             }
         }
+    }
+
+    private fun isDeviceOwnerActive(ctx: Context): Boolean =
+        try {
+            val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            dpm.isDeviceOwnerApp(ctx.packageName) || dpm.isProfileOwnerApp(ctx.packageName)
+        } catch (_: Exception) {
+            false
+        }
+
+    private fun updateDhizukuDeviceOwnerStatus(pref: TwoStatePreference) {
+        val ctx = context ?: return
+        val active = isDeviceOwnerActive(ctx)
+        val statusLine =
+            if (active) {
+                getString(R.string.dhizuku_status_active)
+            } else {
+                getString(R.string.dhizuku_status_not_set)
+            }
+        val baseSummary = getString(R.string.settings_dhizuku_mode_summary)
+        pref.setCustomSummary("$statusLine\n\n$baseSummary")
+        findPreference<Preference>("clear_device_owner")?.let { setChildAvailable(it, active) }
+        findPreference<PreferenceGroup>("category_dhizuku_admin")?.apply {
+            isEnabled = active
+            setCustomSummary(if (!active) getString(R.string.dpm_requires_device_owner) else null)
+        }
+    }
+
+    private fun showClearDeviceOwnerDialog(ctx: Context) {
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(R.string.dhizuku_clear_owner_title)
+            .setMessage(R.string.dhizuku_clear_owner_message)
+            .setPositiveButton(R.string.dhizuku_clear_owner_confirm) { _, _ ->
+                clearDeviceOwner(ctx)
+            }.setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun clearDeviceOwner(ctx: Context) {
+        try {
+            val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            if (dpm.isDeviceOwnerApp(ctx.packageName)) {
+                dpm.clearDeviceOwnerApp(ctx.packageName)
+            } else if (dpm.isProfileOwnerApp(ctx.packageName)) {
+                val admin = ComponentName(ctx, af.shizuku.manager.admin.DhizukuAdminReceiver::class.java)
+                dpm.clearProfileOwner(admin)
+            }
+            notifyUser(R.string.dhizuku_clear_owner_success, long = true)
+            val dhizukuPref = findPreference<TwoStatePreference>(KEY_DHIZUKU_MODE)
+            if (dhizukuPref != null) {
+                ShizukuSettings.setDhizukuModeEnabled(false)
+                dhizukuPref.isChecked = false
+                updateDhizukuDeviceOwnerStatus(dhizukuPref)
+            }
+        } catch (_: Exception) {
+            notifyUser(R.string.dhizuku_clear_owner_failure, long = true)
+        }
+    }
+
+    private fun showDhizukuSetupDialog(ctx: Context) {
+        val command =
+            "adb shell dpm set-device-owner " +
+                "${ctx.packageName}/af.shizuku.manager.admin.DhizukuAdminReceiver"
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(R.string.dhizuku_setup_title)
+            .setMessage(getString(R.string.dhizuku_setup_message, command))
+            .setPositiveButton(R.string.dhizuku_setup_copy) { _, _ ->
+                val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("dpm command", command))
+                notifyUser(R.string.dhizuku_setup_copied)
+            }.setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun isBootloaderUnlocked(): Boolean {
@@ -352,5 +485,14 @@ class RootIntegrationSettingsFragment : BaseSettingsFragment() {
             }
         return readProp("ro.boot.flash.locked") == "0" ||
             readProp("ro.boot.verifiedbootstate") == "orange"
+    }
+
+    private fun setChildAvailable(
+        pref: Preference,
+        available: Boolean,
+    ) {
+        val key = pref.key ?: return
+        (pref.parent as? CollapsiblePreferenceCategory)?.setChildAvailable(key, available)
+            ?: run { pref.isVisible = available }
     }
 }
