@@ -46,6 +46,31 @@ export ANDROID_HOME="$SDK"
     "build-tools;$BUILD_TOOLS" \
     "cmake;$CMAKE_VERSION" >&2
 
+# repo.maven.apache.org rate-limits shared cloud egress (HTTP 429). Point Gradle at Google's
+# Maven Central mirror via a user-level init script (outside the repo). MAVEN_MIRROR=0 skips it.
+if [ "${MAVEN_MIRROR:-1}" != "0" ]; then
+    init_dir="${GRADLE_USER_HOME:-$HOME/.gradle}/init.d"
+    mkdir -p "$init_dir"
+    cat > "$init_dir/central-mirror.gradle" <<'GRADLE'
+def mirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
+def fix = { repos ->
+    repos.configureEach { r ->
+        if (r instanceof MavenArtifactRepository && r.url.toString().startsWith('https://repo.maven.apache.org/maven2')) {
+            r.url = mirror
+        }
+    }
+}
+gradle.beforeSettings { s ->
+    fix(s.pluginManagement.repositories)
+    fix(s.dependencyResolutionManagement.repositories)
+}
+gradle.allprojects { p ->
+    fix(p.repositories)
+    fix(p.buildscript.repositories)
+}
+GRADLE
+fi
+
 top="$(cd "$(dirname "$0")/../.." && pwd)"
 if [ ! -f "$top/local.properties" ]; then
     printf 'sdk.dir=%s\n' "$SDK" > "$top/local.properties"
