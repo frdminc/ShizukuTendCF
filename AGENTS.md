@@ -41,9 +41,10 @@ the same rules. Jules has its own setup notes in [`JULES.md`](JULES.md).
 - **Release-signed build without CI:** `scripts/dev/build-release-local.sh [dropin|shizukuplus]`
   (signing secrets from the 1Password Service vault into a temp dir; installs over the fleet's app)
 - **Unit tests:** the manager has flavours, so name one: `:manager:testShizukuplusDebugUnitTest --tests '<class>'`
-  (bare `:manager:testDebugUnitTest` is ambiguous). JDK 21 is
-  `/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`; `/usr/libexec/java_home -v 21`
-  returns JDK 27 on the build Mac, which fails. A fresh worktree needs `git submodule update --init api`.
+  (bare `:manager:testDebugUnitTest` is ambiguous). `scripts/dev/env.sh` finds a JDK 21 on macOS
+  (Homebrew arm64 and x86_64) and on Linux; `/usr/libexec/java_home -v 21` can return JDK 27 on the
+  build Mac, which fails, so don't call it directly. A fresh worktree needs `git submodule update --init api`.
+- **Scripts run on macOS and Linux:** follow [`docs/portability.md`](docs/portability.md) (no `gsed`, no GNU-only flags).
 - **API demo** (a client that binds a user service): it is not in the root build. Building it from `api/`
   with that directory's own `./gradlew` (Gradle 8.14; `./gradlew -p api` uses the root 9.7.1 wrapper and
   fails) needed three local, uncommitted edits on 2026-10-12: `proguardFiles` without brackets in
