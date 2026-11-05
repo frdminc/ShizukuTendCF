@@ -9,6 +9,20 @@
 # that commit only, so the repo's own jobs never run twice.
 set -euo pipefail
 
+# run_timeout SECS CMD...: GNU timeout, else coreutils' gtimeout (macOS + Homebrew), else no limit.
+timeout_bin=
+for _t in timeout gtimeout; do
+  if command -v "$_t" >/dev/null 2>&1; then timeout_bin=$_t; break; fi
+done
+if [ -z "$timeout_bin" ]; then
+  echo "github-ci-run: no timeout/gtimeout found (brew install coreutils); running without a time limit" >&2
+fi
+run_timeout() {
+  local secs=$1
+  shift
+  if [ -n "$timeout_bin" ]; then "$timeout_bin" "$secs" "$@"; else "$@"; fi
+}
+
 wait=1
 if [ "${1:-}" = "--no-wait" ]; then wait=0; shift; fi
 ref="${1:-HEAD}"
@@ -17,7 +31,7 @@ top=$(git rev-parse --show-toplevel)
 cd "$top"
 remote="${GITHUB_CI_REMOTE:-origin}"
 git remote get-url "$remote" >/dev/null 2>&1 || { echo "github-ci-run: remote $remote missing" >&2; exit 2; }
-repo=$(git remote get-url "$remote" | gsed -E 's#.*github.com[:/]##; s#\.git$##')
+repo=$(git remote get-url "$remote" | sed -E 's#.*github.com[:/]##; s#\.git$##')
 
 if git show-ref --verify --quiet refs/heads/ci/base; then
   base_ref=refs/heads/ci/base
@@ -30,7 +44,7 @@ fi
 
 target_sha=$(git rev-parse --verify "$ref^{commit}")
 short=$(git rev-parse --short=8 "$target_sha")
-slug=$(printf '%s' "$ref" | tr -c 'A-Za-z0-9._-' '-' | gsed 's/-\+/-/g; s/^-//; s/-$//')
+slug=$(printf '%s' "$ref" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g; s/^-//; s/-$//')
 [ -n "$slug" ] || slug=head
 run_branch="ci/run/${slug}-${short}"
 
@@ -105,14 +119,14 @@ commit=$(git commit-tree "$tree" -p "$target_sha" -m "$msg")
 unset GIT_INDEX_FILE
 
 echo "overlay $commit for $target_sha -> $remote $run_branch"
-timeout 600 git push --force "$remote" "$commit:refs/heads/$run_branch"
+run_timeout 600 git push --force "$remote" "$commit:refs/heads/$run_branch"
 echo "branch: https://github.com/$repo/tree/$run_branch"
 
 # Find the run this push started.
 run_id=
 for _ in $(seq 1 12); do
   sleep 5
-  run_id=$(timeout 60 gh run list -R "$repo" --branch "$run_branch" --workflow ci-run.yml --limit 5 \
+  run_id=$(run_timeout 60 gh run list -R "$repo" --branch "$run_branch" --workflow ci-run.yml --limit 5 \
     --json databaseId,headSha -q ".[] | select(.headSha==\"$commit\") | .databaseId" | head -1 || true)
   [ -n "$run_id" ] && break
 done
