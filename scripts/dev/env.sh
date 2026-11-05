@@ -14,7 +14,9 @@
 # Print the major version of the JDK at $1, or nothing if it is not a working JDK.
 _shizuku_jdk_major() {
     [ -x "$1/bin/java" ] || return 0
-    "$1/bin/java" -version 2>&1 | sed -n -E '1s/.*version "([0-9]+).*/\1/p'
+    # The JVM may print "Picked up JAVA_TOOL_OPTIONS ..." or a VM warning before the
+    # version line, so look for the line that has the version instead of taking line 1.
+    "$1/bin/java" -version 2>&1 | sed -n -E '/version "/{s/.*version "([0-9]+).*/\1/p;q;}'
 }
 
 _shizuku_is_jdk21() {
