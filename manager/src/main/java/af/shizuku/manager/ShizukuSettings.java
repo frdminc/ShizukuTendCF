@@ -666,12 +666,6 @@ public class ShizukuSettings {
         }
     }
 
-    /** Tests only: replaces the settings store (the one-prompt scenario harness's fake prefs). */
-    @VisibleForTesting
-    public static void setPreferencesForTesting(SharedPreferences preferences) {
-        sPreferences = preferences;
-    }
-
     @IntDef({
         LaunchMethod.UNKNOWN,
         LaunchMethod.ROOT,
