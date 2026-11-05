@@ -4,6 +4,7 @@ import af.shizuku.manager.utils.VendorBatteryRestrictions
 import android.app.Application
 import android.content.Context
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -36,7 +37,13 @@ class ActivityLogTextTest {
             "Watchdog: restarting after crash #3",
             "Connection: ADB start failed on port 37000 (IOException: refused (x))",
             ActivityLogText.TOGGLE_GRANT,
-        ).forEach { assertEquals(it, shown(it)) }
+        ).forEach {
+            // The fork rebrands user-visible text at build time (manager/tendcf-branding.gradle),
+            // so "Shizuku" may come back as "ShizukuTendCF"; nothing else may change.
+            val shown = shown(it)
+            val rebranded = it.replace("Shizuku", "ShizukuTendCF")
+            assertTrue("\"$it\" shown as \"$shown\"", shown == it || shown == rebranded)
+        }
     }
 
     @Test
