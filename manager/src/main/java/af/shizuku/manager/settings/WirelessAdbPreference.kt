@@ -232,6 +232,7 @@ class WirelessAdbPreference
             enabled: Boolean,
         ) {
             val colors = MaterialTheme.colorScheme
+            val view = LocalView.current
             val isOn = tcpMode.value
             val closing = closingPort.value
             val mode = protectionMode.value

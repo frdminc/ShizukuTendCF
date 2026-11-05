@@ -579,6 +579,8 @@ class PermissionDefinerConsentTest {
         val clientManager = ShizukuClientManager(configManager)
         setField(ShizukuService::class.java, service, "clientManager", clientManager)
         setField(ShizukuService::class.java, service, "configManager", configManager)
+        // allocateInstance skips field initializers; attachApplication now reads this map via dispatchLog.
+        setField(ShizukuService::class.java, service, "featureEnabledMap", java.util.concurrent.ConcurrentHashMap<String, Boolean>())
         setField(Service::class.java, service, "clientManager", clientManager)
         setField(Service::class.java, service, "configManager", configManager)
         setField(ShizukuService::class.java, service, "managerAppId", MANAGER_UID)

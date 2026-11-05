@@ -12,6 +12,7 @@ import af.shizuku.manager.utils.HapticUtils
 import af.shizuku.manager.utils.IconStyleHelper
 import af.shizuku.manager.utils.SettingsHelper
 import af.shizuku.manager.utils.ShizukuStateMachine
+import af.shizuku.manager.utils.springTo
 import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
