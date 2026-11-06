@@ -604,7 +604,9 @@ class FakeWorld(
     fun awaitStartWork(): WorkInfo.State? {
         settle()
         var last: List<WorkInfo> = emptyList()
-        waitUntil({ "the start work to finish (last seen ${last.map { it.state }})" }) {
+        waitUntil({
+            "the start work to finish (last seen ${last.map { "${it.state} attempt=${it.runAttemptCount} next=${it.nextScheduleTimeMillis - System.currentTimeMillis()}ms" }})"
+        }) {
             last = workManager.getWorkInfosForUniqueWork(AdbStartWorker.UNIQUE_WORK_NAME).get()
             last.all { it.state.isFinished }
         }
