@@ -58,22 +58,22 @@ object EnvironmentUtils {
     fun isWifiRequired(allowNetworkProbe: Boolean = true): Boolean {
         if (ShizukuSettings.getTcpMode()) return false
         if (getAdbTcpPort() > 0) return false
-        if (!allowNetworkProbe || android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-            return true
+        if (!allowNetworkProbe) return true
+        // adbd answering on loopback (5555, or the port the last start used) needs no Wi-Fi. The
+        // start work's enqueue asks from a receiver's main thread, where a socket of its own
+        // throws NetworkOnMainThreadException in a release build: probe on a thread of its own
+        // there (AdbPortProber.firstListening), bounded, rather than assume Wi-Fi is needed and
+        // hold the start behind a network constraint adbd's open port makes moot.
+        val ports = listOf(5555, ShizukuSettings.getLastPort())
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            return af.shizuku.manager.adb.AdbPortProber
+                .firstListening(ports, 50) <= 0
         }
-        if (af.shizuku.manager.adb.AdbPortProber
-                .isPortOpen(5555, 50)
-        ) {
-            return false
+        return ports.none {
+            it in 1..65535 &&
+                af.shizuku.manager.adb.AdbPortProber
+                    .isPortOpen(it, 50)
         }
-        val lastPort = ShizukuSettings.getLastPort()
-        if (lastPort in 1..65535 &&
-            af.shizuku.manager.adb.AdbPortProber
-                .isPortOpen(lastPort, 50)
-        ) {
-            return false
-        }
-        return true
     }
 
     // Warm up the root check eagerly when the class is loaded.
