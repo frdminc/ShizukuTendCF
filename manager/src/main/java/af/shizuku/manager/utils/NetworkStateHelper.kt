@@ -13,6 +13,7 @@ object NetworkStateHelper {
     @JvmStatic
     fun isWifiConnected(context: Context): Boolean {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return false
+
         fun isLan(network: Network?): Boolean {
             val capabilities = network?.let { runCatching { cm.getNetworkCapabilities(it) }.getOrNull() } ?: return false
             return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
