@@ -658,9 +658,12 @@ class AdbStartWorker(
             val waitsForWifi = EnvironmentUtils.isWifiRequired() && !ShizukuSettings.isForceStartWadbEnabled()
             val cb = Constraints.Builder()
             if (waitsForWifi) {
-                // Any connection: WirelessDebugging waits for Wi-Fi itself and says so, and a Wi-Fi
-                // network the system marks metered (a hotspot) must not hold the start back.
-                cb.setRequiredNetworkType(NetworkType.CONNECTED)
+                // UNMETERED, not CONNECTED: WorkManager's CONNECTED means a validated network (one
+                // with internet) on API 26+, and wireless debugging needs only a connected Wi-Fi,
+                // internet or not (a LAN-only network, a captive portal). The start notification's
+                // "waiting for Wi-Fi" reason keys on this constraint too (ShizukuReceiverStarter).
+                // A metered Wi-Fi (a hotspot) is let through by "force start" (no constraint).
+                cb.setRequiredNetworkType(NetworkType.UNMETERED)
             }
             val request =
                 OneTimeWorkRequestBuilder<AdbStartWorker>()

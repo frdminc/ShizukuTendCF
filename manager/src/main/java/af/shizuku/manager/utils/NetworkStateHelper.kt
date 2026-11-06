@@ -2,6 +2,7 @@ package af.shizuku.manager.utils
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 
@@ -12,10 +13,17 @@ object NetworkStateHelper {
     @JvmStatic
     fun isWifiConnected(context: Context): Boolean {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return false
-        val activeNetwork = cm.activeNetwork ?: return false
-        val capabilities = cm.getNetworkCapabilities(activeNetwork) ?: return false
-        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+        fun isLan(network: Network?): Boolean {
+            val capabilities = network?.let { runCatching { cm.getNetworkCapabilities(it) }.getOrNull() } ?: return false
+            return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+        }
+        // Not only the default network: with mobile data up, a Wi-Fi without internet (a LAN-only
+        // network, a captive portal) is connected but not the default, and wireless debugging
+        // works over it all the same (WirelessDebugging.wifiNetwork looks the same way).
+        if (isLan(runCatching { cm.activeNetwork }.getOrNull())) return true
+        @Suppress("DEPRECATION")
+        return runCatching { cm.allNetworks.any { isLan(it) } }.getOrDefault(false)
     }
 
     /**
