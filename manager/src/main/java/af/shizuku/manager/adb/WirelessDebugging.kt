@@ -765,6 +765,15 @@ object WirelessDebugging {
 
     private fun watching(context: Context): Boolean = thisBoot(context, KEY_WATCH_BOOT)
 
+    /**
+     * This boot's restore is watching for what ends its stop, and an unlock is one of those
+     * events: its own receiver ([watchUnlock]) answers it, starting again after a silent refusal
+     * or once wireless debugging is on, and starting nothing while the system's prompt is still
+     * the user's to answer. Another start made at the unlock would write adb_wifi_enabled=1 once
+     * more and raise a second network prompt this boot.
+     */
+    fun ownsUnlock(context: Context): Boolean = watching(context)
+
     // True (and the watch ended) if the server is up.
     private fun runningNow(context: Context): Boolean {
         ShizukuStateMachine.update()

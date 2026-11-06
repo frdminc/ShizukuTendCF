@@ -56,6 +56,16 @@ class BootCompleteReceiver : BroadcastReceiver() {
                 }
             }
 
+            // One network prompt per boot: while the wireless debugging restore is watching for
+            // what ends its stop, the unlock is its to answer (WirelessDebugging.watchUnlock), and
+            // a start from here would write adb_wifi_enabled=1 again and raise a second prompt.
+            if (af.shizuku.manager.adb.WirelessDebugging
+                    .ownsUnlock(context)
+            ) {
+                HeadlessLogger.i("Boot", "unlock: the wireless debugging restore is watching and answers it; no start from here")
+                return
+            }
+
             // If Watchdog auto-restart is enabled and the server died while locked/sleeping,
             // revive it immediately upon unlock instead of waiting for the 15-minute alarm.
             if (ShizukuSettings.getWatchdog() && ShizukuSettings.isWatchdogAutoRestartEnabled() && !UserStopFlag.isSet()) {
