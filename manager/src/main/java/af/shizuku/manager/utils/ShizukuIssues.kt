@@ -134,6 +134,15 @@ object ShizukuIssues {
     /** The issue to show: the most severe, then the most recently reported. */
     fun top(): Issue? = topEntry()?.first
 
+    /** Forgets every issue and the shade's state: the registry outlives a test's process. */
+    @androidx.annotation.VisibleForTesting
+    fun resetForTesting() {
+        issues.clear()
+        dismissed = null
+        postedSeverity = null
+        currentFlow.value = null
+    }
+
     private fun topEntry(): Pair<Issue, Long>? =
         issues.values.maxWithOrNull(compareBy<Pair<Issue, Long>> { it.first.severity.ordinal }.thenBy { it.second })
 

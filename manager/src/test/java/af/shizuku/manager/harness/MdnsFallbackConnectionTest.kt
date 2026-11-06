@@ -240,9 +240,10 @@ class MdnsFallbackConnectionTest {
         assertNull(rikka.shizuku.Shizuku.getBinder())
         assertFalse("unaccepted binder must never be queried", touched)
         assertEquals(before + 1, ActivityLogManager.logs.value.size)
+        // Newest first: the line this call added, not the oldest one the process holds.
         assertTrue(
             ActivityLogManager.logs.value
-                .last()
+                .first()
                 .action
                 .contains("10123"),
         )
@@ -281,9 +282,10 @@ class MdnsFallbackConnectionTest {
         assertNull(provider.call("sendUserService", null, extras))
         assertFalse("unaccepted binder must never be queried", touched)
         assertEquals(before + 1, ActivityLogManager.logs.value.size)
+        // Newest first: the line this call added, not the oldest one the process holds.
         assertTrue(
             ActivityLogManager.logs.value
-                .last()
+                .first()
                 .action
                 .contains("10123"),
         )

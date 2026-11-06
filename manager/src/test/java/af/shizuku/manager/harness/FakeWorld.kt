@@ -196,6 +196,10 @@ class FakeWorld(
         ShizukuReceiverStarter.resetForTesting()
         AdbAuthWait.resetForTesting()
         ShizukuStateMachine.resetForTesting()
+        // The problem registry too: an earlier test's crash or stop would take over the Watchdog
+        // notification here.
+        af.shizuku.manager.utils.ShizukuIssues
+            .resetForTesting()
         // The log lives in this test's files dir; a previous test's dir is gone.
         HeadlessLogger.resetForTesting()
         HeadlessLogger.init(app)

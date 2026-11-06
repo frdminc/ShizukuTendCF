@@ -72,7 +72,7 @@ class WatchdogFollowUpScenariosTest {
             .remove("mode")
             .commit()
         // The registry is a process-wide object: an earlier test's crash must not count here.
-        ShizukuIssues.clear(app, WatchdogService.KEY_CRASHED)
+        clearCrashIssues()
         drainWatchdogStarts()
     }
 
@@ -132,8 +132,16 @@ class WatchdogFollowUpScenariosTest {
         notificationManager().activeNotifications.firstOrNull { it.id == id }?.notification
 
     // The crash heads-up (once notification 1002) is a problem in the registry now: shown inside
-    // the Watchdog's notification, and as the shared one when the level allows.
-    private fun crashIssue(): ShizukuIssues.Issue? = ShizukuIssues.top()?.takeIf { it.key == WatchdogService.KEY_CRASHED }
+    // the Watchdog's notification, and as the shared one when the level allows. A crash the
+    // Watchdog is restarting from is KEY_CRASHED; a restart that did not bring the server back
+    // is reported as "stopped" (ShizukuIssues.stoppedIssue), the same heads-up with Retry.
+    private fun crashIssue(): ShizukuIssues.Issue? =
+        ShizukuIssues.top()?.takeIf { it.key == WatchdogService.KEY_CRASHED || it.key == ShizukuIssues.KEY_STOPPED }
+
+    private fun clearCrashIssues() {
+        ShizukuIssues.clear(app, WatchdogService.KEY_CRASHED)
+        ShizukuIssues.clear(app, ShizukuIssues.KEY_STOPPED)
+    }
 
     private fun createBehaviorFragment(): Pair<FragmentActivity, BehaviorSettingsFragment> {
         val controller = Robolectric.buildActivity(FragmentActivity::class.java)
@@ -583,7 +591,7 @@ class WatchdogFollowUpScenariosTest {
             elapse(grace + 1_000) // triggers restart #1
             val restart1WallMs = System.currentTimeMillis()
             elapse(WatchdogService.RECOVERY_WAIT_MS + 1_000) // recovery times out, posts 1002
-            ShizukuIssues.clear(app, WatchdogService.KEY_CRASHED) // clear for next test assertion
+            clearCrashIssues() // clear for next test assertion
             world.settle()
 
             // The dialog restart #1 raised is answered (Allow), so its unanswered marker no
