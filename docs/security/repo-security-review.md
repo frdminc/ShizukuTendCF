@@ -18,7 +18,7 @@ All line references are repository-relative. `M/` is short for
 
 ## 1. Summary
 
-No Critical finding. One High, eight Medium, the rest Low or informational. The merge itself
+No Critical finding. One High, twelve Medium, the rest Low or informational. The merge itself
 closed more than it opened: the old uninstall-and-reinstall "force update" path (a real same-signer
 bypass) is gone, `StarterActivity` is no longer exported, legacy non-TLS ADB authentication is
 confined to adbd's own port, grants now record and re-check signers at start-up, and the manager
@@ -33,7 +33,10 @@ three themes:
    transactions, `elevateApp` and the SU-bridge branch skip the scope check entirely (S2), and the
    command matcher can be satisfied by shell glob expansion or by other system CLIs (S4). The
    scopes are a user-set restriction on an already-granted app, not primary authentication, so
-   these are Medium rather than High.
+   these are Medium rather than High. The same getter-time-only pattern applies to every Plus
+   sub-binder (P1), and three impls do privileged work outside the gate that should cover it:
+   AI Core screenshots and input injection (P2), silent installs that grant every runtime
+   permission (P3), and tar restores extracted as the server uid without vetting (P4).
 3. **CI handles the release keystore more loosely than its comments claim** (C1), pulls
    unreviewed translations into signed releases when Crowdin is configured (C2), does not pin
    workflow token permissions (C3) and has no dependency verification (C4).
@@ -46,6 +49,10 @@ three themes:
 | S2 | Medium | server | Per-app API scopes skipped by custom transactions 10005/10006, `elevateApp` and the `setenforce` branch |
 | S3 | Medium | server | Scope rules, binder firewall and risky-API gates are in-memory only and default open until the manager syncs |
 | S4 | Medium | server | `ScopeCommandMatcher` is a pattern denylist; glob expansion and alternative CLIs sidestep it |
+| P1 | Medium | server impls | Scope and feature-flag checks are getter-time only on every Plus sub-binder; a cached binder outlives revocation |
+| P2 | Medium | server impls | AI Core screenshot and input injection are gated by an experimental flag, not the personal-data option |
+| P3 | Medium | server impls | Silent installs grant every runtime permission (`-g`); `PackageGovernorPlus.installApk` has no unrestricted gate |
+| P4 | Medium | server impls | `BackupRestorePlus` external/obb restores extract client tars as the server uid without `ArchiveVetting` |
 | U1 | Medium | updater | Root and Shizuku installs write a fixed, shell-writable `/data/local/tmp/update.apk` with no symlink protection |
 | C1 | Medium | CI | Decoded release keystore and `signing.properties` remain in the workspace for later steps, including a third-party action |
 | C2 | Medium | CI | Crowdin translations are fetched straight into release builds without review (dormant until secrets exist) |
@@ -66,6 +73,9 @@ three themes:
 | U5 | Low | ADB | Pairing may dial another LAN host advertised over mDNS; any certificate accepted during pairing |
 | U6 | Low | ADB | ADB private key stored in plaintext when AndroidKeyStore is unusable |
 | U7 | Low | ADB | A rogue loopback TLS listener found by the port scan can be pinned as "adbd" (denial of service / confusion) |
+| P5 | Low | server impls | `ApkPatcher.restoreOriginal` / `cleanupAllTempDebug` are ungated and sessions are server-global |
+| P6 | Low | server impls | `AppInspector.dumpHeap` bypasses `StorageAccessPolicy`; `insertSmsMessages` and `injectResourceOverlay` under the wrong or no gate |
+| P7 | Low | server impls | No size cap on staged restores; archive vetting parses tar text listings |
 | R1 | Low | manager | Reinstall copy of settings written world-readable (`chmod 644`) in `/data/local/tmp` |
 | C5 | Low | CI | Gradle build scans of release builds are published to a public service |
 | C6 | Low | CI | Secret scanning uses an old `checkout` major; Gitleaks removed; no CodeQL or Dependabot configuration |
@@ -258,7 +268,139 @@ three themes:
 
 ## 3. Server: Plus feature implementations
 
-<!-- SERVER_IMPLS_PENDING -->
+Every Plus sub-binder is handed out by a getter in `S/ShizukuService.java:3470-3601` behind
+`enforceCallingPermission` (any app the user authorised); the getters additionally check a feature
+flag and, for some, a per-app scope. Two "risky" developer options
+(`unrestricted_app_data`, `unrestricted_personal_data`, `S/ShizukuService.java:157-158`, both
+default off) gate the data-exposing binders through `isRiskyBinderAllowed` (`:3583-3586`), which
+exempts the manager. `isBinderCallBlocked` (`:1137-1160`) governs only `transactRemote` to system
+services and never runs for these binders.
+
+### Inventory
+
+| Impl | Getter (line) | Risky gate (where checked) | Per-app scope |
+|---|---|---|---|
+| `VirtualMachineManagerImpl` | 3470 | none; `avf_manager` flag, getter only | none |
+| `StorageProxyImpl` | 3477 | `unrestricted_app_data` per call in `allowedPath` (`StorageProxyImpl.kt:48`); `unrestricted_personal_data` per call in `openContentUri` (`:235`) | none |
+| `AICorePlusImpl` | 3484 | none; `ai_core_plus` flag defaults on (`:1011`); `ai_core_experimental` per call (`AICorePlusImpl.kt:28-34`) | none |
+| `WindowManagerPlusImpl` | 3496 | none; flag, getter only | none |
+| `ContinuityBridgeImpl` | 3503 | none; flag, getter only | none |
+| `OverlayManagerPlusImpl` | 3510 | none; flag, getter only | none |
+| `NetworkGovernorPlusImpl` | 3517 | none; flag, getter only | `system_settings`, getter only |
+| `ActivityManagerPlusImpl` | 3525 | none; flag, getter only | `activity_manager`, getter only |
+| `StatusBarGovernorPlusImpl` | 3533 | none; flag, getter only | `system_settings`, getter only |
+| `PackageGovernorPlusImpl` | 3541 | none; flag, getter only | `package_manager`, getter only |
+| `DisplayTunerPlusImpl` | 3549 | none; flag, getter only | `system_settings`, getter only |
+| `AppInspectorImpl` | 3557 | `unrestricted_personal_data`, getter and per call (`AppInspectorImpl.kt:23-26`) | `activity_manager`, getter only |
+| `PrivilegedDataSourceImpl` | 3565 | `unrestricted_personal_data`, getter and per call (`:27-30`) | none |
+| `BackupRestorePlusImpl` | 3572 | `unrestricted_app_data`, getter and per call (`:25-28`) | `package_manager`, getter only |
+| `ApkPatcherImpl` | 3589 | `unrestricted_app_data` per call in `prepareTempDebug`, `streamDataDir`, `restoreDataDir` (`:395-399, 403, 482, 490`); not at getter; manager not exempt | `package_manager`, getter only |
+| `DeviceControlPlusImpl` | 3596 | `unrestricted_personal_data`, getter and per call (`:18-21`) | `system_settings`, getter only |
+
+The risky suppliers read `Binder.getCallingUid()` inside the sub-binder's own transaction, so the
+manager exemption applies to the real caller of each call, not to whoever fetched the binder.
+
+### P1. Scope and feature-flag checks are getter-time only (Medium)
+
+- No implementation calls `isAppScopeDisabled` or `isFeatureEnabled` per transaction (grep over
+  the `*.kt` impls: zero hits); `RiskyBinderGate` covers only the two unrestricted options and its
+  own comment (`S/util/RiskyBinderGate.kt:7-10`) names the failure mode: "an app that got one
+  earlier keeps the binder".
+- A client that fetched `IPackageGovernorPlus` keeps `uninstallForUser` / `installApk` /
+  `suspendApp` after the user removes its `package_manager` scope or turns the feature off, until
+  the server or the client process restarts. Same for `AppInspector`, `BackupRestorePlus`,
+  `DeviceControlPlus`, `ApkPatcher`, `ActivityManagerPlus` and the governor/tuner binders.
+- Fix: pass a supplier that re-runs the scope and feature checks to the same
+  `RiskyBinderGate.enforce` pattern on every sub-binder's `onTransact`.
+
+### P2. AI Core screenshot and input injection sit outside the personal-data gate (Medium)
+
+- `S/ShizukuService.java:156` classifies screenshots and input as personal data, yet
+  `AICorePlusImpl.captureLayer` (`:74-93`, full-display `SurfaceControl.screenshot`),
+  `getPixelColor` (`:36-60`) and `simulateTouch` / `simulateSwipe` / `simulateText` (`:136-165`)
+  are gated only by the global `ai_core_experimental` flag (`:28-34`), with no
+  `isRiskyBinderAllowed` and no scope; the parent `ai_core_plus` flag defaults on (`:1011`).
+  `PrivilegedDataSource.screenshotAsPfd` / `injectTap` require the explicit option.
+- Fix: route the experimental methods through
+  `isRiskyBinderAllowed(..., FEATURE_UNRESTRICTED_PERSONAL_DATA)`.
+
+### P3. Silent installs grant every runtime permission (Medium)
+
+- `PackageGovernorPlusImpl.installApk` (`:227-231`) runs `pm install -g <path>` for any path that
+  passes `isSafePath` (allow-list includes `/sdcard/` and `/storage/emulated/`,
+  `S/util/InputValidationUtils.kt:153-160`); gate is the feature flag plus `package_manager` scope,
+  no unrestricted option. `uninstallForUser` (`:89-136`) likewise.
+- `BackupRestorePlusImpl.createInstallSession` (`:324-328`) uses `pm install-create -g` (behind
+  the app-data gate). `ApkPatcherImpl.installViaSession(..., grantPerms = true)` (`:227`,
+  `setGrantAllRequested` `:258-266`, fallback `:236-239`) is used by both `prepareTempDebug`
+  (`:473`) and `restoreOriginal` (`:500`), so a restored original ends up with every requested
+  runtime permission granted regardless of its prior state. All installs go through
+  `IPackageInstaller` / `pm` as shell with no installer UI.
+- Fix: drop `-g` / `setGrantAllRequested`; capture the granted set with `getPermissionState`
+  before the operation and reinstate only that; put `installApk` behind the app-data option.
+
+### P4. Tar restores extracted as the server uid without vetting (Medium; worse in root mode)
+
+- `BackupRestorePlusImpl.restoreExternalData` (`:301-321`) does
+  `File("/sdcard/Android/data/$pkg").mkdirs()` then `tar -xzf - -C dir` straight from the client
+  descriptor; `restoreObbData` (`:517-537`) is identical for `Android/obb`. `ArchiveVetting` is
+  imported only by `StorageProxyImpl.restoreTarDirectory` (`:283-300`), whose own comment explains
+  the risk ("a symlink entry followed by a file written through it would land outside the allowed
+  directory"). As shell the escape is bounded by the shell uid; as root it is not bounded by the
+  storage allow-list at all. Gate: `unrestricted_app_data` plus `package_manager` scope.
+- `ApkPatcherImpl.restoreDataDir` (`:487-493`) also extracts unvetted, but under `run-as <pkg>`,
+  so writes are bounded to that app's uid (Low).
+- Fix: stage and vet exactly as `restoreTarDirectory` does; add a size cap.
+
+### P5-P7. Lower-priority items
+
+- **P5** (Low) `ApkPatcherImpl.restoreOriginal` (`:495-508`) and `cleanupAllTempDebug`
+  (`:531-543`) are ungated by design and sessions are server-global, so any client with the
+  `package_manager` scope can reverse a temp-debug session another client started.
+- **P6** (Low) `AppInspectorImpl.dumpHeap(pid, destPath)` (`:73-107`) writes a heap dump of any
+  pid to any `isSafePath` location using the allow-list only, not `StorageAccessPolicy`, so with
+  the personal-data option on and the app-data option off it can still write under
+  `/data/data/<other>/` in root mode; `BackupRestorePlusImpl.insertSmsMessages` (`:670-721`) is
+  personal-data work living under the app-data gate; `OverlayManagerPlusImpl.injectResourceOverlay`
+  (`:391-472`) registers a fabricated overlay against any target package (including `android`)
+  behind its feature flag only.
+- **P7** (Low) `StorageProxyImpl.restoreTarDirectory` stages the whole client stream in
+  `/data/local/tmp` with no size cap (`:285-288`); `ArchiveVetting` parses tar's text listing and
+  an entry name containing a newline would shift the type parse (`S/util/ArchiveVetting.kt:16-32`).
+- Info: there is no storage or personal-data per-app scope (`M/management/AppViewHolder.kt:565-571`);
+  `StorageProxy` and `ApkPatcher` do not exempt the manager, unlike the four `RiskyBinderGate`
+  binders; `openContentUri` reads any `content://` authority as shell under the personal-data
+  option (documented at `StorageProxyImpl.kt:23-25`); `VirtualMachineManagerImpl` is gated by its
+  feature flag only and passes an unvalidated `name` to the AVF API, nothing else.
+
+### Confirmed defences (feature impls)
+
+- One choke point for every storage operation: `StorageProxyImpl.allowedPath` (`:45-53`)
+  requires `isSafePath`, canonicalises with `File.canonicalPath` (symlinks and `..` resolved before
+  comparison) and applies `StorageAccessPolicy.isAllowed`; it is applied at `:63, 140, 150, 160,
+  179, 203, 213-214, 267, 281` and the canonical string is what the operation uses. Restricted mode
+  is shared storage minus `Android/{data,obb}` (case-insensitive regex,
+  `S/util/StorageAccessPolicy.kt:16-18`) plus read-only `/data/app`; `/data/data`, `/data/user`
+  and `/data/adb/shizuku` are denied (`:14`). No operation uses a caller path without it.
+- `openFile` never hands a read-only pipe for a write request (`:68-69`).
+- Every shell fallback is argv exec: `sh -c '... "$1"' sh <path>` (`StorageProxyImpl.kt:74, 144,
+  154, 164, 187, 207, 222`) and `ShellExecutor.exec(vararg)`; `AICorePlusImpl.simulateText`
+  (`:157-160`) uses argv for untrusted text. No command injection was found.
+- `run-as` is always behind `isValidPackageName` (`S/util/InputValidationUtils.kt:136-150`).
+- `ArchiveVetting` rejects absolute names, `..` components, hard links, device nodes and
+  anything written through an earlier symlink entry (`:16-40`); unit tests exist
+  (`server/src/test/.../ArchiveVettingTest.kt`, `StorageAccessPolicyTest.kt`).
+- `ApkSigner`'s key pair is generated per server process and never touches disk
+  (`ApkSigner.kt:27-29`); patched APKs live in shell-owned `/data/local/tmp/splus_td`.
+- `AppInspector.readProcFile` has a strict whitelist (`:261-273`), `getDumpsys` a regex
+  (`:254-259`), `readLogcat` a line cap (`:110`); `DeviceControl.putSetting` whitelists namespaces
+  (`:25`); `BackupRestorePlus.backupAppData` rejects `-all` / `-shared` style names (`:260-261`).
+- The merge introduced the gating model itself: `util/RiskyBinderGate.kt`,
+  `util/StorageAccessPolicy.kt`, `util/ArchiveVetting.kt`, `util/ScopeCommandMatcher.kt` are new,
+  and `StorageProxyImpl.kt` (201 lines), `ApkPatcherImpl.kt` (141) and `ShizukuService.java`
+  (+680) changed in the merge proper (`git diff --stat c32c1c4b^1 c32c1c4b -- server/src/main`).
+  `PackageGovernorPlusImpl.kt`, `OverlayManagerPlusImpl.kt`, `VirtualMachineManagerImpl.kt`,
+  `ApkSigner.kt` and `InputValidationUtils.kt` were untouched by it.
 
 ## 4. Manager: externally reachable surface
 
@@ -632,20 +774,22 @@ in `manager/src/test/java/af/shizuku/manager/harness/` or `server/src/test/`, pe
 
 1. **S1** Re-validate ordinary grants at attach time by package-set fingerprint; watch granted
    packages' APK directories; wire `dispatchPackageChanged`. (test)
-2. **S2** Add scope checks to transactions 10005/10006, `elevateApp` and the `setenforce` branch.
-   (test)
-3. **U1** Unique, non-followable temp path or stdin install for both install paths.
-4. **C1, C3** Move keystore files to `$RUNNER_TEMP`, reorder the Crowdin step, add top-level
+2. **S2, P1** Add scope checks to transactions 10005/10006, `elevateApp` and the `setenforce`
+   branch; re-run scope and feature checks per transaction on every Plus sub-binder. (test)
+3. **P2, P3, P4** Put AI Core capture/injection behind the personal-data option; drop grant-all
+   on silent installs and gate `installApk`; vet external/obb restores like `restoreTarDirectory`.
+4. **U1** Unique, non-followable temp path or stdin install for both install paths.
+5. **C1, C3** Move keystore files to `$RUNNER_TEMP`, reorder the Crowdin step, add top-level
    read-only permissions, `persist-credentials: false`.
-5. **S3** Persist scope, firewall and risky-API state in `ShizukuConfig`.
-6. **C2** Take translations only via reviewed PRs with approved-only export.
-7. **C4** Dependency locking plus `verification-metadata.xml`; drop `mavenLocal()`.
-8. **M1, M6, M2** Keyguard gate on the tile; `filterTouchesWhenObscured` and
+6. **S3** Persist scope, firewall and risky-API state in `ShizukuConfig`.
+7. **C2** Take translations only via reviewed PRs with approved-only export.
+8. **C4** Dependency locking plus `verification-metadata.xml`; drop `mavenLocal()`.
+9. **M1, M6, M2** Keyguard gate on the tile; `filterTouchesWhenObscured` and
    `setHideOverlayWindows` on the consent dialog; fix or gate the external start route. (test for M2)
-9. **S4** Document scopes as best-effort; add the missing tool names and glob characters to the
+10. **S4** Document scopes as best-effort; add the missing tool names and glob characters to the
    opaque pattern; consider a masked `PATH` for scope-restricted apps.
-10. **S5, D1** Refuse debug-signed managers in `signedLikeManager`; correct the allowlist doc.
-11. **R1, U2-U6, M3-M5, S6-S7, C5-C7** as listed above.
+11. **S5, D1** Refuse debug-signed managers in `signedLikeManager`; correct the allowlist doc.
+12. **R1, U2-U6, M3-M5, S6-S7, P5-P7, C5-C7** as listed above.
 
 ## 9. Coverage and limits
 
@@ -654,10 +798,10 @@ in `manager/src/test/java/af/shizuku/manager/harness/` or `server/src/test/`, pe
   `starter/`, `authorization/`, `automation/locale`, the compat stub, all six workflows,
   `signing.gradle`, root and manager build files, `scripts/dev`, `pre-push-guard`,
   `common/.../TrustedSigners.java`, `docs/PRIVACY.md` and `docs/trusted-signer-allowlist.md`.
-- The Plus feature implementations (`StorageProxyImpl`, `ApkPatcherImpl`, `BackupRestorePlusImpl`,
-  `PrivilegedDataSourceImpl`, `VirtualMachineManagerImpl` and the rest) were reviewed for gate
-  wiring and the access-control inventory in section 3; their internal logic was read for
-  path handling, archive handling and process execution, not line by line for every method.
+- The Plus feature implementations were inventoried for caller checks, gates and scopes
+  (section 3); `StorageProxyImpl`, `StorageAccessPolicy`, `ArchiveVetting`, `ApkPatcherImpl`,
+  `ApkSigner` and `InputValidationUtils` were read in full, the other impls for gate wiring, path
+  handling and process execution rather than every method.
 - Native code (`manager/src/main/jni`, `starter/`) was spot-checked: `starter.cpp` executes
   `app_process` with a fixed argv and runs `pm path` with constant package names only.
 - The `api` submodule (upstream ShizukuPlus-API) was read only where it feeds the scoped code
