@@ -20,12 +20,12 @@ MIN_FEATS="${MIN_FEATS:-3}"
 MAX_HIGHLIGHTS="${MAX_HIGHLIGHTS:-4}"
 TAG_RE='^(r[0-9]+|[0-9]+\.[0-9]+\.[0-9]+\.r[0-9]+|v[0-9]+\.[0-9]+\.[0-9]+\.r[0-9]+)$'
 
-tags=$(git tag --list --sort=-creatordate | grep -E "$TAG_RE" | head -60 || true)
+tags=$(git tag --list --sort=-creatordate | grep -E "$TAG_RE" | head -n 60 || true)
 newer=""
 for t in $tags; do
   if [ -n "$newer" ]; then
     range="${t}..${newer}"
-    trailer=$(git log "$range" --no-merges --format='%(trailers:key=Release-Type,valueonly)' | tr 'A-Z' 'a-z' | grep -oE 'major|minor|patch' | head -1 || true)
+    trailer=$(git log "$range" --no-merges --format='%(trailers:key=Release-Type,valueonly)' | tr 'A-Z' 'a-z' | grep -oE 'major|minor|patch' | head -n 1 || true)
     feats=$(git log "$range" --no-merges --pretty=format:'%s' | grep -cE '^feat(\([^)]+\))?!?: ' || true)
     entries=$(git diff "$t" "$newer" -- CHANGELOG.md | grep -E '^\+- \*\*' | sed -E 's/^\+- \*\*([^*]+)\*\*.*/\1/' | sed -E 's/ — .*//; s/[.:]$//' || true)
     entry_count=$(printf '%s' "$entries" | grep -c . || true)
@@ -50,7 +50,7 @@ for t in $tags; do
         highlights=$(git log "$range" --no-merges --pretty=format:'%s' | grep -E '^feat(\([^)]+\))?!?: ' | sed -E 's/^feat(\([^)]+\))?!?: //' || true)
       fi
       echo "$newer"
-      printf '%s\n' "$highlights" | head -"$MAX_HIGHLIGHTS" | paste -sd ';' - | sed 's/;/; /g'
+      printf '%s\n' "$highlights" | head -n "$MAX_HIGHLIGHTS" | paste -sd ';' - | sed 's/;/; /g'
       exit 0
     fi
   fi
