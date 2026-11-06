@@ -3,5 +3,6 @@
 # Kotlin/Java compile. Used by AI agents to confirm a refactor didn't
 # break compilation without paying for the full APK pipeline.
 set -euo pipefail
+source "$(dirname "$0")/env.sh"
 cd "$(dirname "$0")/../.."
 bash gradlew :manager:compileShizukuplusReleaseKotlin :manager:compileShizukuplusReleaseJavaWithJavac "$@"

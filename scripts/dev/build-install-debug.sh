@@ -9,6 +9,7 @@
 #
 # Usage:  bash scripts/dev/build-install-debug.sh [gradlew args...]
 set -euo pipefail
+source "$(dirname "$0")/env.sh"
 cd "$(dirname "$0")/../.."
 
 ADB_SERIAL="${ADB_SERIAL:-127.0.0.1:5555}"
@@ -160,6 +161,7 @@ NEW_APK_DIR="$(adb -s "$ADB_SERIAL" shell pm path af.shizuku.plus.api 2>/dev/nul
     | sed 's|package:||;s|/base.apk||')"
 
 if [[ -n "$NEW_APK_DIR" ]]; then
+    # The string below runs on the Android device (adb shell), not on this machine.
     adb -s "$ADB_SERIAL" shell "
         kill \$(pidof shizuku_plus_server) 2>/dev/null || true
         sleep 1

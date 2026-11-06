@@ -6,6 +6,7 @@
 #   scripts/dev/build-release-local.sh [flavor]   (default: dropin; also shizukuplus)
 # Needs the 1Password service-account token (OP_ENV, default below) and the op CLI.
 set -euo pipefail
+source "$(dirname "$0")/env.sh"
 cd "$(dirname "$0")/../.."
 
 flavor="${1:-dropin}"
@@ -31,7 +32,9 @@ op read "op://$VAULT/$ITEM/KEYSTORE" | base64 --decode > "$tmp/key.jks"
 } > "$tmp/signing.properties"
 unset OP_SERVICE_ACCOUNT_TOKEN
 
-task=":manager:assemble${flavor^}Release"
+# ${flavor^} is bash 4+; stock macOS has bash 3.2.
+first="$(printf %s "${flavor:0:1}" | tr '[:lower:]' '[:upper:]')"
+task=":manager:assemble${first}${flavor:1}Release"
 # Capped: a release build (R8) otherwise takes every core and pushed this machine's load past
 # 100 on 2026-10-05. Override with GRADLE_MAX_WORKERS.
 SIGNING_PROPERTIES="$tmp/signing.properties" bash gradlew --max-workers="${GRADLE_MAX_WORKERS:-2}" "$task" "${@:2}"
