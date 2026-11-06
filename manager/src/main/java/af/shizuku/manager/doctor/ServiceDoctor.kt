@@ -124,6 +124,12 @@ object ServiceDoctor {
                         }.getOrDefault(false)
                     },
                     tip = if (!adbOk && !EnvironmentUtils.isRooted()) "• " + context.getString(R.string.doctor_tip_adb) else null,
+                    // Not in background healing: writing adb_wifi_enabled=1 raises the system's
+                    // "Allow wireless debugging on this network?" prompt, and the start's restore
+                    // (WirelessDebugging) owns that write, one automatic prompt per boot. Healing
+                    // after a crash wrote it a second time, behind the user's back. "Fix all" is
+                    // the user's own hand and still applies it.
+                    autoHeal = false,
                 ),
             )
             if (!adbOk && !EnvironmentUtils.isRooted()) tips.add("• " + context.getString(R.string.doctor_tip_adb))
