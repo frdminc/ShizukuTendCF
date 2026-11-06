@@ -62,11 +62,24 @@ class FakeAdbd(
 ) : Closeable {
     enum class Answer { ACCEPT, REJECT, SILENT }
 
-    // Bound with SO_REUSEADDR so a port a closed instance held can be listened on again.
+    // Bound with SO_REUSEADDR so a port a closed instance held can be listened on again. A port
+    // asked for by number is one a closed instance held (adbd restarting on its port): the JDK
+    // closes a listening socket only once the thread blocked in accept() has woken (see
+    // [close]), so the bind is tried again briefly rather than fail with "Address already in use".
     private val server =
         ServerSocket().apply {
             reuseAddress = true
-            bind(InetSocketAddress(InetAddress.getLoopbackAddress(), port), 50)
+            val address = InetSocketAddress(InetAddress.getLoopbackAddress(), port)
+            val deadline = System.currentTimeMillis() + if (port == 0) 0 else BIND_RETRY_MS
+            while (true) {
+                try {
+                    bind(address, 50)
+                    break
+                } catch (e: java.net.BindException) {
+                    if (System.currentTimeMillis() >= deadline) throw e
+                    Thread.sleep(10)
+                }
+            }
         }
     val port: Int get() = server.localPort
 
@@ -102,12 +115,11 @@ class FakeAdbd(
     @Volatile
     var onHello: () -> Unit = {}
 
-    init {
+    private val acceptor =
         Thread({ acceptLoop() }, "fake-adbd").apply {
             isDaemon = true
             start()
         }
-    }
 
     /**
      * Waits for the next not-yet-awaited key offer, calling [pump] while it waits (the caller may
@@ -133,8 +145,16 @@ class FakeAdbd(
     /** Drops every connection, as a dying peer process would. */
     fun dropAll() = open.forEach { runCatching { it.close() } }
 
+    /**
+     * Closes the listening socket and every connection. Returns only once the port is free: the
+     * JDK's close of a socket another thread is blocked in accept() on just wakes that thread,
+     * and the descriptor (still listening) goes when the thread has finished with it. Under load
+     * that came late, and a replacement adbd bound on the same port got "Address already in use",
+     * which the manager took for a dropped socket and retried the start with a backoff.
+     */
     override fun close() {
         runCatching { server.close() }
+        if (Thread.currentThread() !== acceptor) runCatching { acceptor.join(CLOSE_JOIN_MS) }
         dropAll()
     }
 
@@ -354,5 +374,7 @@ class FakeAdbd(
 
     private companion object {
         const val REMOTE_ID = 100
+        const val BIND_RETRY_MS = 2_000L
+        const val CLOSE_JOIN_MS = 5_000L
     }
 }
