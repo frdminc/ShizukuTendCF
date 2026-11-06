@@ -55,6 +55,11 @@ object EnvironmentUtils {
             state.contains("adb")
         }
 
+    // Loopback connects answer in a few ms; the margin is for a busy device (boot, low memory) or a loaded CI
+    // machine. A probe that is too tight reads "adbd not listening" and holds the start behind a Wi-Fi
+    // constraint the device may never meet (the other probes in AdbPortProber use 150-600 ms).
+    private const val LOOPBACK_PROBE_MS = 150
+
     fun isWifiRequired(allowNetworkProbe: Boolean = true): Boolean {
         if (ShizukuSettings.getTcpMode()) return false
         if (getAdbTcpPort() > 0) return false
@@ -67,12 +72,12 @@ object EnvironmentUtils {
         val ports = listOf(5555, ShizukuSettings.getLastPort())
         if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
             return af.shizuku.manager.adb.AdbPortProber
-                .firstListening(ports, 50) <= 0
+                .firstListening(ports, LOOPBACK_PROBE_MS) <= 0
         }
         return ports.none {
             it in 1..65535 &&
                 af.shizuku.manager.adb.AdbPortProber
-                    .isPortOpen(it, 50)
+                    .isPortOpen(it, LOOPBACK_PROBE_MS)
         }
     }
 
